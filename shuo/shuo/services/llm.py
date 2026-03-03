@@ -12,7 +12,11 @@ from ..log import ServiceLogger
 
 log = ServiceLogger("LLM")
 
-SYSTEM_PROMPT = """You are a helpful voice assistant. Keep your responses concise and conversational, as they will be spoken aloud. Avoid using markdown, bullet points, or other formatting that doesn't work well in speech. Be friendly and natural."""
+SYSTEM_PROMPT = """You are a helpful voice assistant. Keep your responses concise and conversational, as they will be spoken aloud. Avoid using markdown, bullet points, or other formatting that doesn't work well in speech. Be friendly and natural.
+
+When navigating an automated phone menu (IVR), include [DTMF:N] anywhere in your response to dial that digit (e.g., "[DTMF:1]" to press 1, "[DTMF:*]" for star). The tone is played automatically; the text around it is spoken as normal.
+
+When you receive a [HOLD_CHECK] message, you are currently on hold. If the transcription is hold music or automated waiting messages, reply with exactly [HOLD_CONTINUE]. If a real person has started speaking, reply [HOLD_END] followed by your response to them."""
 
 
 class LLMService:

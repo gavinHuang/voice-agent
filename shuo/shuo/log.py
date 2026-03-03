@@ -15,7 +15,7 @@ from .types import (
     Event,
     StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
-    AgentTurnDoneEvent,
+    AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent,
     Action,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
     Phase,
@@ -194,6 +194,20 @@ class Logger:
             self._events_logger.info(
                 _c(C.GREEN, "\u2190") + " " +
                 _c(C.DIM, "Agent turn done")
+            )
+            return
+
+        if isinstance(event, HoldStartEvent):
+            self._events_logger.info(
+                "\u23F8  " + _c(C.YELLOW, "Hold mode") + " " +
+                _c(C.DIM, "waiting for real person")
+            )
+            return
+
+        if isinstance(event, HoldEndEvent):
+            self._events_logger.info(
+                "\u25B6  " + _c(C.GREEN, "Hold ended") + " " +
+                _c(C.DIM, "real person detected")
             )
             return
 

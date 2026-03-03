@@ -31,6 +31,7 @@ class AppState:
     """
     phase: Phase = Phase.LISTENING
     stream_sid: Optional[str] = None
+    hold_mode: bool = False
 
 
 # =============================================================================
@@ -73,10 +74,23 @@ class AgentTurnDoneEvent:
     pass
 
 
+@dataclass(frozen=True)
+class HoldStartEvent:
+    """Agent detected it is on hold — suppress barge-in until person returns."""
+    pass
+
+
+@dataclass(frozen=True)
+class HoldEndEvent:
+    """Agent detected a real person — exit hold mode, resume normal behaviour."""
+    pass
+
+
 Event = Union[
     StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent,
+    HoldStartEvent, HoldEndEvent,
 ]
 
 
@@ -94,6 +108,7 @@ class FeedFluxAction:
 class StartAgentTurnAction:
     """Start agent response pipeline."""
     transcript: str
+    hold_check: bool = False
 
 
 @dataclass(frozen=True)

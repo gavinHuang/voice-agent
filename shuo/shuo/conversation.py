@@ -24,7 +24,7 @@ from fastapi import WebSocket
 from .types import (
     AppState,
     Event, StreamStartEvent, StreamStopEvent,
-    FluxStartOfTurnEvent, FluxEndOfTurnEvent, AgentTurnDoneEvent,
+    FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 from .state import process_event
@@ -109,7 +109,7 @@ async def run_conversation_over_twilio(websocket: WebSocket) -> None:
                 agent = Agent(
                     websocket=websocket,
                     stream_sid=event.stream_sid,
-                    on_done=lambda: event_queue.put_nowait(AgentTurnDoneEvent()),
+                    emit=lambda e: event_queue.put_nowait(e),
                     tts_pool=tts_pool,
                     tracer=tracer,
                 )
@@ -127,7 +127,7 @@ async def run_conversation_over_twilio(websocket: WebSocket) -> None:
 
                 elif isinstance(action, StartAgentTurnAction):
                     if agent:
-                        await agent.start_turn(action.transcript)
+                        await agent.start_turn(action.transcript, hold_check=action.hold_check)
 
                 elif isinstance(action, ResetAgentTurnAction):
                     if agent:

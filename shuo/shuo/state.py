@@ -15,6 +15,7 @@ from .types import (
     AppState, Phase,
     Event, StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent, AgentTurnDoneEvent,
+    HoldStartEvent, HoldEndEvent,
     Action, FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 
@@ -44,11 +45,14 @@ def process_event(state: AppState, event: Event) -> Tuple[AppState, List[Action]
     if isinstance(event, FluxEndOfTurnEvent):
         if event.transcript and state.phase == Phase.LISTENING:
             new_state = replace(state, phase=Phase.RESPONDING)
-            return new_state, [StartAgentTurnAction(transcript=event.transcript)]
+            return new_state, [StartAgentTurnAction(
+                transcript=event.transcript,
+                hold_check=state.hold_mode,
+            )]
         return state, []
 
     if isinstance(event, FluxStartOfTurnEvent):
-        if state.phase == Phase.RESPONDING:
+        if state.phase == Phase.RESPONDING and not state.hold_mode:
             return replace(state, phase=Phase.LISTENING), [ResetAgentTurnAction()]
         return state, []
 
@@ -56,5 +60,11 @@ def process_event(state: AppState, event: Event) -> Tuple[AppState, List[Action]
         if state.phase == Phase.RESPONDING:
             return replace(state, phase=Phase.LISTENING), []
         return state, []
+
+    if isinstance(event, HoldStartEvent):
+        return replace(state, hold_mode=True), []
+
+    if isinstance(event, HoldEndEvent):
+        return replace(state, hold_mode=False), []
 
     return state, []
