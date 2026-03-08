@@ -19,8 +19,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, WebSocket, Response, Query
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
 from openai import AsyncOpenAI
+from twilio.jwt.access_token import AccessToken
+from twilio.jwt.access_token.grants import VoiceGrant
 
 from .conversation import run_conversation_over_twilio
 from .services.twilio_client import make_outbound_call
@@ -40,6 +42,89 @@ _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/token")
+async def get_token():
+    """Generate a Twilio Access Token for the browser softphone."""
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    api_key = os.getenv("TWILIO_API_KEY")
+    api_secret = os.getenv("TWILIO_API_SECRET")
+    token = AccessToken(account_sid, api_key, api_secret, identity="browser")
+    token.add_grant(VoiceGrant(incoming_allow=True))
+    return {"token": token.to_jwt()}
+
+
+@app.get("/phone", response_class=HTMLResponse)
+async def phone():
+    """Browser softphone page for testing — answers calls from the agent."""
+    public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>shuo | test phone</title>
+  <style>
+    body {{ font-family: monospace; display: flex; flex-direction: column; align-items: center;
+           justify-content: center; height: 100vh; margin: 0; background: #111; color: #eee; }}
+    #status {{ font-size: 1.2em; margin-bottom: 24px; color: #aaa; }}
+    button {{ padding: 16px 40px; font-size: 1.1em; border: none; border-radius: 8px;
+              cursor: pointer; margin: 8px; }}
+    #answer {{ background: #22c55e; color: white; display: none; }}
+    #hangup  {{ background: #ef4444; color: white; display: none; }}
+    #register {{ background: #3b82f6; color: white; }}
+  </style>
+</head>
+<body>
+  <h2>shuo test phone</h2>
+  <div id="status">Click Register to start</div>
+  <button id="register" onclick="register()">Register</button>
+  <button id="answer"  onclick="answer()">Answer</button>
+  <button id="hangup"  onclick="hangup()">Hang Up</button>
+
+  <script src="https://unpkg.com/@twilio/voice-sdk@2.18.0/dist/twilio.min.js"></script>
+  <script>
+    let device, activeCall;
+
+    async function register() {{
+      document.getElementById('status').textContent = 'Fetching token...';
+      const res  = await fetch('{public_url}/token');
+      const data = await res.json();
+      device = new Twilio.Device(data.token, {{ codecPreferences: ['opus', 'pcmu'] }});
+
+      device.on('registered', () => {{ document.getElementById('status').textContent = 'Ready — waiting for call'; document.getElementById('register').style.display='none'; }});
+      device.on('error',      (e) => {{ document.getElementById('status').textContent = 'Error: ' + e.message; }});
+      device.on('incoming',   (call) => {{
+        activeCall = call;
+        document.getElementById('status').textContent = 'Incoming call...';
+        document.getElementById('answer').style.display = 'inline-block';
+        call.on('disconnect', reset);
+        call.on('cancel',     reset);
+      }});
+
+      device.register();
+    }}
+
+    function answer() {{
+      if (activeCall) {{
+        activeCall.accept();
+        document.getElementById('status').textContent = 'In call';
+        document.getElementById('answer').style.display = 'none';
+        document.getElementById('hangup').style.display = 'inline-block';
+      }}
+    }}
+
+    function hangup() {{
+      if (activeCall) activeCall.disconnect();
+    }}
+
+    function reset() {{
+      document.getElementById('status').textContent = 'Call ended — ready';
+      document.getElementById('answer').style.display = 'none';
+      document.getElementById('hangup').style.display = 'none';
+    }}
+  </script>
+</body>
+</html>"""
 
 
 @app.api_route("/twiml", methods=["GET", "POST"])

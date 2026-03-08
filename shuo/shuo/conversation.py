@@ -16,13 +16,15 @@ Events come from:
 """
 
 import json
+import os
 import asyncio
+from dataclasses import replace
 from typing import Optional
 
 from fastapi import WebSocket
 
 from .types import (
-    AppState,
+    AppState, Phase,
     Event, StreamStartEvent, StreamStopEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
@@ -132,6 +134,13 @@ async def run_conversation_over_twilio(websocket: WebSocket) -> None:
                 elif isinstance(action, ResetAgentTurnAction):
                     if agent:
                         await agent.cancel_turn()
+
+            # ─── INITIAL GREETING ────────────────────────────────────
+            if isinstance(event, StreamStartEvent):
+                initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
+                if initial_msg and agent:
+                    state = replace(state, phase=Phase.RESPONDING)
+                    await agent.start_turn(initial_msg)
 
             # ─── EXIT CHECK ─────────────────────────────────────────
             if isinstance(event, StreamStopEvent):

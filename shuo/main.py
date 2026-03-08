@@ -40,7 +40,7 @@ def check_environment() -> bool:
         "TWILIO_PHONE_NUMBER",
         "TWILIO_PUBLIC_URL",
         "DEEPGRAM_API_KEY",
-        "OPENAI_API_KEY",
+        "GROQ_API_KEY",
         "ELEVENLABS_API_KEY",
     ]
     
@@ -78,8 +78,8 @@ def main():
 
     if len(sys.argv) >= 2:
         phone_number = sys.argv[1]
-        if not phone_number.startswith("+"):
-            print("Error: Phone number must start with +")
+        if not phone_number.startswith("+") and not phone_number.startswith("client:"):
+            print("Error: Phone number must start with + (or use client:identity for browser)")
             sys.exit(1)
 
     # Check environment
