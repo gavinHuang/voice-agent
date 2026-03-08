@@ -14,6 +14,7 @@ import os
 import time
 import asyncio
 import random
+import uuid
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
@@ -27,10 +28,13 @@ from twilio.jwt.access_token.grants import VoiceGrant
 from .conversation import run_conversation_over_twilio
 from .services.twilio_client import make_outbound_call
 from .log import get_logger
+from dashboard.server import router as dashboard_router
+from dashboard import bus as dashboard_bus, registry as dashboard_registry
 
 logger = get_logger("shuo.server")
 
 app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
+app.include_router(dashboard_router)
 
 # ── Graceful shutdown / connection draining ───────────────────────────
 _draining = False          # Set True on SIGTERM — reject new calls
@@ -55,13 +59,13 @@ async def get_token():
     return {"token": token.to_jwt()}
 
 
-_CLIENT_DIR = Path(__file__).parent.parent / "client"
+_SOFTPHONE_DIR = Path(__file__).parent.parent.parent / "softphone"
 
 
 @app.get("/phone")
 async def phone():
     """Browser softphone page for testing — answers calls from the agent."""
-    return FileResponse(_CLIENT_DIR / "phone.html")
+    return FileResponse(_SOFTPHONE_DIR / "phone.html")
 
 
 @app.api_route("/twiml", methods=["GET", "POST"])
@@ -89,7 +93,9 @@ async def twiml():
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect record="record-from-answer-dual">
-        <Stream url="{ws_url}" track="inbound_track" />
+        <Stream url="{ws_url}" track="inbound_track">
+            <Parameter name="from" value="{{From}}"/>
+        </Stream>
     </Connect>
 </Response>"""
     
@@ -309,22 +315,54 @@ async def bench_ttft(
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for Twilio Media Streams.
-    
+
     Handles the bidirectional audio stream for a single call.
-    Tracks active connections for graceful shutdown draining.
+    Wires the dashboard event bus and registry for real-time monitoring.
     """
     global _active_calls
 
     await websocket.accept()
     _active_calls += 1
+
+    # Assign a short ID for this call before stream_sid is known
+    call_id = uuid.uuid4().hex[:8]
+    goal = os.getenv("CALL_GOAL", "")
+    dashboard_bus.create(call_id)
+    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=call_id, goal=goal))
+
+    def observer(event: dict) -> None:
+        tagged = {**event, "call_id": call_id}
+        # Persist call_sid and phone once Twilio sends the start message
+        if event.get("type") == "stream_start":
+            dashboard_registry.update(
+                call_id,
+                call_sid=event.get("call_sid", ""),
+                phone=event.get("phone", ""),
+            )
+        dashboard_bus.publish_global(tagged)
+
+    def should_suppress_agent() -> bool:
+        c = dashboard_registry.get(call_id)
+        return c is not None and c.mode == dashboard_registry.CallMode.TAKEOVER
+
+    def on_agent_ready(agent) -> None:
+        dashboard_registry.update(call_id, agent=agent)
+
     logger.info(f"Call connected  (active: {_active_calls})")
 
     try:
-        await run_conversation_over_twilio(websocket)
+        await run_conversation_over_twilio(
+            websocket,
+            observer=observer,
+            should_suppress_agent=should_suppress_agent,
+            on_agent_ready=on_agent_ready,
+        )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
         _active_calls -= 1
+        dashboard_registry.remove(call_id)
+        dashboard_bus.destroy(call_id)
         logger.info(f"Call ended  (active: {_active_calls})")
         if _draining and _active_calls <= 0:
             _drain_event.set()

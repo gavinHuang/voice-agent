@@ -18,6 +18,7 @@ Marker protocol (embedded in LLM output, stripped before TTS):
 """
 
 import asyncio
+import json
 import time
 from typing import Optional, Callable, List, Dict, Any
 
@@ -130,12 +131,14 @@ class Agent:
         emit: Callable[[Any], None],
         tts_pool: TTSPool,
         tracer: Tracer,
+        on_token_observed: Optional[Callable[[str], None]] = None,
     ):
         self._websocket = websocket
         self._stream_sid = stream_sid
         self._emit = emit
         self._tts_pool = tts_pool
         self._tracer = tracer
+        self._on_token_observed = on_token_observed
 
         # Persistent LLM -- keeps conversation history across turns
         self._llm = LLMService(
@@ -256,6 +259,22 @@ class Agent:
 
         log.info(f"Turn cancelled at +{elapsed}ms (history preserved)")
 
+    async def inject_dtmf(self, digit: str) -> None:
+        """
+        Inject a DTMF tone into the outbound audio stream (dashboard control).
+
+        Generates the tone as μ-law audio and sends it directly to Twilio,
+        where it is played to the remote party — the same path used by the
+        agent's own [DTMF:N] marker mechanism.
+        """
+        audio = generate_dtmf_ulaw_b64(digit)
+        msg = json.dumps({
+            "event": "media",
+            "streamSid": self._stream_sid,
+            "media": {"payload": audio},
+        })
+        await self._websocket.send_text(msg)
+
     async def cleanup(self) -> None:
         """Final cleanup when call ends."""
         if self._active:
@@ -289,6 +308,8 @@ class Agent:
         if clean_text:
             self._tts_had_text = True
             await self._tts.send(clean_text)
+            if self._on_token_observed:
+                self._on_token_observed(clean_text)
 
     async def _on_llm_done(self) -> None:
         """LLM finished -> flush scanner, fire hold events, flush TTS."""

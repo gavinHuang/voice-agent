@@ -57,9 +57,12 @@ def parse_twilio_message(data: dict) -> Optional[Event]:
 
     elif event_type == "start":
         start_data = data.get("start", {})
-        stream_sid = start_data.get("streamSid")
+        stream_sid = start_data.get("streamSid", "")
+        call_sid = start_data.get("callSid", "")
+        custom = start_data.get("customParameters", {})
+        phone = custom.get("from", "")
         if stream_sid:
-            return StreamStartEvent(stream_sid=stream_sid)
+            return StreamStartEvent(stream_sid=stream_sid, call_sid=call_sid, phone=phone)
 
     elif event_type == "media":
         media_data = data.get("media", {})

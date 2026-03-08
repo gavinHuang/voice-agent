@@ -42,6 +42,8 @@ class AppState:
 class StreamStartEvent:
     """Twilio stream started."""
     stream_sid: str
+    call_sid: str = ""   # Twilio call SID (CA...) for REST API
+    phone: str = ""      # Remote phone number (from TwiML custom parameter)
 
 
 @dataclass(frozen=True)

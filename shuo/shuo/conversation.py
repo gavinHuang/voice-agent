@@ -19,7 +19,7 @@ import json
 import os
 import asyncio
 from dataclasses import replace
-from typing import Optional
+from typing import Callable, Optional
 
 from fastapi import WebSocket
 
@@ -27,6 +27,7 @@ from .types import (
     AppState, Phase,
     Event, StreamStartEvent, StreamStopEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
+    AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 from .state import process_event
@@ -40,7 +41,12 @@ from .log import Logger, get_logger
 logger = get_logger("shuo.conversation")
 
 
-async def run_conversation_over_twilio(websocket: WebSocket) -> None:
+async def run_conversation_over_twilio(
+    websocket: WebSocket,
+    observer: Optional[Callable[[dict], None]] = None,
+    should_suppress_agent: Optional[Callable[[], bool]] = None,
+    on_agent_ready: Optional[Callable[["Agent"], None]] = None,
+) -> None:
     """
     Main event loop for a single call.
 
@@ -114,12 +120,40 @@ async def run_conversation_over_twilio(websocket: WebSocket) -> None:
                     emit=lambda e: event_queue.put_nowait(e),
                     tts_pool=tts_pool,
                     tracer=tracer,
+                    on_token_observed=(
+                        (lambda tok: observer({"type": "agent_token", "token": tok}))
+                        if observer else None
+                    ),
                 )
+                if on_agent_ready:
+                    on_agent_ready(agent)
 
             # ─── UPDATE (pure) ──────────────────────────────────────
             old_phase = state.phase
             state, actions = process_event(state, event)
             event_log.transition(old_phase, state.phase)
+
+            # ─── OBSERVE ────────────────────────────────────────────
+            if observer:
+                if isinstance(event, StreamStartEvent):
+                    observer({
+                        "type":       "stream_start",
+                        "call_sid":   event.call_sid,
+                        "stream_sid": event.stream_sid,
+                        "phone":      event.phone,
+                    })
+                elif isinstance(event, FluxEndOfTurnEvent) and event.transcript:
+                    observer({"type": "transcript", "text": event.transcript})
+                elif isinstance(event, AgentTurnDoneEvent):
+                    observer({"type": "agent_done"})
+                elif isinstance(event, HoldStartEvent):
+                    observer({"type": "hold"})
+                elif isinstance(event, HoldEndEvent):
+                    observer({"type": "hold_end"})
+                elif isinstance(event, StreamStopEvent):
+                    observer({"type": "stream_stop"})
+                if old_phase != state.phase:
+                    observer({"type": "phase_change", "from": old_phase.name, "to": state.phase.name})
 
             # ─── DISPATCH (side effects) ────────────────────────────
             for action in actions:
@@ -128,7 +162,7 @@ async def run_conversation_over_twilio(websocket: WebSocket) -> None:
                     await flux.send(action.audio_bytes)
 
                 elif isinstance(action, StartAgentTurnAction):
-                    if agent:
+                    if agent and not (should_suppress_agent and should_suppress_agent()):
                         await agent.start_turn(action.transcript, hold_check=action.hold_check)
 
                 elif isinstance(action, ResetAgentTurnAction):
