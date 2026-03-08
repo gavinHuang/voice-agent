@@ -66,6 +66,87 @@
   /* ── Main content ────────────────────────────────── */
   main { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 
+  /* ── New Call form ───────────────────────────────── */
+  #new-call-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  #new-call-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #1c2128;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+  }
+  #new-call-header:hover { background: #21262d; }
+  #new-call-toggle { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+
+  #new-call-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #new-call-body.hidden { display: none; }
+
+  .form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-row label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    width: 52px;
+    flex-shrink: 0;
+  }
+
+  .form-row input,
+  .form-row textarea {
+    flex: 1;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #0d1117;
+    color: var(--text);
+    outline: none;
+    resize: none;
+  }
+  .form-row input:focus,
+  .form-row textarea:focus { border-color: var(--blue); }
+
+  #call-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-call {
+    border-color: #1d4ed8;
+    color: var(--blue);
+    font-weight: bold;
+  }
+  .btn-call:hover { background: #0f1e38; }
+  .btn-call:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #call-form-msg {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  #call-form-msg.error { color: var(--danger); }
+  #call-form-msg.ok    { color: var(--ok); }
+
   #no-calls {
     color: var(--muted);
     text-align: center;
@@ -276,6 +357,42 @@
     color: var(--purple);
   }
   .keypad-grid button:hover { background: #1c1028; }
+
+  /* ── Outcome panel ──────────────────────────────── */
+  .outcome-panel {
+    display: none;
+    padding: 10px 16px 14px;
+    border-top: 1px solid var(--border);
+    background: #0d1117;
+  }
+  .outcome-panel.visible { display: block; }
+
+  .outcome-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .outcome-text {
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--text);
+    min-height: 2.5em;
+    white-space: pre-wrap;
+  }
+
+  .outcome-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+  }
+
+  .btn-summarize { border-color: #4c1d95; color: var(--purple); }
+  .btn-summarize:hover { background: #1c1028; }
+
+  .outcome-status { font-size: 0.75rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -287,6 +404,29 @@
 </header>
 
 <main>
+  <!-- ── New Call form ─────────────────────────────────────────── -->
+  <div id="new-call-panel">
+    <div id="new-call-header" onclick="toggleNewCallForm()">
+      <span>+ New Call</span>
+      <span id="new-call-toggle">▲ collapse</span>
+    </div>
+    <div id="new-call-body">
+      <div class="form-row">
+        <label for="nc-phone">Phone</label>
+        <input id="nc-phone" type="tel" placeholder="+61400000000" autocomplete="off">
+      </div>
+      <div class="form-row" style="align-items:flex-start">
+        <label for="nc-goal" style="padding-top:6px">Goal</label>
+        <textarea id="nc-goal" rows="2"
+          placeholder="e.g. Confirm the customer's appointment for tomorrow at 2pm"></textarea>
+      </div>
+      <div id="call-form-actions">
+        <button class="btn-call" id="btn-place-call" onclick="placeCall()">📞 Place Call</button>
+        <span id="call-form-msg"></span>
+      </div>
+    </div>
+  </div>
+
   <div id="no-calls">No active calls. Waiting…</div>
   <div id="calls"></div>
 </main>
@@ -336,7 +476,7 @@ function handleEvent(ev) {
     case 'active_calls': ev.calls.forEach(c => getOrCreatePanel(c)); break;
     case 'stream_start': getOrCreatePanel({
         call_id: ev.call_id, phone: ev.phone || ev.call_id,
-        goal: '', mode: 'agent'
+        goal: ev.goal || '', mode: 'agent'
       }); break;
     case 'stream_stop':  scheduleRemove(ev.call_id); break;
     case 'transcript':   addUserTurn(ev.call_id, ev.text); break;
@@ -363,7 +503,9 @@ function getOrCreatePanel(callData) {
     phase:          'LISTENING',
     elapsed:        callData.elapsed || 0,
     timerInterval:  null,
-    agentBlock:     null,  // current streaming agent turn div
+    agentBlock:     null,   // current streaming agent turn div
+    agentBuf:       '',     // buffer accumulating current agent turn text
+    transcript:     [],     // [{role, text}] for summary
   };
   calls[callData.call_id] = state;
 
@@ -386,8 +528,13 @@ function getOrCreatePanel(callData) {
 function scheduleRemove(callId) {
   const state = calls[callId];
   if (!state) return;
-  // Brief delay so "stream_stop" events render before panel disappears
-  setTimeout(() => removePanel(callId), 3000);
+  // Show the outcome panel and stop the timer; panel stays until dismissed
+  clearInterval(state.timerInterval);
+  const panel = state.panel;
+  panel.querySelector('.outcome-panel').classList.add('visible');
+  panel.querySelector('.call-header').style.opacity = '0.5';
+  // Disable control buttons
+  panel.querySelectorAll('.controls button').forEach(b => b.disabled = true);
 }
 
 function removePanel(callId) {
@@ -451,14 +598,32 @@ function buildPanel(state) {
         ).join('')}
       </div>
     </div>
+    <div class="outcome-panel">
+      <div class="outcome-label">OUTCOME</div>
+      <div class="outcome-text">—</div>
+      <div class="outcome-actions">
+        <button class="btn-summarize" onclick="doSummarize('${state.call_id}')">✨ Summarize</button>
+        <span class="outcome-status"></span>
+      </div>
+    </div>
   `;
   return el;
+}
+
+// ── Goal update ────────────────────────────────────────────────────────────
+function updateGoal(callId, goal) {
+  const state = calls[callId];
+  if (!state) return;
+  state.goal = goal;
+  const el = state.panel.querySelector('.goal-text');
+  if (el) el.innerHTML = goal ? esc(goal) : '<span style="color:var(--muted)">—</span>';
 }
 
 // ── Transcript ────────────────────────────────────────────────────────────
 function addUserTurn(callId, text) {
   const state = calls[callId];
   if (!state) return;
+  state.transcript.push({ role: 'user', text });
   const content = state.panel.querySelector('.user-content');
   const block = document.createElement('div');
   block.className = 'turn-block';
@@ -470,6 +635,7 @@ function addUserTurn(callId, text) {
 function appendAgentToken(callId, token) {
   const state = calls[callId];
   if (!state) return;
+  state.agentBuf += token;
   const content = state.panel.querySelector('.agent-content');
 
   if (!state.agentBlock) {
@@ -486,6 +652,10 @@ function finalizeAgentTurn(callId) {
   if (!state || !state.agentBlock) return;
   state.agentBlock.classList.remove('streaming');
   state.agentBlock = null;
+  if (state.agentBuf) {
+    state.transcript.push({ role: 'agent', text: state.agentBuf });
+    state.agentBuf = '';
+  }
 }
 
 // ── Phase / mode ──────────────────────────────────────────────────────────
@@ -604,6 +774,87 @@ function esc(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// ── Outcome / Summary ──────────────────────────────────────────────────────
+async function doSummarize(callId) {
+  const state = calls[callId];
+  if (!state) return;
+  const panel   = state.panel;
+  const textEl  = panel.querySelector('.outcome-text');
+  const statusEl = panel.querySelector('.outcome-status');
+  const btn     = panel.querySelector('.btn-summarize');
+
+  btn.disabled = true;
+  statusEl.textContent = 'Generating…';
+
+  try {
+    const r = await api('/dashboard/summarize', 'POST', {
+      goal:       state.goal,
+      transcript: state.transcript,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = `Error: ${data.error || r.statusText}`;
+      btn.disabled = false;
+    } else {
+      textEl.textContent = data.summary;
+      statusEl.textContent = '';
+    }
+  } catch (e) {
+    statusEl.textContent = `Error: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// ── New Call form ───────────────────────────────────────────────────────────
+function toggleNewCallForm() {
+  const body   = document.getElementById('new-call-body');
+  const toggle = document.getElementById('new-call-toggle');
+  const collapsed = body.classList.toggle('hidden');
+  toggle.textContent = collapsed ? '▼ expand' : '▲ collapse';
+}
+
+async function placeCall() {
+  const phone = document.getElementById('nc-phone').value.trim();
+  const goal  = document.getElementById('nc-goal').value.trim();
+  const btn   = document.getElementById('btn-place-call');
+  const msg   = document.getElementById('call-form-msg');
+
+  if (!phone) {
+    setFormMsg('Phone number is required', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  setFormMsg('Placing call…', '');
+
+  try {
+    const r = await api('/dashboard/call', 'POST', { phone, goal });
+    const data = await r.json();
+    if (!r.ok) {
+      setFormMsg(`Error: ${data.error || r.statusText}`, 'error');
+    } else {
+      setFormMsg(`Calling ${data.to}…`, 'ok');
+      document.getElementById('nc-phone').value = '';
+      document.getElementById('nc-goal').value  = '';
+    }
+  } catch (e) {
+    setFormMsg(`Error: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setFormMsg(text, cls) {
+  const el = document.getElementById('call-form-msg');
+  el.textContent = text;
+  el.className   = cls;
+}
+
+// Allow pressing Enter in the phone field to submit
+document.getElementById('nc-phone').addEventListener('keydown', e => {
+  if (e.key === 'Enter') placeCall();
+});
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 connectWS();

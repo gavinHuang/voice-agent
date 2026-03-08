@@ -14,6 +14,7 @@ Routes (all under /dashboard):
 import os
 import time
 from pathlib import Path
+from typing import List
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
@@ -146,6 +147,32 @@ async def handback(call_id: str):
 
 # ── Control: DTMF injection ───────────────────────────────────────────────────
 
+class CallRequest(BaseModel):
+    phone: str
+    goal: str = ""
+
+
+@router.post("/call")
+async def start_call(body: CallRequest):
+    """
+    Trigger an outbound call from the dashboard UI.
+
+    Stores the goal keyed by call SID so the agent picks it up when the
+    WebSocket stream_start event arrives.
+    """
+    phone = body.phone.strip()
+    if not phone.startswith("+") and not phone.startswith("client:"):
+        phone = f"+{phone}"
+
+    try:
+        from shuo.services.twilio_client import make_outbound_call
+        call_sid = make_outbound_call(phone)
+        registry.set_pending(call_sid, phone=phone, goal=body.goal)
+        return {"status": "calling", "to": phone, "call_sid": call_sid}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 class DTMFRequest(BaseModel):
     digit: str
 
@@ -173,5 +200,49 @@ async def inject_dtmf(call_id: str, body: DTMFRequest):
         await call.agent.inject_dtmf(digit)
         dashboard_bus.publish_global({"call_id": call_id, "type": "dtmf", "digit": digit})
         return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Call summary ──────────────────────────────────────────────────────────────
+
+class SummarizeRequest(BaseModel):
+    goal: str = ""
+    transcript: List[dict]   # [{role: "user"|"agent", text: str}, ...]
+
+
+@router.post("/summarize")
+async def summarize_call(body: SummarizeRequest):
+    """
+    Generate a brief outcome summary for a completed call using the LLM.
+    Accepts the goal and transcript collected client-side.
+    """
+    from openai import AsyncOpenAI
+
+    lines = "\n".join(
+        f"{'Caller' if t['role'] == 'user' else 'Agent'}: {t['text']}"
+        for t in body.transcript
+    )
+    goal_line = f"Goal: {body.goal}\n\n" if body.goal else ""
+    prompt = (
+        f"{goal_line}"
+        f"Transcript:\n{lines}\n\n"
+        "In 1–2 sentences, summarize the outcome of this call. "
+        "Was the goal accomplished? What was agreed or left unresolved?"
+    )
+
+    try:
+        client = AsyncOpenAI(
+            api_key=os.getenv("GROQ_API_KEY", ""),
+            base_url="https://api.groq.com/openai/v1",
+        )
+        resp = await client.chat.completions.create(
+            model=os.getenv("LLM_MODEL", "llama-3.3-70b-versatile"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=120,
+            temperature=0.3,
+        )
+        summary = resp.choices[0].message.content.strip()
+        return {"summary": summary}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

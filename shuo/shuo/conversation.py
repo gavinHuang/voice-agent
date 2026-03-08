@@ -27,7 +27,7 @@ from .types import (
     AppState, Phase,
     Event, StreamStartEvent, StreamStopEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
-    AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent,
+    AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupRequestEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 from .state import process_event
@@ -46,6 +46,8 @@ async def run_conversation_over_twilio(
     observer: Optional[Callable[[dict], None]] = None,
     should_suppress_agent: Optional[Callable[[], bool]] = None,
     on_agent_ready: Optional[Callable[["Agent"], None]] = None,
+    get_goal: Optional[Callable[[str], str]] = None,
+    on_hangup: Optional[Callable[[], None]] = None,
 ) -> None:
     """
     Main event loop for a single call.
@@ -114,12 +116,14 @@ async def run_conversation_over_twilio(
                 stream_sid = event.stream_sid
                 await flux.start()
                 await tts_pool.start()
+                goal = get_goal(event.call_sid) if get_goal else os.getenv("CALL_GOAL", "")
                 agent = Agent(
                     websocket=websocket,
                     stream_sid=event.stream_sid,
                     emit=lambda e: event_queue.put_nowait(e),
                     tts_pool=tts_pool,
                     tracer=tracer,
+                    goal=goal,
                     on_token_observed=(
                         (lambda tok: observer({"type": "agent_token", "token": tok}))
                         if observer else None
@@ -172,12 +176,26 @@ async def run_conversation_over_twilio(
             # ─── INITIAL GREETING ────────────────────────────────────
             if isinstance(event, StreamStartEvent):
                 initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
-                if initial_msg and agent:
+                opener = initial_msg or (
+                    "[CALL_STARTED]" if goal else ""
+                )
+                if opener and agent:
                     state = replace(state, phase=Phase.RESPONDING)
-                    await agent.start_turn(initial_msg)
+                    await agent.start_turn(opener)
 
             # ─── EXIT CHECK ─────────────────────────────────────────
             if isinstance(event, StreamStopEvent):
+                break
+
+            if isinstance(event, HangupRequestEvent):
+                if on_hangup:
+                    on_hangup()
+                if observer:
+                    observer({"type": "stream_stop"})
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
                 break
 
     except Exception as e:

@@ -1,26 +1,19 @@
 # voice-agent
 
-A real-time AI voice agent that makes and receives phone calls. Built on [shuo](shuo/README.md) — a ~600-line Python voice agent framework.
+A real-time AI voice agent that makes outbound phone calls and lets you monitor and take over live. Built on [shuo](shuo/README.md) — a ~600-line Python voice agent framework.
 
-The agent listens, understands speech with Deepgram Flux, generates replies with Groq LLaMA 3.3, and speaks back with ElevenLabs — targeting ~400 ms end-to-end latency.
+The agent listens with Deepgram Flux, replies with Groq LLaMA 3.3, and speaks with ElevenLabs — targeting ~400 ms end-to-end latency. When the goal is accomplished it says a short goodbye and hangs up automatically.
 
 ---
 
-## What's in this repo
+## Repo layout
 
 ```
 voice-agent/
-  shuo/               # Core voice agent (framework + server + entry point)
-  dashboard/          # Web dashboard (call registry, live monitoring)
-    server.py         # Dashboard FastAPI server
-    app.html          # Dashboard UI
-    registry.py       # Call registry
-    bus.py            # Event bus
+  shuo/               # Core voice agent (framework + FastAPI server)
+  dashboard/          # Supervisor dashboard (UI, call registry, event bus)
   client/             # Browser softphone for end-to-end testing
-    phone.html        # Softphone UI (served via ngrok HTTPS)
   softphone/          # Standalone softphone (static, no server required)
-    phone.html        # Self-contained softphone page
-  README.md           # This file
 ```
 
 ---
@@ -28,7 +21,7 @@ voice-agent/
 ## Prerequisites
 
 - Python 3.9+
-- [ngrok](https://ngrok.com/) (for local development)
+- [ngrok](https://ngrok.com/) (for local development — Twilio needs a public HTTPS URL)
 - API keys for: **Twilio**, **Deepgram**, **Groq**, **ElevenLabs**
 
 ---
@@ -38,7 +31,7 @@ voice-agent/
 ```bash
 cd shuo
 pip install -r requirements.txt
-cp .env.example .env   # then fill in your keys (see Configuration below)
+cp .env.example .env   # fill in your keys (see Configuration below)
 ```
 
 Start ngrok in a separate terminal:
@@ -47,13 +40,13 @@ Start ngrok in a separate terminal:
 ngrok http 3040
 ```
 
-Copy the `https://` URL ngrok gives you and set it as `TWILIO_PUBLIC_URL` in your `.env`.
+Copy the `https://` URL ngrok gives you and set it as `TWILIO_PUBLIC_URL` in `shuo/.env`.
 
 ---
 
 ## Configuration
 
-All config lives in `shuo/.env`. Copy from `.env.example` and fill in:
+All config lives in `shuo/.env`:
 
 | Variable | Required | Description |
 |---|---|---|
@@ -68,110 +61,63 @@ All config lives in `shuo/.env`. Copy from `.env.example` and fill in:
 | `ELEVENLABS_API_KEY` | Yes | From [ElevenLabs](https://elevenlabs.io) |
 | `ELEVENLABS_VOICE_ID` | No | Voice ID (default: Rachel `21m00Tcm4TlvDq8ikWAM`) |
 | `LLM_MODEL` | No | Groq model (default: `llama-3.3-70b-versatile`) |
-| `INITIAL_MESSAGE` | No | If set, agent speaks this first when a call connects (outbound greeting) |
 | `PORT` | No | Server port (default: `3040`) |
 | `DRAIN_TIMEOUT` | No | Seconds to wait for active calls on SIGTERM (default: `300`) |
 
-To create a Twilio API Key (needed for browser softphone):
+> **Note:** `CALL_GOAL` and `INITIAL_MESSAGE` are now managed through the dashboard UI — no need to set them in `.env`.
+
+To create a Twilio API Key (needed for the browser softphone):
 Twilio Console → Account → API Keys → Create new key → copy SID and Secret.
 
 ---
 
 ## Running
 
-All commands are run from the `shuo/` directory.
-
-### Inbound mode — wait for calls
-
 ```bash
 cd shuo
 python main.py
 ```
 
-Configure your Twilio number's Voice webhook to: `https://your-ngrok-url/twiml`
-
-### Outbound call to a real phone number
-
-```bash
-cd shuo
-python main.py +61400000000
-```
-
-Or trigger via HTTP while the server is already running:
-
-```bash
-curl https://your-ngrok-url/call/+61400000000
-```
-
-Set `INITIAL_MESSAGE` in `.env` to make the agent speak first when the call connects:
-
-```
-INITIAL_MESSAGE=Hello! I'm calling to let you know your parcel has arrived. Can you collect it today?
-```
-
-### Browser softphone (for testing without a physical phone)
-
-1. Start the server: `python main.py`
-2. Open `https://your-ngrok-url/phone` in a browser
-3. Click **Register** — the browser becomes a softphone client
-4. Trigger a call to `client:browser`: `python main.py client:browser`
-5. Click **Answer** when the call comes in — speak naturally, the agent responds
-
-The browser softphone uses the Twilio Voice SDK. It requires `TWILIO_API_KEY` and `TWILIO_API_SECRET` to be set.
-
----
-
-## Quick start: make a call and monitor it
-
-### 1. Start the server
-
-```bash
-cd shuo
-python main.py
-```
-
-### 2. Place an outbound call with a task
-
-Set `CALL_GOAL` so the agent knows what it's trying to accomplish, then trigger the call:
-
-```bash
-# Set the goal for this call
-export CALL_GOAL="Confirm the customer's appointment for tomorrow at 2pm"
-
-# Trigger a call to a phone number
-python main.py +61400000000
-```
-
-Or trigger a call via HTTP while the server is already running:
-
-```bash
-CALL_GOAL="Remind the customer their subscription renews tomorrow" \
-  python main.py  # server already running in another terminal
-
-curl https://your-ngrok-url/call/+61400000000
-```
-
-`CALL_GOAL` is available to the agent as context for the conversation. If left unset, the agent uses the default system prompt.
-
-### 3. View the dashboard
-
-Open the dashboard in your browser to monitor live calls in real time:
+Then open the dashboard:
 
 ```
 https://your-ngrok-url/dashboard
 ```
 
-The dashboard shows:
-- All active calls with phone number, goal, and elapsed time
-- Live transcript as the conversation unfolds
-- Controls to **hang up**, **take over** (mute the agent and speak yourself via the softphone), or **hand back** to the agent
+---
 
-To take over a call manually:
-1. Open `https://your-ngrok-url/phone` in a second tab (the browser softphone)
+## Dashboard workflow
+
+### 1. Place a call
+
+At the top of the dashboard, fill in:
+
+- **Phone** — the number to call in E.164 format (e.g. `+61400000000`), or `client:browser` to call the browser softphone
+- **Goal** — what the agent should accomplish (e.g. `Confirm the customer's appointment for tomorrow at 2pm`)
+
+Click **📞 Place Call**. The agent dials out, introduces itself, and works toward the goal.
+
+### 2. Monitor the call
+
+Each active call shows:
+
+- Phone number, goal, and elapsed time
+- Live transcript — caller on the left, agent on the right
+- Phase badge (`LISTENING` / `RESPONDING`)
+
+### 3. Take over the call
+
+If you want to step in manually:
+
+1. Open `https://your-ngrok-url/phone` in another tab (browser softphone)
 2. Click **Register**
-3. In the dashboard, click **Take over** on the active call — the agent goes silent
+3. In the dashboard, click **🎤 Take Over** — the agent goes silent
 4. Speak directly to the caller via the softphone
-5. Click **Hand back** to return control to the agent
+5. Click **🔙 Hand Back** to return control to the agent
+
+### 4. View the outcome
+
+When the call ends the panel stays open with an **OUTCOME** section. Click **✨ Summarize** to generate a one-sentence LLM summary of what was accomplished.
 
 ---
 
@@ -200,39 +146,39 @@ Twilio ── WebSocket (μ-law 8kHz audio) ──► FastAPI /ws
                                             Caller hears
 ```
 
-Everything streams end-to-end — LLM tokens feed TTS immediately, TTS audio feeds Twilio immediately. Barge-in (interruption) cancels the agent pipeline instantly.
+Everything streams end-to-end. LLM tokens feed TTS immediately; TTS audio feeds Twilio immediately. Barge-in cancels the agent pipeline instantly. When the agent emits `[HANGUP]` after completing its goal, the call is terminated via the Twilio REST API.
 
-### State machine
-
-```
-LISTENING ──EndOfTurn──► RESPONDING ──Done──► LISTENING
-    ▲                        │
-    └────StartOfTurn─────────┘  (barge-in cancels agent)
-```
+See [shuo/README.md](shuo/README.md) for the framework internals — state machine, architecture diagram, and project structure.
 
 ---
 
-## API endpoints
+## API reference
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/health` | Health check → `{"status": "ok"}` |
-| `GET/POST` | `/twiml` | TwiML webhook — Twilio calls this to get WebSocket URL |
-| `WS` | `/ws` | Twilio media stream — one connection per active call |
-| `GET` | `/token` | Issues a Twilio Access Token for the browser softphone |
+| `GET` | `/health` | Health check |
+| `GET/POST` | `/twiml` | TwiML webhook for Twilio |
+| `WS` | `/ws` | Twilio media stream (one per call) |
+| `GET` | `/token` | Twilio Access Token for browser softphone |
 | `GET` | `/phone` | Browser softphone UI |
-| `GET` | `/call/{number}` | Trigger an outbound call, e.g. `/call/+61400000000` |
-| `GET` | `/trace/latest` | Most recent call latency trace as JSON |
-| `GET` | `/bench/ttft` | TTFT benchmark across OpenAI/Groq models |
+| `GET` | `/call/{number}` | Trigger outbound call via HTTP |
+| `GET` | `/dashboard` | Supervisor dashboard UI |
+| `WS` | `/dashboard/ws` | Live event stream to dashboard |
+| `POST` | `/dashboard/call` | Place call with goal `{phone, goal}` |
+| `POST` | `/dashboard/calls/{id}/hangup` | Hang up a call |
+| `POST` | `/dashboard/calls/{id}/takeover` | Suppress agent, human takes over |
+| `POST` | `/dashboard/calls/{id}/handback` | Return control to agent |
+| `POST` | `/dashboard/calls/{id}/dtmf` | Inject DTMF digit |
+| `POST` | `/dashboard/summarize` | Generate call outcome summary |
 
 ---
 
 ## Known limitations
 
-- **Mainland China (+86)**: Twilio does not support calls to China. Use Vonage or Alibaba Cloud Voice as alternatives.
-- **Twilio trial accounts**: Can only call verified numbers. Upgrade to a paid account to call any number.
-- **ngrok free tier**: URL changes every restart — update `TWILIO_PUBLIC_URL` in `.env` after each restart.
-- **Browser softphone**: Requires HTTPS (ngrok provides this). Won't work on plain `http://localhost`.
+- **Mainland China (+86)**: Twilio does not support calls to China.
+- **Twilio trial accounts**: Can only call verified numbers.
+- **ngrok free tier**: URL changes on every restart — update `TWILIO_PUBLIC_URL` in `.env` after each restart.
+- **Browser softphone**: Requires HTTPS (ngrok provides this).
 
 ---
 
@@ -254,5 +200,3 @@ Set all environment variables in Railway's dashboard. Set `TWILIO_PUBLIC_URL` to
 cd shuo
 python -m pytest tests/ -v   # pure unit tests, no I/O, runs in ~0.03s
 ```
-
-See [`shuo/docs/project-description.md`](shuo/docs/project-description.md) for a detailed technical reference covering the architecture, state machine, latency optimizations, and planned extensions.

@@ -29,6 +29,19 @@ class ActiveCall:
 
 _calls: Dict[str, ActiveCall] = {}
 
+# Pending call data keyed by Twilio call SID — set when a call is triggered via
+# the dashboard UI, consumed when the WebSocket stream_start event arrives.
+_pending: Dict[str, Dict[str, str]] = {}
+
+
+def set_pending(call_sid: str, phone: str, goal: str) -> None:
+    _pending[call_sid] = {"phone": phone, "goal": goal}
+
+
+def pop_pending(call_sid: str) -> Dict[str, str]:
+    """Return {phone, goal} for the call SID, or empty strings if not found."""
+    return _pending.pop(call_sid, {"phone": "", "goal": ""})
+
 
 def register(call: ActiveCall) -> None:
     _calls[call.call_id] = call

@@ -6,6 +6,7 @@ chunks at the correct rate, regardless of other activity.
 """
 
 import json
+import base64
 import asyncio
 from typing import List, Optional, Callable
 
@@ -109,20 +110,30 @@ class AudioPlayer:
                 pass
     
     async def _playback_loop(self) -> None:
-        """Independent loop that drips audio at ~20ms intervals."""
+        """
+        Drips audio to Twilio at real-time playback rate.
+
+        Each chunk is base64-encoded μ-law 8kHz audio (1 byte = 1 sample =
+        0.125 ms). We sleep for the actual audio duration of each chunk so
+        _on_done fires when the callee finishes hearing the last word, not
+        when the last byte has been buffered in Twilio.
+        """
         try:
             while self._running:
                 if self._index < len(self._chunks):
                     chunk = self._chunks[self._index]
                     await self._send_audio(chunk)
                     self._index += 1
-                    await asyncio.sleep(0.020)
-                    
+                    # Sleep for the actual audio duration of this chunk
+                    audio_bytes = base64.b64decode(chunk)
+                    duration_s = len(audio_bytes) / 8000.0
+                    await asyncio.sleep(max(duration_s, 0.010))
+
                 elif self._tts_done:
                     break
                 else:
                     await asyncio.sleep(0.010)
-            
+
             if self._running:
                 self._running = False
                 if self._on_done:

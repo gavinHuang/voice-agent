@@ -31,7 +31,7 @@ from .services.player import AudioPlayer
 from .services.dtmf import generate_dtmf_ulaw_b64
 from .tracer import Tracer
 from .log import ServiceLogger
-from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent
+from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupRequestEvent
 
 log = ServiceLogger("Agent")
 
@@ -57,7 +57,7 @@ class MarkerScanner:
         DTMF:0 ... DTMF:9, DTMF:*, DTMF:#
     """
 
-    KNOWN = {"HOLD", "HOLD_END", "HOLD_CONTINUE"}
+    KNOWN = {"HOLD", "HOLD_END", "HOLD_CONTINUE", "HANGUP"}
     MAX_BUF = 20  # Max chars to buffer before giving up on a potential marker
 
     def __init__(self) -> None:
@@ -131,6 +131,7 @@ class Agent:
         emit: Callable[[Any], None],
         tts_pool: TTSPool,
         tracer: Tracer,
+        goal: str = "",
         on_token_observed: Optional[Callable[[str], None]] = None,
     ):
         self._websocket = websocket
@@ -144,6 +145,7 @@ class Agent:
         self._llm = LLMService(
             on_token=self._on_llm_token,
             on_done=self._on_llm_done,
+            goal=goal,
         )
 
         # Active per-turn services (set during start, cleared on cancel)
@@ -168,6 +170,7 @@ class Agent:
         self._tts_had_text: bool = False
         self._pending_hold_start: bool = False
         self._pending_hold_end: bool = False
+        self._pending_hangup: bool = False
 
     @property
     def is_turn_active(self) -> bool:
@@ -196,6 +199,7 @@ class Agent:
         self._tts_had_text = False
         self._pending_hold_start = False
         self._pending_hold_end = False
+        self._pending_hangup = False
 
         # Begin tracing this turn
         self._turn = self._tracer.begin_turn(transcript)
@@ -303,6 +307,8 @@ class Agent:
                 self._pending_hold_start = True
             elif m == "HOLD_END":
                 self._pending_hold_end = True
+            elif m == "HANGUP":
+                self._pending_hangup = True
             # HOLD_CONTINUE is silently absorbed — no TTS, stay in hold
 
         if clean_text:
@@ -389,4 +395,8 @@ class Agent:
         self._tts = None
         self._player = None
 
-        self._emit(AgentTurnDoneEvent())
+        if self._pending_hangup:
+            self._pending_hangup = False
+            self._emit(HangupRequestEvent())
+        else:
+            self._emit(AgentTurnDoneEvent())

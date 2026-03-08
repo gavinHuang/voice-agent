@@ -88,11 +88,18 @@ class HoldEndEvent:
     pass
 
 
+@dataclass(frozen=True)
+class HangupRequestEvent:
+    """Agent finished its goodbye turn and wants to end the call."""
+    pass
+
+
 Event = Union[
     StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent,
     HoldStartEvent, HoldEndEvent,
+    HangupRequestEvent,
 ]
 
 

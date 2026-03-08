@@ -326,19 +326,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Assign a short ID for this call before stream_sid is known
     call_id = uuid.uuid4().hex[:8]
-    goal = os.getenv("CALL_GOAL", "")
     dashboard_bus.create(call_id)
-    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=call_id, goal=goal))
+    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=call_id))
 
     def observer(event: dict) -> None:
         tagged = {**event, "call_id": call_id}
-        # Persist call_sid and phone once Twilio sends the start message
+        # On stream_start: embed phone and goal into the broadcast so the
+        # dashboard panel is created with both values in a single event.
         if event.get("type") == "stream_start":
-            dashboard_registry.update(
-                call_id,
-                call_sid=event.get("call_sid", ""),
-                phone=event.get("phone", ""),
-            )
+            c = dashboard_registry.get(call_id)
+            tagged = {**tagged, "phone": c.phone if c else "", "goal": c.goal if c else ""}
         dashboard_bus.publish_global(tagged)
 
     def should_suppress_agent() -> bool:
@@ -348,7 +345,38 @@ async def websocket_endpoint(websocket: WebSocket):
     def on_agent_ready(agent) -> None:
         dashboard_registry.update(call_id, agent=agent)
 
+    def on_hangup() -> None:
+        c = dashboard_registry.get(call_id)
+        if not c or not c.call_sid:
+            return
+        call_sid = c.call_sid
+
+        async def _do_hangup():
+            try:
+                from twilio.rest import Client
+                loop = asyncio.get_event_loop()
+                client = Client(
+                    os.getenv("TWILIO_ACCOUNT_SID"),
+                    os.getenv("TWILIO_AUTH_TOKEN"),
+                )
+                await loop.run_in_executor(
+                    None, lambda: client.calls(call_sid).update(status="completed")
+                )
+            except Exception as e:
+                logger.warning(f"Hangup REST call failed: {e}")
+
+        asyncio.create_task(_do_hangup())
+
     logger.info(f"Call connected  (active: {_active_calls})")
+
+    def get_goal(call_sid: str) -> str:
+        # Pop the pending phone+goal and store both in the registry so the
+        # observer can embed them in the stream_start broadcast.
+        pending = dashboard_registry.pop_pending(call_sid)
+        goal = pending["goal"] or os.getenv("CALL_GOAL", "")
+        phone = pending["phone"]
+        dashboard_registry.update(call_id, goal=goal, phone=phone)
+        return goal
 
     try:
         await run_conversation_over_twilio(
@@ -356,6 +384,8 @@ async def websocket_endpoint(websocket: WebSocket):
             observer=observer,
             should_suppress_agent=should_suppress_agent,
             on_agent_ready=on_agent_ready,
+            get_goal=get_goal,
+            on_hangup=on_hangup,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")

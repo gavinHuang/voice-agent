@@ -12,7 +12,13 @@ from ..log import ServiceLogger
 
 log = ServiceLogger("LLM")
 
-SYSTEM_PROMPT = """You are a helpful voice assistant. Keep your responses concise and conversational, as they will be spoken aloud. Avoid using markdown, bullet points, or other formatting that doesn't work well in speech. Be friendly and natural.
+SYSTEM_PROMPT = """You are an AI agent making an outbound phone call on behalf of the caller. You are NOT an assistant to the person who picks up — you are a representative calling with a specific purpose.
+
+Keep responses concise and conversational; they will be spoken aloud. No markdown, bullet points, or formatting. Be polite, direct, and professional.
+
+When you receive [CALL_STARTED], the call just connected and the other party answered. Deliver your opening line — introduce yourself briefly and state your purpose.
+
+When you have fully accomplished your goal, say a single short closing sentence (e.g. "Perfect, thank you. Goodbye!") and immediately include [HANGUP] — keep it to one sentence, no extra pleasantries.
 
 When navigating an automated phone menu (IVR), include [DTMF:N] anywhere in your response to dial that digit (e.g., "[DTMF:1]" to press 1, "[DTMF:*]" for star). The tone is played automatically; the text around it is spoken as normal.
 
@@ -30,17 +36,25 @@ class LLMService:
         self,
         on_token: Callable[[str], Awaitable[None]],
         on_done: Callable[[], Awaitable[None]],
+        goal: str = "",
     ):
         self._on_token = on_token
         self._on_done = on_done
-        
+
+        goal_suffix = (
+            f"\n\nYour goal for this call: {goal}\n"
+            "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
+            "Once accomplished, say a brief goodbye and include [HANGUP] to end the call."
+        ) if goal else ""
+        self._system_prompt = SYSTEM_PROMPT + goal_suffix
+
         self._client = AsyncOpenAI(
             api_key=os.getenv("GROQ_API_KEY", ""),
             base_url="https://api.groq.com/openai/v1",
         )
         self._task: Optional[asyncio.Task] = None
         self._running = False
-        
+
         self._history: List[Dict[str, str]] = []
     
     @property
@@ -85,7 +99,7 @@ class LLMService:
         
         try:
             messages = [
-                {"role": "system", "content": SYSTEM_PROMPT}
+                {"role": "system", "content": self._system_prompt}
             ] + self._history
             
             stream = await self._client.chat.completions.create(
