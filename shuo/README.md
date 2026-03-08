@@ -36,6 +36,38 @@ LISTENING ──EndOfTurn──→ RESPONDING ──Done──→ LISTENING
     └────StartOfTurn─────────┘  (barge-in)
 ```
 
+```mermaid
+flowchart LR
+    Phone(["📞 Phone"])
+
+    subgraph Twilio["Twilio"]
+        TwilioWS["Media Stream\nWebSocket"]
+    end
+
+    subgraph Server["shuo server"]
+        TC["twilio_client\nparse messages"]
+        Flux["flux\nDeepgram STT\n+ turn detection"]
+        SM["state machine\nprocess_event()"]
+        Agent["agent\nLLM→TTS→Player"]
+        LLM["llm\nOpenAI streaming"]
+        Pool["tts_pool\nwarm connections"]
+        TTS["tts\nElevenLabs streaming"]
+        Player["player\nsend audio"]
+    end
+
+    Phone <-->|"call audio"| TwilioWS
+    TwilioWS -->|"raw WS messages"| TC
+    TC -->|"audio bytes"| Flux
+    Flux -->|"EndOfTurn / StartOfTurn"| SM
+    TC -->|"DTMF / stream events"| SM
+    SM -->|"StartAgent / Cancel"| Agent
+    Agent --> LLM
+    LLM -->|"token stream"| TTS
+    Pool -->|"warm WS connection"| TTS
+    TTS -->|"audio chunks"| Player
+    Player -->|"media frames"| TwilioWS
+```
+
 ## Project structure
 
 ```
