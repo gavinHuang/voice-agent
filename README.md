@@ -11,8 +11,15 @@ The agent listens, understands speech with Deepgram Flux, generates replies with
 ```
 voice-agent/
   shuo/               # Core voice agent (framework + server + entry point)
-  client/
-    phone.html        # Browser softphone for end-to-end testing
+  dashboard/          # Web dashboard (call registry, live monitoring)
+    server.py         # Dashboard FastAPI server
+    app.html          # Dashboard UI
+    registry.py       # Call registry
+    bus.py            # Event bus
+  client/             # Browser softphone for end-to-end testing
+    phone.html        # Softphone UI (served via ngrok HTTPS)
+  softphone/          # Standalone softphone (static, no server required)
+    phone.html        # Self-contained softphone page
   README.md           # This file
 ```
 
@@ -111,6 +118,60 @@ INITIAL_MESSAGE=Hello! I'm calling to let you know your parcel has arrived. Can 
 5. Click **Answer** when the call comes in — speak naturally, the agent responds
 
 The browser softphone uses the Twilio Voice SDK. It requires `TWILIO_API_KEY` and `TWILIO_API_SECRET` to be set.
+
+---
+
+## Quick start: make a call and monitor it
+
+### 1. Start the server
+
+```bash
+cd shuo
+python main.py
+```
+
+### 2. Place an outbound call with a task
+
+Set `CALL_GOAL` so the agent knows what it's trying to accomplish, then trigger the call:
+
+```bash
+# Set the goal for this call
+export CALL_GOAL="Confirm the customer's appointment for tomorrow at 2pm"
+
+# Trigger a call to a phone number
+python main.py +61400000000
+```
+
+Or trigger a call via HTTP while the server is already running:
+
+```bash
+CALL_GOAL="Remind the customer their subscription renews tomorrow" \
+  python main.py  # server already running in another terminal
+
+curl https://your-ngrok-url/call/+61400000000
+```
+
+`CALL_GOAL` is available to the agent as context for the conversation. If left unset, the agent uses the default system prompt.
+
+### 3. View the dashboard
+
+Open the dashboard in your browser to monitor live calls in real time:
+
+```
+https://your-ngrok-url/dashboard
+```
+
+The dashboard shows:
+- All active calls with phone number, goal, and elapsed time
+- Live transcript as the conversation unfolds
+- Controls to **hang up**, **take over** (mute the agent and speak yourself via the softphone), or **hand back** to the agent
+
+To take over a call manually:
+1. Open `https://your-ngrok-url/phone` in a second tab (the browser softphone)
+2. Click **Register**
+3. In the dashboard, click **Take over** on the active call — the agent goes silent
+4. Speak directly to the caller via the softphone
+5. Click **Hand back** to return control to the agent
 
 ---
 
