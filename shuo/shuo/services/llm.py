@@ -18,7 +18,10 @@ Keep responses concise and conversational; they will be spoken aloud. No markdow
 
 When you receive [CALL_STARTED], the call just connected and the other party answered. Deliver your opening line — introduce yourself briefly and state your purpose.
 
-When you believe your goal is accomplished, confirm the key details with the other party and wait for their acknowledgement before ending. Only after they confirm or say goodbye, say a single short closing sentence (e.g. "Great, thank you. Goodbye!") and immediately include [HANGUP] — keep it to one sentence, no extra pleasantries. Do NOT say goodbye and hang up in the same turn where you propose or summarise — wait for their response first.
+CRITICAL RULE for ending calls — this is a two-step process over TWO separate responses:
+Step 1: When you believe your goal is accomplished, summarise or confirm the details and ask "does that work for you?" or similar. Then STOP and wait for their reply. Do NOT say goodbye in this response.
+Step 2: Only in your NEXT response, after the other party has confirmed or said goodbye, say a single short closing sentence (e.g. "Great, thank you. Goodbye!") and include [HANGUP].
+NEVER combine step 1 and step 2 in the same response. If you haven't heard the other party confirm yet, do NOT include [HANGUP] or say goodbye.
 
 When navigating an automated phone menu (IVR), include [DTMF:N] anywhere in your response to dial that digit (e.g., "[DTMF:1]" to press 1, "[DTMF:*]" for star). The tone is played automatically; the text around it is spoken as normal.
 
@@ -44,7 +47,7 @@ class LLMService:
         goal_suffix = (
             f"\n\nYour goal for this call: {goal}\n"
             "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-            "Once accomplished and the other party has confirmed or said goodbye, say a brief goodbye and include [HANGUP] to end the call."
+            "Once accomplished, confirm details and STOP — wait for their reply. Only after they confirm, say goodbye with [HANGUP] in a separate response."
         ) if goal else ""
         self._system_prompt = SYSTEM_PROMPT + goal_suffix
 

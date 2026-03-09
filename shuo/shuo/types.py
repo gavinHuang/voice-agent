@@ -20,6 +20,7 @@ class Phase(Enum):
     """Current phase of the conversation."""
     LISTENING = auto()    # Waiting for user / user speaking
     RESPONDING = auto()   # Agent active (LLM -> TTS -> Playback)
+    HANGING_UP = auto()   # Hangup requested, waiting for call to end
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,12 @@ class HoldEndEvent:
 
 
 @dataclass(frozen=True)
+class HangupPendingEvent:
+    """Agent detected [HANGUP] marker — block new turns while goodbye plays."""
+    pass
+
+
+@dataclass(frozen=True)
 class HangupRequestEvent:
     """Agent finished its goodbye turn and wants to end the call."""
     pass
@@ -99,7 +106,7 @@ Event = Union[
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent,
     HoldStartEvent, HoldEndEvent,
-    HangupRequestEvent,
+    HangupPendingEvent, HangupRequestEvent,
 ]
 
 

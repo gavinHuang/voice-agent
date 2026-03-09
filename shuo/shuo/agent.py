@@ -31,7 +31,7 @@ from .services.player import AudioPlayer
 from .services.dtmf import generate_dtmf_ulaw_b64
 from .tracer import Tracer
 from .log import ServiceLogger
-from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupRequestEvent
+from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent
 
 log = ServiceLogger("Agent")
 
@@ -309,6 +309,7 @@ class Agent:
                 self._pending_hold_end = True
             elif m == "HANGUP":
                 self._pending_hangup = True
+                self._emit(HangupPendingEvent())  # Block new turns immediately
             # HOLD_CONTINUE is silently absorbed — no TTS, stay in hold
 
         if clean_text:

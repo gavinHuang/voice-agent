@@ -15,7 +15,7 @@ from .types import (
     AppState, Phase,
     Event, StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent, AgentTurnDoneEvent,
-    HoldStartEvent, HoldEndEvent,
+    HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent,
     Action, FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 
@@ -30,6 +30,12 @@ def process_event(state: AppState, event: Event) -> Tuple[AppState, List[Action]
     - FluxStartOfTurnEvent -> interrupt (barge-in)
     - AgentTurnDoneEvent -> back to listening
     """
+    # Once hanging up, ignore everything except stream stop
+    if state.phase == Phase.HANGING_UP:
+        if isinstance(event, StreamStopEvent):
+            return state, []
+        return state, []
+
     if isinstance(event, StreamStartEvent):
         return replace(state, stream_sid=event.stream_sid, phase=Phase.LISTENING), []
 
@@ -66,5 +72,8 @@ def process_event(state: AppState, event: Event) -> Tuple[AppState, List[Action]
 
     if isinstance(event, HoldEndEvent):
         return replace(state, hold_mode=False), []
+
+    if isinstance(event, (HangupPendingEvent, HangupRequestEvent)):
+        return replace(state, phase=Phase.HANGING_UP), []
 
     return state, []
