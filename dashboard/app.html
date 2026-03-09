@@ -835,8 +835,6 @@ async function placeCall() {
       setFormMsg(`Error: ${data.error || r.statusText}`, 'error');
     } else {
       setFormMsg(`Calling ${data.to}…`, 'ok');
-      document.getElementById('nc-phone').value = '';
-      document.getElementById('nc-goal').value  = '';
     }
   } catch (e) {
     setFormMsg(`Error: ${e.message}`, 'error');

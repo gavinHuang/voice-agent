@@ -77,13 +77,24 @@ class ColorFormatter(logging.Formatter):
 
 def setup_logging(level: int = logging.INFO) -> None:
     """Configure logging for the application."""
+    import os
+    from logging.handlers import RotatingFileHandler
+
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(ColorFormatter())
     console.setLevel(level)
 
+    # Plain formatter for file (no ANSI colors)
+    file_formatter = logging.Formatter("%(asctime)s.%(msecs)03d | %(levelname)s | %(name)s | %(message)s",
+                                       datefmt="%Y-%m-%d %H:%M:%S")
+    log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shuo.log")
+    file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=3)
+    file_handler.setFormatter(file_formatter)
+    file_handler.setLevel(level)
+
     root = logging.getLogger()
     root.setLevel(level)
-    root.handlers = [console]
+    root.handlers = [console, file_handler]
 
     # Quiet noisy libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
