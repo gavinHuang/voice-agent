@@ -345,7 +345,7 @@ async def websocket_endpoint(websocket: WebSocket):
     def on_agent_ready(agent) -> None:
         dashboard_registry.update(call_id, agent=agent)
 
-    def on_hangup() -> None:
+    def on_hangup():
         c = dashboard_registry.get(call_id)
         if not c or not c.call_sid:
             return
@@ -365,7 +365,7 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as e:
                 logger.warning(f"Hangup REST call failed: {e}")
 
-        asyncio.create_task(_do_hangup())
+        return asyncio.create_task(_do_hangup())
 
     logger.info(f"Call connected  (active: {_active_calls})")
 

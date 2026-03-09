@@ -189,7 +189,14 @@ async def run_conversation_over_twilio(
 
             if isinstance(event, HangupRequestEvent):
                 if on_hangup:
-                    on_hangup()
+                    result = on_hangup()
+                    # Await the hangup coroutine/task so the Twilio REST
+                    # call completes before we tear down the WebSocket.
+                    if asyncio.isfuture(result) or asyncio.iscoroutine(result):
+                        try:
+                            await result
+                        except Exception:
+                            pass
                 if observer:
                     observer({"type": "stream_stop"})
                 try:
