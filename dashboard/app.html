@@ -57,6 +57,16 @@
   #ws-status.disconnected { color: var(--danger);  border-color: var(--danger); }
   #ws-status.connecting   { color: var(--warn);    border-color: var(--warn); }
 
+  #phone-status {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: #1c2128;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  #phone-status.ready { color: var(--ok); border-color: var(--ok); }
+
   #active-count {
     margin-left: auto;
     font-size: 0.8rem;
@@ -246,7 +256,7 @@
   .agent-col .turn-block { color: var(--agent); }
 
   .turn-block.streaming::after {
-    content: '▌';
+    content: '\25CC';
     animation: blink 0.8s step-end infinite;
     color: var(--agent);
     opacity: 0.8;
@@ -278,10 +288,10 @@
     background: #0d1117;
   }
 
-  /* ── Takeover banner ────────────────────────────── */
-  .takeover-banner {
+  /* ── Takeover softphone bar ────────────────────── */
+  .takeover-bar {
     display: none;
-    padding: 8px 16px;
+    padding: 10px 16px;
     background: #1c1710;
     border-bottom: 1px solid #78350f;
     font-size: 0.8rem;
@@ -289,13 +299,23 @@
     align-items: center;
     gap: 12px;
   }
-  .takeover-banner.visible { display: flex; }
-  .takeover-banner a {
-    color: var(--blue);
-    text-decoration: none;
-    font-size: 0.78rem;
+  .takeover-bar.visible { display: flex; }
+  .takeover-bar .bar-status { flex: 1; }
+  .takeover-bar .btn-mute {
+    border-color: var(--border);
+    color: var(--muted);
+    font-size: 0.75rem;
+    padding: 3px 10px;
   }
-  .takeover-banner a:hover { text-decoration: underline; }
+  .takeover-bar .btn-mute.muted { color: var(--danger); border-color: var(--danger); }
+  .takeover-bar .btn-transfer-back {
+    border-color: #14532d;
+    color: var(--ok);
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    font-weight: bold;
+  }
+  .takeover-bar .btn-transfer-back:hover { background: #0f1e14; }
 
   /* ── Controls ───────────────────────────────────── */
   .controls {
@@ -326,9 +346,6 @@
 
   .btn-takeover { border-color: #78350f; color: var(--warn); }
   .btn-takeover:hover { background: #1c1710; }
-
-  .btn-handback { border-color: #14532d; color: var(--ok); }
-  .btn-handback:hover { background: #0f1e14; }
 
   .btn-keypad-toggle { color: var(--muted); }
 
@@ -399,7 +416,8 @@
 
 <header>
   <h1>shuo <span>monitor</span></h1>
-  <div id="ws-status" class="connecting">connecting…</div>
+  <div id="ws-status" class="connecting">connecting...</div>
+  <div id="phone-status">phone: init</div>
   <div id="active-count">active: 0</div>
 </header>
 
@@ -408,7 +426,7 @@
   <div id="new-call-panel">
     <div id="new-call-header" onclick="toggleNewCallForm()">
       <span>+ New Call</span>
-      <span id="new-call-toggle">▲ collapse</span>
+      <span id="new-call-toggle">&triangle; collapse</span>
     </div>
     <div id="new-call-body">
       <div class="form-row">
@@ -421,28 +439,95 @@
           placeholder="e.g. Confirm the customer's appointment for tomorrow at 2pm"></textarea>
       </div>
       <div id="call-form-actions">
-        <button class="btn-call" id="btn-place-call" onclick="placeCall()">📞 Place Call</button>
+        <button class="btn-call" id="btn-place-call" onclick="placeCall()">Place Call</button>
         <span id="call-form-msg"></span>
       </div>
     </div>
   </div>
 
-  <div id="no-calls">No active calls. Waiting…</div>
+  <div id="no-calls">No active calls. Waiting...</div>
   <div id="calls"></div>
 </main>
 
+<script src="https://unpkg.com/@twilio/voice-sdk@2.18.0/dist/twilio.min.js"></script>
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-const calls = {};       // call_id → callState
+const calls = {};       // call_id -> callState
 let   ws    = null;
 let   reconnectDelay = 1000;
+
+// ── Twilio Voice Device (softphone) ─────────────────────────────────────
+let twilioDevice = null;
+let softphoneCall = null;          // active Twilio call during takeover
+let pendingTakeoverCallId = null;  // set before server dials us
+
+async function initTwilioDevice() {
+  const statusEl = document.getElementById('phone-status');
+  try {
+    statusEl.textContent = 'phone: connecting';
+    const res = await fetch('/token');
+    const data = await res.json();
+    twilioDevice = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
+
+    twilioDevice.on('registered', () => {
+      statusEl.textContent = 'phone: ready';
+      statusEl.className = 'ready';
+    });
+    twilioDevice.on('error', (e) => {
+      statusEl.textContent = 'phone: error';
+      statusEl.className = '';
+      console.error('Twilio device error', e);
+    });
+    twilioDevice.on('incoming', (call) => {
+      // Auto-accept incoming takeover calls from the server
+      if (pendingTakeoverCallId) {
+        call.accept();
+        softphoneCall = call;
+        const callId = pendingTakeoverCallId;
+        pendingTakeoverCallId = null;
+        call.on('disconnect', () => onSoftphoneDisconnect(callId));
+        call.on('cancel', () => onSoftphoneDisconnect(callId));
+      }
+    });
+
+    twilioDevice.register();
+  } catch (e) {
+    statusEl.textContent = 'phone: failed';
+    console.error('Failed to init Twilio device', e);
+  }
+}
+
+function onSoftphoneDisconnect(callId) {
+  softphoneCall = null;
+  const state = calls[callId];
+  if (state && state.mode === 'takeover' && !state._ending) {
+    // Softphone disconnected by user — hand back to agent
+    doHandback(callId);
+  }
+}
+
+function onCallEnded(callId) {
+  // Server says call is fully over — disconnect softphone if still active
+  const state = calls[callId];
+  if (state) state._ending = true;  // prevent onSoftphoneDisconnect from calling handback
+  if (softphoneCall) {
+    try { softphoneCall.disconnect(); } catch(e) {}
+    softphoneCall = null;
+  }
+  pendingTakeoverCallId = null;
+  if (state) {
+    state.mode = 'agent';
+    setMode(callId, 'agent');
+    scheduleRemove(callId);
+  }
+}
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const url   = `${proto}://${location.host}/dashboard/ws`;
 
-  setWsStatus('connecting', 'connecting…');
+  setWsStatus('connecting', 'connecting...');
   ws = new WebSocket(url);
 
   ws.onopen = () => {
@@ -456,7 +541,7 @@ function connectWS() {
   };
 
   ws.onclose = ws.onerror = () => {
-    setWsStatus('disconnected', `reconnecting in ${reconnectDelay / 1000}s…`);
+    setWsStatus('disconnected', `reconnecting in ${reconnectDelay / 1000}s...`);
     setTimeout(() => {
       reconnectDelay = Math.min(reconnectDelay * 2, 16000);
       connectWS();
@@ -474,20 +559,48 @@ function setWsStatus(cls, text) {
 function handleEvent(ev) {
   switch (ev.type) {
     case 'active_calls': ev.calls.forEach(c => getOrCreatePanel(c)); break;
-    case 'stream_start': getOrCreatePanel({
-        call_id: ev.call_id, phone: ev.phone || ev.call_id,
-        goal: ev.goal || '', mode: 'agent'
-      }); break;
-    case 'stream_stop':  scheduleRemove(ev.call_id); break;
+    case 'stream_start': {
+      const existing = calls[ev.call_id];
+      if (existing) {
+        // Reconnection after take-over hand-back — re-enable panel
+        existing.panel.querySelector('.outcome-panel').classList.remove('visible');
+        existing.panel.querySelector('.call-header').style.opacity = '';
+        existing.panel.querySelectorAll('.controls button').forEach(b => b.disabled = false);
+        setMode(ev.call_id, 'agent');
+        if (!existing.timerInterval) {
+          existing.timerInterval = setInterval(() => {
+            existing.elapsed++;
+            const el = existing.panel.querySelector('.call-timer');
+            if (el) el.textContent = formatTime(existing.elapsed);
+          }, 1000);
+        }
+      } else {
+        getOrCreatePanel({
+          call_id: ev.call_id, phone: ev.phone || ev.call_id,
+          goal: ev.goal || '', mode: 'agent'
+        });
+      }
+      break;
+    }
+    case 'stream_stop': {
+      const cs = calls[ev.call_id];
+      if (cs && cs.mode === 'takeover') {
+        // Stream closed for takeover redirect — panel stays active
+      } else {
+        scheduleRemove(ev.call_id);
+      }
+      break;
+    }
     case 'transcript':   addUserTurn(ev.call_id, ev.text); break;
     case 'phase_change': setPhase(ev.call_id, ev.to); break;
     case 'agent_token':  appendAgentToken(ev.call_id, ev.token); break;
     case 'agent_done':   finalizeAgentTurn(ev.call_id); break;
-    case 'dtmf':         addEventChip(ev.call_id, `📱 ${ev.digit}`, 'dtmf'); break;
-    case 'hold':         addEventChip(ev.call_id, '⏸ hold', 'hold'); break;
-    case 'hold_end':     addEventChip(ev.call_id, '▶ hold end', 'hold'); break;
+    case 'dtmf':         addEventChip(ev.call_id, 'DTMF ' + ev.digit, 'dtmf'); break;
+    case 'hold':         addEventChip(ev.call_id, 'hold', 'hold'); break;
+    case 'hold_end':     addEventChip(ev.call_id, 'hold end', 'hold'); break;
     case 'takeover':     setMode(ev.call_id, 'takeover'); break;
     case 'handback':     setMode(ev.call_id, 'agent'); break;
+    case 'call_ended':   onCallEnded(ev.call_id); break;
   }
 }
 
@@ -503,9 +616,10 @@ function getOrCreatePanel(callData) {
     phase:          'LISTENING',
     elapsed:        callData.elapsed || 0,
     timerInterval:  null,
-    agentBlock:     null,   // current streaming agent turn div
-    agentBuf:       '',     // buffer accumulating current agent turn text
-    transcript:     [],     // [{role, text}] for summary
+    agentBlock:     null,
+    agentBuf:       '',
+    transcript:     [],
+    muted:          false,
   };
   calls[callData.call_id] = state;
 
@@ -515,7 +629,6 @@ function getOrCreatePanel(callData) {
   document.getElementById('no-calls').style.display = 'none';
   updateActiveCount();
 
-  // Elapsed timer
   state.timerInterval = setInterval(() => {
     state.elapsed++;
     const el = panel.querySelector('.call-timer');
@@ -528,12 +641,11 @@ function getOrCreatePanel(callData) {
 function scheduleRemove(callId) {
   const state = calls[callId];
   if (!state) return;
-  // Show the outcome panel and stop the timer; panel stays until dismissed
   clearInterval(state.timerInterval);
+  state.timerInterval = null;
   const panel = state.panel;
   panel.querySelector('.outcome-panel').classList.add('visible');
   panel.querySelector('.call-header').style.opacity = '0.5';
-  // Disable control buttons
   panel.querySelectorAll('.controls button').forEach(b => b.disabled = true);
 }
 
@@ -567,7 +679,7 @@ function buildPanel(state) {
       <span class="call-timer">${formatTime(state.elapsed)}</span>
     </div>
     <div class="call-goal">
-      <strong>Goal:</strong> <span class="goal-text">${esc(state.goal) || '<span style="color:var(--muted)">—</span>'}</span>
+      <strong>Goal:</strong> <span class="goal-text">${esc(state.goal) || '<span style="color:var(--muted)">&mdash;</span>'}</span>
     </div>
     <div class="transcript-grid">
       <div class="col user-col">
@@ -580,16 +692,15 @@ function buildPanel(state) {
       </div>
     </div>
     <div class="call-events"></div>
-    <div class="takeover-banner">
-      ⚠ Agent suppressed — human in control.
-      <a href="/phone" target="_blank">Open softphone ↗</a>
-      to speak with the caller.
+    <div class="takeover-bar">
+      <span class="bar-status">You are on the call &mdash; agent listening</span>
+      <button class="btn-mute" onclick="doToggleMute('${state.call_id}')">Mute</button>
+      <button class="btn-transfer-back" onclick="doTransferBack('${state.call_id}')">Transfer Back</button>
     </div>
     <div class="controls">
-      <button class="btn-hangup"   onclick="doHangup('${state.call_id}')">🔴 Hang Up</button>
-      <button class="btn-takeover" onclick="doTakeover('${state.call_id}')">🎤 Take Over</button>
-      <button class="btn-handback" onclick="doHandback('${state.call_id}')" style="display:none">🔙 Hand Back</button>
-      <button class="btn-keypad-toggle" onclick="toggleKeypad('${state.call_id}')">📱 Keypad</button>
+      <button class="btn-hangup"   onclick="doHangup('${state.call_id}')">Hang Up</button>
+      <button class="btn-takeover" onclick="doTakeover('${state.call_id}')">Take Over</button>
+      <button class="btn-keypad-toggle" onclick="toggleKeypad('${state.call_id}')">Keypad</button>
     </div>
     <div class="keypad">
       <div class="keypad-grid">
@@ -600,23 +711,14 @@ function buildPanel(state) {
     </div>
     <div class="outcome-panel">
       <div class="outcome-label">OUTCOME</div>
-      <div class="outcome-text">—</div>
+      <div class="outcome-text">&mdash;</div>
       <div class="outcome-actions">
-        <button class="btn-summarize" onclick="doSummarize('${state.call_id}')">✨ Summarize</button>
+        <button class="btn-summarize" onclick="doSummarize('${state.call_id}')">Summarize</button>
         <span class="outcome-status"></span>
       </div>
     </div>
   `;
   return el;
-}
-
-// ── Goal update ────────────────────────────────────────────────────────────
-function updateGoal(callId, goal) {
-  const state = calls[callId];
-  if (!state) return;
-  state.goal = goal;
-  const el = state.panel.querySelector('.goal-text');
-  if (el) el.innerHTML = goal ? esc(goal) : '<span style="color:var(--muted)">—</span>';
 }
 
 // ── Transcript ────────────────────────────────────────────────────────────
@@ -627,7 +729,7 @@ function addUserTurn(callId, text) {
   const content = state.panel.querySelector('.user-content');
   const block = document.createElement('div');
   block.className = 'turn-block';
-  block.textContent = `"${text}"`;
+  block.textContent = '"' + text + '"';
   content.appendChild(block);
   content.scrollTop = content.scrollHeight;
 }
@@ -664,7 +766,6 @@ function setPhase(callId, phase) {
   if (!state) return;
   state.phase = phase;
 
-  // Start a fresh agent block on new RESPONDING phase
   if (phase === 'RESPONDING') state.agentBlock = null;
 
   const badge = state.panel.querySelector('.phase-badge');
@@ -680,21 +781,22 @@ function setMode(callId, mode) {
   if (!state) return;
   state.mode = mode;
 
-  const banner   = state.panel.querySelector('.takeover-banner');
+  const bar      = state.panel.querySelector('.takeover-bar');
   const btnTake  = state.panel.querySelector('.btn-takeover');
-  const btnBack  = state.panel.querySelector('.btn-handback');
 
   if (mode === 'takeover') {
-    banner.classList.add('visible');
+    bar.classList.add('visible');
     btnTake.style.display = 'none';
-    btnBack.style.display = '';
   } else {
-    banner.classList.remove('visible');
+    bar.classList.remove('visible');
     btnTake.style.display = '';
-    btnBack.style.display = 'none';
+    // Reset mute state
+    state.muted = false;
+    const muteBtn = state.panel.querySelector('.btn-mute');
+    if (muteBtn) { muteBtn.textContent = 'Mute'; muteBtn.classList.remove('muted'); }
   }
 
-  setPhase(callId, state.phase); // refresh badge
+  setPhase(callId, state.phase);
 }
 
 // ── Event chips ───────────────────────────────────────────────────────────
@@ -711,6 +813,11 @@ function addEventChip(callId, label, cls) {
 // ── Control actions ───────────────────────────────────────────────────────
 async function doHangup(callId) {
   if (!confirm('Hang up this call?')) return;
+  // Disconnect softphone if active (prevents browser mic staying open)
+  if (softphoneCall) {
+    try { softphoneCall.disconnect(); } catch(e) {}
+    softphoneCall = null;
+  }
   try {
     const r = await api(`/dashboard/calls/${callId}/hangup`, 'POST');
     if (!r.ok) showError(callId, await r.text());
@@ -718,17 +825,53 @@ async function doHangup(callId) {
 }
 
 async function doTakeover(callId) {
+  if (!twilioDevice || twilioDevice.state !== 'registered') {
+    showError(callId, 'Softphone not ready');
+    return;
+  }
+  // Tell the device to expect an incoming call for this takeover
+  pendingTakeoverCallId = callId;
   try {
     const r = await api(`/dashboard/calls/${callId}/takeover`, 'POST');
-    if (!r.ok) showError(callId, await r.text());
-  } catch (e) { showError(callId, e.message); }
+    if (!r.ok) {
+      pendingTakeoverCallId = null;
+      showError(callId, await r.text());
+    }
+  } catch (e) {
+    pendingTakeoverCallId = null;
+    showError(callId, e.message);
+  }
 }
 
 async function doHandback(callId) {
+  // Disconnect our softphone leg
+  if (softphoneCall) {
+    try { softphoneCall.disconnect(); } catch(e) {}
+    softphoneCall = null;
+  }
   try {
     const r = await api(`/dashboard/calls/${callId}/handback`, 'POST');
     if (!r.ok) showError(callId, await r.text());
   } catch (e) { showError(callId, e.message); }
+}
+
+function doTransferBack(callId) {
+  doHandback(callId);
+}
+
+function doToggleMute(callId) {
+  const state = calls[callId];
+  if (!state || !softphoneCall) return;
+  state.muted = !state.muted;
+  softphoneCall.mute(state.muted);
+  const btn = state.panel.querySelector('.btn-mute');
+  if (state.muted) {
+    btn.textContent = 'Unmute';
+    btn.classList.add('muted');
+  } else {
+    btn.textContent = 'Mute';
+    btn.classList.remove('muted');
+  }
 }
 
 async function doSendDTMF(callId, digit) {
@@ -758,7 +901,7 @@ async function api(path, method = 'GET', body = null) {
 function showError(callId, msg) {
   const state = calls[callId];
   if (!state) return;
-  addEventChip(callId, `⚠ ${msg}`, '');
+  addEventChip(callId, msg, '');
 }
 
 function formatTime(secs) {
@@ -785,7 +928,7 @@ async function doSummarize(callId) {
   const btn     = panel.querySelector('.btn-summarize');
 
   btn.disabled = true;
-  statusEl.textContent = 'Generating…';
+  statusEl.textContent = 'Generating...';
 
   try {
     const r = await api('/dashboard/summarize', 'POST', {
@@ -811,7 +954,7 @@ function toggleNewCallForm() {
   const body   = document.getElementById('new-call-body');
   const toggle = document.getElementById('new-call-toggle');
   const collapsed = body.classList.toggle('hidden');
-  toggle.textContent = collapsed ? '▼ expand' : '▲ collapse';
+  toggle.textContent = collapsed ? 'expand' : 'collapse';
 }
 
 async function placeCall() {
@@ -826,7 +969,7 @@ async function placeCall() {
   }
 
   btn.disabled = true;
-  setFormMsg('Placing call…', '');
+  setFormMsg('Placing call...', '');
 
   try {
     const r = await api('/dashboard/call', 'POST', { phone, goal });
@@ -834,7 +977,7 @@ async function placeCall() {
     if (!r.ok) {
       setFormMsg(`Error: ${data.error || r.statusText}`, 'error');
     } else {
-      setFormMsg(`Calling ${data.to}…`, 'ok');
+      setFormMsg(`Calling ${data.to}...`, 'ok');
     }
   } catch (e) {
     setFormMsg(`Error: ${e.message}`, 'error');
@@ -849,13 +992,13 @@ function setFormMsg(text, cls) {
   el.className   = cls;
 }
 
-// Allow pressing Enter in the phone field to submit
 document.getElementById('nc-phone').addEventListener('keydown', e => {
   if (e.key === 'Enter') placeCall();
 });
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 connectWS();
+initTwilioDevice();
 </script>
 </body>
 </html>

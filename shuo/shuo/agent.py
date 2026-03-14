@@ -181,6 +181,23 @@ class Agent:
         """Read-only access to conversation history (owned by LLM)."""
         return self._llm.history
 
+    def restore_history(
+        self,
+        saved_history: List[Dict[str, str]],
+        takeover_transcript: List[str],
+    ) -> None:
+        """Restore conversation history after take-over hand-back."""
+        self._llm.set_history(saved_history)
+        if takeover_transcript:
+            context = (
+                "[HANDBACK] A human supervisor temporarily took over the call. "
+                "Here is what was said during the takeover:\n\n"
+                + "\n".join(takeover_transcript)
+                + "\n\nYou are now back in control. Continue the conversation "
+                "naturally, picking up from where things were left."
+            )
+            self._llm._history.append({"role": "user", "content": context})
+
     # ── Turn Lifecycle ──────────────────────────────────────────────
 
     async def start_turn(self, transcript: str, hold_check: bool = False) -> None:

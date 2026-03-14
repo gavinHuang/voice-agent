@@ -37,6 +37,7 @@ class TTSService:
         
         self._api_key = os.getenv("ELEVENLABS_API_KEY", "")
         self._voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+        self._model_id = os.getenv("ELEVENLABS_MODEL", "eleven_flash_v2_5")
     
     @property
     def is_active(self) -> bool:
@@ -58,7 +59,7 @@ class TTSService:
         
         url = (
             f"wss://api.elevenlabs.io/v1/text-to-speech/{self._voice_id}/stream-input?"
-            f"model_id=eleven_turbo_v2_5&"
+            f"model_id={self._model_id}&"
             f"output_format=ulaw_8000"
         )
         
@@ -179,13 +180,19 @@ class TTSService:
         """Parse and handle ElevenLabs response."""
         try:
             data = json.loads(message)
-            
+
+            # Handle ElevenLabs error responses
+            if "error" in data or "detail" in data:
+                err = data.get("error") or data.get("detail", {})
+                log.error(f"ElevenLabs error: {err}")
+                return
+
             if "audio" in data and data["audio"]:
                 audio_base64 = data["audio"]
                 await self._on_audio(audio_base64)
-            
+
             if data.get("isFinal", False):
                 await self._on_done()
-            
+
         except json.JSONDecodeError:
             log.error(f"Invalid JSON: {message[:100]}")

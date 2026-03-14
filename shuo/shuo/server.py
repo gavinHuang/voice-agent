@@ -26,7 +26,9 @@ from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 
 from .conversation import run_conversation_over_twilio
-from .services.twilio_client import make_outbound_call
+from .services.twilio_client import make_outbound_call, parse_twilio_message
+from .services.flux import FluxService
+from .types import MediaEvent, StreamStopEvent
 from .log import get_logger
 from dashboard.server import router as dashboard_router
 from dashboard import bus as dashboard_bus, registry as dashboard_registry
@@ -66,6 +68,70 @@ _SOFTPHONE_DIR = Path(__file__).parent.parent.parent / "softphone"
 async def phone():
     """Browser softphone page for testing — answers calls from the agent."""
     return FileResponse(_SOFTPHONE_DIR / "phone.html")
+
+
+@app.api_route("/twiml/conference/{call_id}", methods=["GET", "POST"])
+async def twiml_conference(call_id: str):
+    """Return TwiML to join a takeover conference (used by softphone leg)."""
+    twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Dial>
+        <Conference startConferenceOnEnter="true"
+                    endConferenceOnExit="false">takeover-{call_id}</Conference>
+    </Dial>
+</Response>"""
+    return Response(content=twiml_response, media_type="application/xml")
+
+
+@app.api_route("/twiml/dial-action/{call_id}", methods=["GET", "POST"])
+async def dial_action(call_id: str):
+    """
+    Called by Twilio when the callee's <Dial><Conference> ends.
+
+    Two scenarios:
+    1. Callee hung up during takeover → clean up softphone + notify dashboard
+    2. Handback redirected the call → this won't fire (redirect skips action)
+    """
+    call = dashboard_registry.get(call_id)
+    if call and call.mode == dashboard_registry.CallMode.TAKEOVER:
+        # Callee left conference (hung up) — terminate softphone + clean up
+        if call.softphone_call_sid:
+            try:
+                from twilio.rest import Client
+                client = Client(
+                    os.getenv("TWILIO_ACCOUNT_SID"),
+                    os.getenv("TWILIO_AUTH_TOKEN"),
+                )
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None, lambda: client.calls(call.softphone_call_sid).update(
+                        status="completed"
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Softphone cleanup failed: {e}")
+            dashboard_registry.update(call_id, softphone_call_sid="")
+
+        dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended"})
+        dashboard_registry.remove(call_id)
+        dashboard_bus.destroy(call_id)
+        # Callee already hung up — return empty TwiML
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response/>',
+            media_type="application/xml",
+        )
+
+    # Normal dial-action (non-takeover) — reconnect to agent stream
+    public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+    ws_url = public_url.replace("https://", "wss://").replace("http://", "ws://")
+    ws_url = f"{ws_url}/ws"
+    twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="{ws_url}" track="inbound_track"/>
+    </Connect>
+</Response>"""
+    return Response(content=twiml_response, media_type="application/xml")
 
 
 @app.api_route("/twiml", methods=["GET", "POST"])
@@ -311,6 +377,63 @@ async def bench_ttft(
     })
 
 
+@app.websocket("/ws-listen")
+async def ws_listen(websocket: WebSocket):
+    """
+    Listen-only WebSocket for take-over mode.
+
+    Receives a Twilio REST media stream, feeds audio to Deepgram Flux
+    for transcription, and publishes transcripts to the dashboard.
+    The agent uses these transcripts to maintain context during take-over.
+    """
+    await websocket.accept()
+
+    call_id = websocket.query_params.get("call_id", "")
+    call = dashboard_registry.get(call_id) if call_id else None
+    if not call:
+        logger.warning(f"ws-listen: unknown call_id={call_id!r}")
+        await websocket.close()
+        return
+
+    async def on_end_of_turn(transcript: str) -> None:
+        if not transcript:
+            return
+        c = dashboard_registry.get(call_id)
+        if c:
+            c.takeover_transcript.append(transcript)
+        dashboard_bus.publish_global({
+            "call_id": call_id,
+            "type": "transcript",
+            "text": transcript,
+        })
+
+    async def on_start_of_turn() -> None:
+        pass  # No barge-in handling during listen mode
+
+    flux = FluxService(
+        on_end_of_turn=on_end_of_turn,
+        on_start_of_turn=on_start_of_turn,
+    )
+    await flux.start()
+    logger.info(f"ws-listen connected for call {call_id}")
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            data = json.loads(raw)
+            event = parse_twilio_message(data)
+            if event:
+                if isinstance(event, MediaEvent):
+                    await flux.send(event.audio_bytes)
+                elif isinstance(event, StreamStopEvent):
+                    break
+    except Exception as e:
+        logger.warning(f"ws-listen error for {call_id}: {e}")
+    finally:
+        await flux.stop()
+        logger.info(f"ws-listen disconnected for call {call_id}")
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -318,35 +441,36 @@ async def websocket_endpoint(websocket: WebSocket):
 
     Handles the bidirectional audio stream for a single call.
     Wires the dashboard event bus and registry for real-time monitoring.
+    Supports reconnection after take-over hand-back.
     """
     global _active_calls
 
     await websocket.accept()
     _active_calls += 1
 
-    # Assign a short ID for this call before stream_sid is known
-    call_id = uuid.uuid4().hex[:8]
-    dashboard_bus.create(call_id)
-    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=call_id))
+    # Mutable context — call_id may change if this is a reconnection
+    ctx = {"call_id": uuid.uuid4().hex[:8]}
+    dashboard_bus.create(ctx["call_id"])
+    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx["call_id"]))
 
     def observer(event: dict) -> None:
-        tagged = {**event, "call_id": call_id}
+        tagged = {**event, "call_id": ctx["call_id"]}
         # On stream_start: embed phone and goal into the broadcast so the
         # dashboard panel is created with both values in a single event.
         if event.get("type") == "stream_start":
-            c = dashboard_registry.get(call_id)
+            c = dashboard_registry.get(ctx["call_id"])
             tagged = {**tagged, "phone": c.phone if c else "", "goal": c.goal if c else ""}
         dashboard_bus.publish_global(tagged)
 
     def should_suppress_agent() -> bool:
-        c = dashboard_registry.get(call_id)
+        c = dashboard_registry.get(ctx["call_id"])
         return c is not None and c.mode == dashboard_registry.CallMode.TAKEOVER
 
     def on_agent_ready(agent) -> None:
-        dashboard_registry.update(call_id, agent=agent)
+        dashboard_registry.update(ctx["call_id"], agent=agent)
 
     def on_hangup():
-        c = dashboard_registry.get(call_id)
+        c = dashboard_registry.get(ctx["call_id"])
         if not c or not c.call_sid:
             return
         call_sid = c.call_sid
@@ -375,8 +499,40 @@ async def websocket_endpoint(websocket: WebSocket):
         pending = dashboard_registry.pop_pending(call_sid)
         goal = pending["goal"] or os.getenv("CALL_GOAL", "")
         phone = pending["phone"]
-        dashboard_registry.update(call_id, goal=goal, phone=phone)
+        dashboard_registry.update(ctx["call_id"], goal=goal, phone=phone, call_sid=call_sid)
         return goal
+
+    def get_saved_state(call_sid: str):
+        """Check if this stream reconnects a call that was in take-over."""
+        existing = dashboard_registry.find_by_call_sid(call_sid)
+        if existing and existing.call_id != ctx["call_id"] and existing.saved_history:
+            result = {
+                "history": existing.saved_history,
+                "takeover_transcript": existing.takeover_transcript,
+                "goal": existing.goal,
+                "phone": existing.phone,
+            }
+            # Clean up the temporary entry and bus
+            dashboard_registry.remove(ctx["call_id"])
+            dashboard_bus.destroy(ctx["call_id"])
+            # Reuse the original call_id so dashboard panel stays intact
+            ctx["call_id"] = existing.call_id
+            dashboard_registry.update(ctx["call_id"],
+                mode=dashboard_registry.CallMode.AGENT,
+                saved_history=[],
+                takeover_transcript=[],
+                listen_stream_sid="",
+                call_sid=call_sid,
+            )
+            dashboard_bus.publish_global({
+                "call_id": ctx["call_id"],
+                "type": "stream_start",
+                "phone": result["phone"],
+                "goal": result["goal"],
+            })
+            logger.info(f"Reconnected call {ctx['call_id']} after take-over")
+            return result
+        return None
 
     try:
         await run_conversation_over_twilio(
@@ -386,13 +542,22 @@ async def websocket_endpoint(websocket: WebSocket):
             on_agent_ready=on_agent_ready,
             get_goal=get_goal,
             on_hangup=on_hangup,
+            get_saved_state=get_saved_state,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
         _active_calls -= 1
-        dashboard_registry.remove(call_id)
-        dashboard_bus.destroy(call_id)
-        logger.info(f"Call ended  (active: {_active_calls})")
+        cid = ctx["call_id"]
+        call = dashboard_registry.get(cid)
+        if call and call.mode == dashboard_registry.CallMode.TAKEOVER:
+            # Preserve registry entry for reconnection after hand-back
+            if call.agent:
+                dashboard_registry.update(cid, saved_history=call.agent.history)
+            logger.info(f"Call {cid} paused for takeover  (active: {_active_calls})")
+        else:
+            dashboard_registry.remove(cid)
+            dashboard_bus.destroy(cid)
+            logger.info(f"Call ended  (active: {_active_calls})")
         if _draining and _active_calls <= 0:
             _drain_event.set()

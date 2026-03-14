@@ -13,6 +13,7 @@ Routes (all under /dashboard):
 
 import os
 import time
+import asyncio
 from pathlib import Path
 from typing import List
 
@@ -22,6 +23,9 @@ from pydantic import BaseModel
 
 from . import bus as dashboard_bus
 from . import registry
+
+import logging
+_log = logging.getLogger("dashboard.server")
 
 _HERE = Path(__file__).parent
 
@@ -102,13 +106,38 @@ async def hangup(call_id: str):
     if not call.call_sid:
         return JSONResponse({"error": "Call SID not yet available"}, status_code=503)
 
+    loop = asyncio.get_event_loop()
     try:
         from twilio.rest import Client
         client = Client(
             os.getenv("TWILIO_ACCOUNT_SID"),
             os.getenv("TWILIO_AUTH_TOKEN"),
         )
-        client.calls(call.call_sid).update(status="completed")
+
+        # Hang up softphone leg first if in takeover
+        if call.softphone_call_sid:
+            try:
+                await loop.run_in_executor(
+                    None, lambda: client.calls(call.softphone_call_sid).update(
+                        status="completed"
+                    )
+                )
+            except Exception:
+                pass
+            registry.update(call_id, softphone_call_sid="")
+
+        # Hang up the callee's call
+        try:
+            await loop.run_in_executor(
+                None, lambda: client.calls(call.call_sid).update(status="completed")
+            )
+        except Exception as e:
+            _log.warning(f"Callee hangup failed (may already be ended): {e}")
+
+        # Clean up registry and bus
+        registry.remove(call_id)
+        dashboard_bus.destroy(call_id)
+        dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended"})
         return {"status": "ok"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -119,29 +148,117 @@ async def hangup(call_id: str):
 @router.post("/calls/{call_id}/takeover")
 async def takeover(call_id: str):
     """
-    Suppress the agent and hand control to the human supervisor.
+    Join the live call as a three-way conference.
 
-    The agent will finish its current utterance (if any) then stop responding.
-    The supervisor uses the softphone (/phone) to speak to the caller.
+    1. Save agent conversation history
+    2. Redirect the callee into a conference room
+    3. Dial the browser softphone into the same conference
+    4. Create a listen-only stream so the agent tracks the conversation
+    5. Agent is suppressed but keeps listening
     """
     call = registry.get(call_id)
     if not call:
         return JSONResponse({"error": "Call not found"}, status_code=404)
+    if not call.call_sid:
+        return JSONResponse({"error": "Call SID not yet available"}, status_code=503)
 
-    registry.update(call_id, mode=registry.CallMode.TAKEOVER)
+    # Save agent history before redirecting (stream will close)
+    if call.agent:
+        registry.update(call_id, saved_history=call.agent.history)
+
+    registry.update(call_id, mode=registry.CallMode.TAKEOVER, takeover_transcript=[])
     dashboard_bus.publish_global({"call_id": call_id, "type": "takeover"})
+
+    loop = asyncio.get_event_loop()
+    try:
+        from twilio.rest import Client
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+        from_number = os.getenv("TWILIO_PHONE_NUMBER", "")
+        client = Client(account_sid, auth_token)
+        conf_name = f"takeover-{call_id}"
+
+        # 1. Redirect callee into the conference with a <Start><Stream>
+        #    to fork audio for real-time transcription during takeover
+        ws_url = public_url.replace("https://", "wss://").replace("http://", "ws://")
+        listen_url = f"{ws_url}/ws-listen?call_id={call_id}"
+        conf_twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            f'<Start><Stream url="{listen_url}" track="both_tracks"/></Start>'
+            f'<Dial action="{public_url}/twiml/dial-action/{call_id}">'
+            f'<Conference startConferenceOnEnter="true" '
+            f'endConferenceOnExit="false">{conf_name}</Conference>'
+            "</Dial>"
+            "</Response>"
+        )
+        await loop.run_in_executor(
+            None, lambda: client.calls(call.call_sid).update(twiml=conf_twiml)
+        )
+
+        # 2. Dial the browser softphone into the same conference
+        softphone_call = await loop.run_in_executor(
+            None, lambda: client.calls.create(
+                to="client:browser",
+                from_=from_number,
+                url=f"{public_url}/twiml/conference/{call_id}",
+            )
+        )
+        registry.update(call_id, softphone_call_sid=softphone_call.sid)
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
     return {"status": "ok"}
 
 
 @router.post("/calls/{call_id}/handback")
 async def handback(call_id: str):
-    """Return control to the agent."""
+    """
+    Remove the human from the conference and return control to the agent.
+
+    1. Hang up the softphone call leg (leaves conference)
+    2. Redirect the callee back to <Connect><Stream>
+    3. The agent conversation loop reconnects with full history
+    """
     call = registry.get(call_id)
     if not call:
         return JSONResponse({"error": "Call not found"}, status_code=404)
+    if not call.call_sid:
+        return JSONResponse({"error": "Call SID not yet available"}, status_code=503)
 
     registry.update(call_id, mode=registry.CallMode.AGENT)
     dashboard_bus.publish_global({"call_id": call_id, "type": "handback"})
+
+    loop = asyncio.get_event_loop()
+    try:
+        from twilio.rest import Client
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+        client = Client(account_sid, auth_token)
+
+        # Hang up the softphone leg
+        if call.softphone_call_sid:
+            try:
+                await loop.run_in_executor(
+                    None, lambda: client.calls(call.softphone_call_sid).update(
+                        status="completed"
+                    )
+                )
+            except Exception as e:
+                _log.warning(f"Softphone hangup failed: {e}")
+            registry.update(call_id, softphone_call_sid="")
+
+        # Redirect callee back to the normal Connect+Stream TwiML
+        twiml_url = f"{public_url}/twiml"
+        await loop.run_in_executor(
+            None, lambda: client.calls(call.call_sid).update(url=twiml_url)
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
     return {"status": "ok"}
 
 

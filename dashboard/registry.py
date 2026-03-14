@@ -25,6 +25,11 @@ class ActiveCall:
     mode:       CallMode = CallMode.AGENT
     agent:      Any = None    # shuo Agent instance (for DTMF injection)
     started_at: float = field(default_factory=time.monotonic)
+    # Take-over state preservation
+    saved_history:       List[Dict[str, str]] = field(default_factory=list)
+    takeover_transcript: List[str] = field(default_factory=list)
+    listen_stream_sid:   str = ""
+    softphone_call_sid:  str = ""
 
 
 _calls: Dict[str, ActiveCall] = {}
@@ -60,6 +65,14 @@ def update(call_id: str, **kwargs) -> None:
 
 def remove(call_id: str) -> None:
     _calls.pop(call_id, None)
+
+
+def find_by_call_sid(call_sid: str) -> Optional[ActiveCall]:
+    """Look up a call by its Twilio call SID."""
+    for call in _calls.values():
+        if call.call_sid == call_sid:
+            return call
+    return None
 
 
 def all_calls() -> List[ActiveCall]:

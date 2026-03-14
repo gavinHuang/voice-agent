@@ -48,6 +48,7 @@ async def run_conversation_over_twilio(
     on_agent_ready: Optional[Callable[["Agent"], None]] = None,
     get_goal: Optional[Callable[[str], str]] = None,
     on_hangup: Optional[Callable[[], None]] = None,
+    get_saved_state: Optional[Callable[[str], Optional[dict]]] = None,
 ) -> None:
     """
     Main event loop for a single call.
@@ -103,6 +104,7 @@ async def run_conversation_over_twilio(
 
     state = AppState()
     reader_task = asyncio.create_task(read_twilio())
+    saved: Optional[dict] = None  # Set on reconnection after take-over
 
     try:
         while True:
@@ -114,9 +116,17 @@ async def run_conversation_over_twilio(
             # Initialize services on stream start
             if isinstance(event, StreamStartEvent):
                 stream_sid = event.stream_sid
+
+                # Check for reconnection after take-over hand-back
+                saved = get_saved_state(event.call_sid) if get_saved_state else None
+
+                if saved:
+                    goal = saved["goal"]
+                else:
+                    goal = get_goal(event.call_sid) if get_goal else os.getenv("CALL_GOAL", "")
+
                 await flux.start()
                 await tts_pool.start()
-                goal = get_goal(event.call_sid) if get_goal else os.getenv("CALL_GOAL", "")
                 agent = Agent(
                     websocket=websocket,
                     stream_sid=event.stream_sid,
@@ -129,6 +139,13 @@ async def run_conversation_over_twilio(
                         if observer else None
                     ),
                 )
+
+                if saved:
+                    agent.restore_history(
+                        saved["history"],
+                        saved["takeover_transcript"],
+                    )
+
                 if on_agent_ready:
                     on_agent_ready(agent)
 
@@ -175,13 +192,17 @@ async def run_conversation_over_twilio(
 
             # ─── INITIAL GREETING ────────────────────────────────────
             if isinstance(event, StreamStartEvent):
-                initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
-                opener = initial_msg or (
-                    "[CALL_STARTED]" if goal else ""
-                )
-                if opener and agent:
-                    state = replace(state, phase=Phase.RESPONDING)
-                    await agent.start_turn(opener)
+                if saved:
+                    # Resuming after take-over hand-back — no greeting
+                    pass
+                else:
+                    initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
+                    opener = initial_msg or (
+                        "[CALL_STARTED]" if goal else ""
+                    )
+                    if opener and agent:
+                        state = replace(state, phase=Phase.RESPONDING)
+                        await agent.start_turn(opener)
 
             # ─── EXIT CHECK ─────────────────────────────────────────
             if isinstance(event, StreamStopEvent):

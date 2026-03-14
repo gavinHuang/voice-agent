@@ -70,6 +70,10 @@ class LLMService:
     
     def clear_history(self) -> None:
         self._history = []
+
+    def set_history(self, messages: List[Dict[str, str]]) -> None:
+        """Replace conversation history (used for resuming after take-over)."""
+        self._history = list(messages)
     
     async def start(self, user_message: str) -> None:
         """Start generating a response."""

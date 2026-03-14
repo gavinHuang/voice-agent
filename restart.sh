@@ -15,12 +15,4 @@ fi
 
 echo "Starting server..."
 cd "$(dirname "$0")/shuo"
-nohup python3 main.py > /tmp/voice-agent-server.log 2>&1 &
-sleep 3
-
-if lsof -i :$PORT -t > /dev/null 2>&1; then
-  echo "Server running on port $PORT (PID: $(lsof -i :$PORT -t | head -1))"
-else
-  echo "Failed to start. Check /tmp/voice-agent-server.log"
-  exit 1
-fi
+python3 main.py 2>&1 | tee /tmp/voice-agent-server.log
