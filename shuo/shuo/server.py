@@ -382,10 +382,12 @@ async def ws_listen(websocket: WebSocket):
     """
     Listen-only WebSocket for take-over mode.
 
-    Receives a Twilio REST media stream, feeds audio to Deepgram Flux
-    for transcription, and publishes transcripts to the dashboard.
-    The agent uses these transcripts to maintain context during take-over.
+    Receives a Twilio media stream with both_tracks, feeds callee audio
+    (inbound) and human audio (outbound) to separate Deepgram Flux
+    instances so each speaker is transcribed independently.
     """
+    import base64 as _b64
+
     await websocket.accept()
 
     call_id = websocket.query_params.get("call_id", "")
@@ -395,42 +397,58 @@ async def ws_listen(websocket: WebSocket):
         await websocket.close()
         return
 
-    async def on_end_of_turn(transcript: str) -> None:
-        if not transcript:
-            return
-        c = dashboard_registry.get(call_id)
-        if c:
-            c.takeover_transcript.append(transcript)
-        dashboard_bus.publish_global({
-            "call_id": call_id,
-            "type": "transcript",
-            "text": transcript,
-        })
+    def make_on_end_of_turn(speaker: str):
+        async def _cb(transcript: str) -> None:
+            if not transcript:
+                return
+            c = dashboard_registry.get(call_id)
+            if c:
+                c.takeover_transcript.append(transcript)
+            dashboard_bus.publish_global({
+                "call_id": call_id,
+                "type":    "transcript",
+                "speaker": speaker,
+                "text":    transcript,
+            })
+        return _cb
 
-    async def on_start_of_turn() -> None:
-        pass  # No barge-in handling during listen mode
+    async def _noop_start() -> None:
+        pass
 
-    flux = FluxService(
-        on_end_of_turn=on_end_of_turn,
-        on_start_of_turn=on_start_of_turn,
+    flux_callee = FluxService(
+        on_end_of_turn=make_on_end_of_turn("callee"),
+        on_start_of_turn=_noop_start,
     )
-    await flux.start()
+    flux_human = FluxService(
+        on_end_of_turn=make_on_end_of_turn("human"),
+        on_start_of_turn=_noop_start,
+    )
+    await flux_callee.start()
+    await flux_human.start()
     logger.info(f"ws-listen connected for call {call_id}")
 
     try:
         while True:
             raw = await websocket.receive_text()
             data = json.loads(raw)
-            event = parse_twilio_message(data)
-            if event:
-                if isinstance(event, MediaEvent):
-                    await flux.send(event.audio_bytes)
-                elif isinstance(event, StreamStopEvent):
-                    break
+            event_type = data.get("event")
+            if event_type == "media":
+                media = data.get("media", {})
+                payload = media.get("payload", "")
+                if payload:
+                    audio = _b64.b64decode(payload)
+                    # "inbound" = callee speaking; "outbound" = what callee hears (human)
+                    if media.get("track") == "outbound":
+                        await flux_human.send(audio)
+                    else:
+                        await flux_callee.send(audio)
+            elif event_type == "stop":
+                break
     except Exception as e:
         logger.warning(f"ws-listen error for {call_id}: {e}")
     finally:
-        await flux.stop()
+        await flux_callee.stop()
+        await flux_human.stop()
         logger.info(f"ws-listen disconnected for call {call_id}")
 
 

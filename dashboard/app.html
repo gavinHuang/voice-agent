@@ -207,60 +207,64 @@
   }
   .call-goal strong { color: var(--text); }
 
-  /* ── Transcript area ────────────────────────────── */
-  .transcript-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-bottom: 1px solid var(--border);
-    min-height: 160px;
-    max-height: 300px;
-  }
-
-  .col {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .col + .col { border-left: 1px solid var(--border); }
-
-  .col-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    padding: 5px 12px 4px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    background: #1c2128;
-  }
-  .user-col  .col-label { color: var(--user); }
-  .agent-col .col-label { color: var(--agent); }
-
-  .col-content {
-    flex: 1;
+  /* ── Chat view (conversational transcript) ──────── */
+  .chat-view {
     overflow-y: auto;
     padding: 10px 12px;
+    max-height: 320px;
+    min-height: 160px;
+    border-bottom: 1px solid var(--border);
     font-size: 0.82rem;
-    line-height: 1.55;
+    line-height: 1.5;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .turn-block {
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #21262d;
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
-  .turn-block:last-child { border-bottom: none; margin-bottom: 0; }
 
-  .user-col  .turn-block { color: var(--user); }
-  .agent-col .turn-block { color: var(--agent); }
+  .msg-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    font-weight: bold;
+    padding: 0 4px;
+  }
 
-  .turn-block.streaming::after {
+  .msg-text {
+    padding: 6px 10px;
+    border-radius: 8px;
+    max-width: 82%;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  /* Callee — left-aligned, blue */
+  .msg-callee .msg-label { color: var(--user); }
+  .msg-callee .msg-text  { background: #0f2035; border: 1px solid #1e4060; color: var(--user); align-self: flex-start; }
+
+  /* Agent — right-aligned, green */
+  .msg-agent { align-items: flex-end; }
+  .msg-agent .msg-label { color: var(--agent); }
+  .msg-agent .msg-text  { background: #0f2018; border: 1px solid #1a4028; color: var(--agent); }
+  .msg-agent.streaming .msg-text::after {
     content: '\25CC';
     animation: blink 0.8s step-end infinite;
     color: var(--agent);
     opacity: 0.8;
+    margin-left: 4px;
   }
+
+  /* Human — right-aligned, amber */
+  .msg-human { align-items: flex-end; }
+  .msg-human .msg-label { color: var(--warn); }
+  .msg-human .msg-text  { background: #1c1209; border: 1px solid #78350f; color: var(--warn); }
+
   @keyframes blink { 50% { opacity: 0; } }
 
   .event-chip {
@@ -591,7 +595,7 @@ function handleEvent(ev) {
       }
       break;
     }
-    case 'transcript':   addUserTurn(ev.call_id, ev.text); break;
+    case 'transcript':   addTurn(ev.call_id, ev.speaker || 'callee', ev.text); break;
     case 'phase_change': setPhase(ev.call_id, ev.to); break;
     case 'agent_token':  appendAgentToken(ev.call_id, ev.token); break;
     case 'agent_done':   finalizeAgentTurn(ev.call_id); break;
@@ -681,16 +685,7 @@ function buildPanel(state) {
     <div class="call-goal">
       <strong>Goal:</strong> <span class="goal-text">${esc(state.goal) || '<span style="color:var(--muted)">&mdash;</span>'}</span>
     </div>
-    <div class="transcript-grid">
-      <div class="col user-col">
-        <div class="col-label">USER</div>
-        <div class="col-content user-content"></div>
-      </div>
-      <div class="col agent-col">
-        <div class="col-label">AGENT</div>
-        <div class="col-content agent-content"></div>
-      </div>
-    </div>
+    <div class="chat-view"></div>
     <div class="call-events"></div>
     <div class="takeover-bar">
       <span class="bar-status">You are on the call &mdash; agent listening</span>
@@ -722,31 +717,32 @@ function buildPanel(state) {
 }
 
 // ── Transcript ────────────────────────────────────────────────────────────
-function addUserTurn(callId, text) {
+function addTurn(callId, speaker, text) {
   const state = calls[callId];
   if (!state) return;
-  state.transcript.push({ role: 'user', text });
-  const content = state.panel.querySelector('.user-content');
-  const block = document.createElement('div');
-  block.className = 'turn-block';
-  block.textContent = '"' + text + '"';
-  content.appendChild(block);
-  content.scrollTop = content.scrollHeight;
+  state.transcript.push({ role: speaker, text });
+  const chat = state.panel.querySelector('.chat-view');
+  const msg = document.createElement('div');
+  msg.className = `msg msg-${speaker}`;
+  msg.innerHTML = `<span class="msg-label">${speaker.toUpperCase()}</span><span class="msg-text">${esc(text)}</span>`;
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
 }
 
 function appendAgentToken(callId, token) {
   const state = calls[callId];
   if (!state) return;
   state.agentBuf += token;
-  const content = state.panel.querySelector('.agent-content');
+  const chat = state.panel.querySelector('.chat-view');
 
   if (!state.agentBlock) {
     state.agentBlock = document.createElement('div');
-    state.agentBlock.className = 'turn-block streaming';
-    content.appendChild(state.agentBlock);
+    state.agentBlock.className = 'msg msg-agent streaming';
+    state.agentBlock.innerHTML = `<span class="msg-label">AGENT</span><span class="msg-text"></span>`;
+    chat.appendChild(state.agentBlock);
   }
-  state.agentBlock.appendChild(document.createTextNode(token));
-  content.scrollTop = content.scrollHeight;
+  state.agentBlock.querySelector('.msg-text').appendChild(document.createTextNode(token));
+  chat.scrollTop = chat.scrollHeight;
 }
 
 function finalizeAgentTurn(callId) {

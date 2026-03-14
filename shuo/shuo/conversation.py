@@ -164,7 +164,7 @@ async def run_conversation_over_twilio(
                         "phone":      event.phone,
                     })
                 elif isinstance(event, FluxEndOfTurnEvent) and event.transcript:
-                    observer({"type": "transcript", "text": event.transcript})
+                    observer({"type": "transcript", "speaker": "callee", "text": event.transcript})
                 elif isinstance(event, AgentTurnDoneEvent):
                     observer({"type": "agent_done"})
                 elif isinstance(event, HoldStartEvent):
