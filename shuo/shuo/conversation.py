@@ -103,7 +103,8 @@ async def run_conversation_over_twilio(
 
     state = AppState()
     reader_task = asyncio.create_task(read_twilio())
-    saved: Optional[dict] = None  # Set on reconnection after take-over
+    saved: Optional[dict] = None          # Set on reconnection after take-over
+    _handback_prompt: Optional[str] = None  # Set when handback has a transcript
 
     try:
         while True:
@@ -152,7 +153,7 @@ async def run_conversation_over_twilio(
                 )
 
                 if saved:
-                    agent.restore_history(
+                    _handback_prompt = agent.restore_history(
                         saved["history"],
                         saved["takeover_transcript"],
                     )
@@ -202,11 +203,14 @@ async def run_conversation_over_twilio(
                     if agent:
                         await agent.cancel_turn()
 
-            # ─── INITIAL GREETING ────────────────────────────────────
+            # ─── INITIAL GREETING / HANDBACK RESPONSE ───────────────
             if isinstance(event, StreamStartEvent):
                 if saved:
-                    # Resuming after take-over hand-back — no greeting
-                    pass
+                    # Resuming after take-over hand-back — agent reacts to
+                    # what was discussed and continues toward the goal.
+                    if _handback_prompt and agent:
+                        state = replace(state, phase=Phase.RESPONDING)
+                        await agent.start_turn(_handback_prompt)
                 else:
                     initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
                     opener = initial_msg or (

@@ -185,18 +185,24 @@ class Agent:
         self,
         saved_history: List[Dict[str, str]],
         takeover_transcript: List[str],
-    ) -> None:
-        """Restore conversation history after take-over hand-back."""
+    ) -> Optional[str]:
+        """
+        Restore conversation history after take-over hand-back.
+
+        Returns a handback prompt to pass to start_turn() so the agent
+        proactively continues the conversation, or None if no takeover
+        transcript is available (agent waits for callee to speak).
+        """
         self._llm.set_history(saved_history)
         if takeover_transcript:
-            context = (
+            return (
                 "[HANDBACK] A human supervisor temporarily took over the call. "
-                "Here is what was said during the takeover:\n\n"
+                "Here is what was discussed:\n\n"
                 + "\n".join(takeover_transcript)
-                + "\n\nYou are now back in control. Continue the conversation "
-                "naturally, picking up from where things were left."
+                + "\n\nYou are now back in control. React to what was just "
+                "discussed and continue working toward the goal. Be concise."
             )
-            self._llm._history.append({"role": "user", "content": context})
+        return None
 
     # ── Turn Lifecycle ──────────────────────────────────────────────
 
