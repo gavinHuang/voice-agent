@@ -182,11 +182,13 @@ async def takeover(call_id: str):
         # 1. Redirect callee into the conference with a <Start><Stream>
         #    to fork audio for real-time transcription during takeover
         ws_url = public_url.replace("https://", "wss://").replace("http://", "ws://")
-        listen_url = f"{ws_url}/ws-listen?call_id={call_id}"
+        listen_url = f"{ws_url}/ws-listen"
         conf_twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
             "<Response>"
-            f'<Start><Stream url="{listen_url}" track="both_tracks"/></Start>'
+            f'<Start><Stream url="{listen_url}" track="both_tracks">'
+            f'<Parameter name="call_id" value="{call_id}"/>'
+            f'</Stream></Start>'
             f'<Dial action="{public_url}/twiml/dial-action/{call_id}">'
             f'<Conference startConferenceOnEnter="true" '
             f'endConferenceOnExit="false">{conf_name}</Conference>'

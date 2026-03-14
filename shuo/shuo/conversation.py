@@ -32,6 +32,7 @@ from .types import (
 )
 from .state import process_event
 from .services.flux import FluxService
+from .services.flux_pool import FluxPool
 from .services.tts_pool import TTSPool
 from .services.twilio_client import parse_twilio_message
 from .agent import Agent
@@ -49,6 +50,8 @@ async def run_conversation_over_twilio(
     get_goal: Optional[Callable[[str], str]] = None,
     on_hangup: Optional[Callable[[], None]] = None,
     get_saved_state: Optional[Callable[[str], Optional[dict]]] = None,
+    tts_pool: Optional[TTSPool] = None,
+    flux_pool: Optional[FluxPool] = None,
 ) -> None:
     """
     Main event loop for a single call.
@@ -65,7 +68,10 @@ async def run_conversation_over_twilio(
     tracer = Tracer()
 
     agent: Optional[Agent] = None
-    tts_pool = TTSPool(pool_size=1, ttl=8.0)
+    flux: Optional[FluxService] = None
+    _own_tts_pool = tts_pool is None   # True if we created it locally
+    if _own_tts_pool:
+        tts_pool = TTSPool(pool_size=1, ttl=8.0)
     stream_sid: Optional[str] = None
 
     # ── Flux Callbacks (push events to queue) ───────────────────────
@@ -75,13 +81,6 @@ async def run_conversation_over_twilio(
 
     async def on_flux_start_of_turn() -> None:
         await event_queue.put(FluxStartOfTurnEvent())
-
-    # ── Create Flux Service ─────────────────────────────────────────
-
-    flux = FluxService(
-        on_end_of_turn=on_flux_end_of_turn,
-        on_start_of_turn=on_flux_start_of_turn,
-    )
 
     # ── Twilio WebSocket Reader ─────────────────────────────────────
 
@@ -125,8 +124,20 @@ async def run_conversation_over_twilio(
                 else:
                     goal = get_goal(event.call_sid) if get_goal else os.getenv("CALL_GOAL", "")
 
-                await flux.start()
-                await tts_pool.start()
+                if flux_pool:
+                    flux = await flux_pool.get(
+                        on_end_of_turn=on_flux_end_of_turn,
+                        on_start_of_turn=on_flux_start_of_turn,
+                    )
+                else:
+                    flux = FluxService(
+                        on_end_of_turn=on_flux_end_of_turn,
+                        on_start_of_turn=on_flux_start_of_turn,
+                    )
+                    await flux.start()
+
+                if _own_tts_pool:
+                    await tts_pool.start()
                 agent = Agent(
                     websocket=websocket,
                     stream_sid=event.stream_sid,
@@ -180,7 +191,8 @@ async def run_conversation_over_twilio(
             for action in actions:
                 event_log.action(action)
                 if isinstance(action, FeedFluxAction):
-                    await flux.send(action.audio_bytes)
+                    if flux:
+                        await flux.send(action.audio_bytes)
 
                 elif isinstance(action, StartAgentTurnAction):
                     if agent and not (should_suppress_agent and should_suppress_agent()):
@@ -240,8 +252,10 @@ async def run_conversation_over_twilio(
         if agent:
             await agent.cleanup()
 
-        await tts_pool.stop()
-        await flux.stop()
+        if _own_tts_pool:
+            await tts_pool.stop()
+        if flux:
+            await flux.stop()  # Pool refills automatically after this
 
         # Save trace
         call_id = stream_sid or "unknown"

@@ -47,6 +47,17 @@ class FluxService:
     def is_active(self) -> bool:
         return self._running and self._connection is not None
 
+    def bind(
+        self,
+        on_end_of_turn: Callable[[str], Awaitable[None]],
+        on_start_of_turn: Callable[[], Awaitable[None]],
+        on_interim: Optional[Callable[[str], Awaitable[None]]] = None,
+    ) -> None:
+        """Rebind callbacks — used by FluxPool when dispensing a warm connection."""
+        self._on_end_of_turn = on_end_of_turn
+        self._on_start_of_turn = on_start_of_turn
+        self._on_interim = on_interim
+
     async def start(self) -> None:
         """Connect to Deepgram Flux (always-on for the duration of the call)."""
         if self._running:

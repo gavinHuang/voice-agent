@@ -28,6 +28,8 @@ from twilio.jwt.access_token.grants import VoiceGrant
 from .conversation import run_conversation_over_twilio
 from .services.twilio_client import make_outbound_call, parse_twilio_message
 from .services.flux import FluxService
+from .services.tts_pool import TTSPool
+from .services.flux_pool import FluxPool
 from .types import MediaEvent, StreamStopEvent
 from .log import get_logger
 from dashboard.server import router as dashboard_router
@@ -42,6 +44,46 @@ app.include_router(dashboard_router)
 _draining = False          # Set True on SIGTERM — reject new calls
 _active_calls = 0          # Count of live WebSocket conversations
 _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
+
+# ── Global pre-warmed service pools ──────────────────────────────────
+_tts_pool: Optional[TTSPool] = None
+_flux_pool: Optional[FluxPool] = None
+
+
+@app.on_event("startup")
+async def startup_warmup() -> None:
+    """Pre-load models and warm service connections before the first call."""
+    asyncio.create_task(_warmup())
+
+
+async def _warmup() -> None:
+    global _tts_pool, _flux_pool
+
+    # Pre-load TTS model so the first call doesn't pay model-load latency.
+    provider = os.getenv("TTS_PROVIDER", "kokoro").lower()
+    if provider == "kokoro":
+        try:
+            from .services.tts_kokoro import _get_pipeline
+            await _get_pipeline()
+            logger.info("Kokoro model pre-loaded")
+        except Exception as e:
+            logger.warning(f"Kokoro pre-load failed: {e}")
+
+    # Global TTS pool — pre-warms a connection so the first call gets one immediately.
+    _tts_pool = TTSPool(pool_size=2, ttl=120.0)
+    await _tts_pool.start()
+    logger.info("Global TTS pool started")
+
+    # NOTE: Flux (Deepgram) connections are NOT pooled.
+    # Reusing an idle Deepgram connection causes the turn detector to
+    # fire prematurely (calibrated to silence, not live speech).
+    # A fresh connection is created per call for correct turn detection.
+
+
+@app.on_event("shutdown")
+async def shutdown_pools() -> None:
+    if _tts_pool:
+        await _tts_pool.stop()
 
 
 @app.get("/health")
@@ -382,21 +424,61 @@ async def ws_listen(websocket: WebSocket):
     """
     Listen-only WebSocket for take-over mode.
 
-    Receives a Twilio media stream with both_tracks, feeds callee audio
-    (inbound) and human audio (outbound) to separate Deepgram Flux
-    instances so each speaker is transcribed independently.
+    Twilio strips query parameters from WebSocket URLs, so the call is
+    identified from the Twilio 'start' event: first via customParameters
+    (call_id injected via <Parameter> in the TwiML), then via callSid lookup.
+
+    Feeds callee (inbound) and human (outbound) audio to separate Deepgram
+    Flux instances for independent per-speaker transcription.
     """
     import base64 as _b64
 
     await websocket.accept()
 
-    call_id = websocket.query_params.get("call_id", "")
-    call = dashboard_registry.get(call_id) if call_id else None
-    if not call:
-        logger.warning(f"ws-listen: unknown call_id={call_id!r}")
+    # ── Identify the call from the Twilio start event ─────────────────
+    call_id = ""
+    call = None
+    try:
+        while True:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            data = json.loads(raw)
+            event_type = data.get("event")
+            if event_type == "connected":
+                continue
+            if event_type == "start":
+                start_data = data.get("start", {})
+                custom = start_data.get("customParameters", {})
+                call_id = custom.get("call_id", "")
+                if call_id:
+                    call = dashboard_registry.get(call_id)
+                if not call:
+                    # Fallback: look up by Twilio call SID
+                    call_sid = start_data.get("callSid", "")
+                    if call_sid:
+                        call = dashboard_registry.find_by_call_sid(call_sid)
+                        if call:
+                            call_id = call.call_id
+                break
+            if event_type == "stop":
+                await websocket.close()
+                return
+    except asyncio.TimeoutError:
+        logger.warning("ws-listen: timed out waiting for start event")
+        await websocket.close()
+        return
+    except Exception as e:
+        logger.warning(f"ws-listen: error during handshake: {e}")
         await websocket.close()
         return
 
+    if not call:
+        logger.warning(f"ws-listen: could not identify call (call_id={call_id!r})")
+        await websocket.close()
+        return
+
+    logger.info(f"ws-listen connected for call {call_id}")
+
+    # ── Set up per-speaker Flux instances ────────────────────────────
     def make_on_end_of_turn(speaker: str):
         async def _cb(transcript: str) -> None:
             if not transcript:
@@ -425,7 +507,6 @@ async def ws_listen(websocket: WebSocket):
     )
     await flux_callee.start()
     await flux_human.start()
-    logger.info(f"ws-listen connected for call {call_id}")
 
     try:
         while True:
@@ -437,7 +518,7 @@ async def ws_listen(websocket: WebSocket):
                 payload = media.get("payload", "")
                 if payload:
                     audio = _b64.b64decode(payload)
-                    # "inbound" = callee speaking; "outbound" = what callee hears (human)
+                    # "inbound" = callee speaking; "outbound" = what callee hears (= human)
                     if media.get("track") == "outbound":
                         await flux_human.send(audio)
                     else:
@@ -561,6 +642,7 @@ async def websocket_endpoint(websocket: WebSocket):
             get_goal=get_goal,
             on_hangup=on_hangup,
             get_saved_state=get_saved_state,
+            tts_pool=_tts_pool,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
