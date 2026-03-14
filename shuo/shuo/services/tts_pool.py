@@ -1,9 +1,9 @@
 """
-ElevenLabs TTS connection pool.
+TTS connection pool.
 
-Pre-connects WebSocket connections and manages their lifecycle.
-Stale connections (past TTL) are evicted automatically.
-The pool auto-refills after a connection is dispensed.
+Pre-initialises TTS instances and manages their lifecycle.
+Stale instances (past TTL) are evicted automatically.
+The pool auto-refills after an instance is dispensed.
 
 Usage:
     pool = TTSPool(pool_size=1, ttl=8.0)
@@ -20,7 +20,7 @@ import time
 from typing import Optional, Callable, Awaitable, List
 from dataclasses import dataclass
 
-from .tts import TTSService
+from .tts import create_tts
 from ..log import ServiceLogger
 
 log = ServiceLogger("TTSPool")
@@ -38,7 +38,7 @@ async def _noop_done() -> None:
 @dataclass
 class _Entry:
     """A pooled TTS connection with its creation timestamp."""
-    tts: TTSService
+    tts: object
     created_at: float  # time.monotonic()
 
 
@@ -78,7 +78,7 @@ class TTSPool:
         self,
         on_audio: Callable[[str], Awaitable[None]],
         on_done: Callable[[], Awaitable[None]],
-    ) -> TTSService:
+    ):
         """
         Get a connected TTS service with the given callbacks.
 
@@ -103,7 +103,7 @@ class TTSPool:
 
         # No warm connections available -- create fresh (blocking)
         log.info("Pool empty, connecting fresh...")
-        tts = TTSService(on_audio=on_audio, on_done=on_done)
+        tts = create_tts(on_audio=on_audio, on_done=on_done)
         await tts.start()
         self._trigger_fill()
         return tts
@@ -138,7 +138,7 @@ class TTSPool:
 
                 # Fill to target
                 while self._running and len(self._ready) < self._pool_size:
-                    tts = TTSService(on_audio=_noop_audio, on_done=_noop_done)
+                    tts = create_tts(on_audio=_noop_audio, on_done=_noop_done)
                     try:
                         await tts.start()
                         self._ready.append(

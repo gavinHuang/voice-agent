@@ -25,7 +25,7 @@ from typing import Optional, Callable, List, Dict, Any
 from fastapi import WebSocket
 
 from .services.llm import LLMService
-from .services.tts import TTSService
+from .services.tts import create_tts
 from .services.tts_pool import TTSPool
 from .services.player import AudioPlayer
 from .services.dtmf import generate_dtmf_ulaw_b64
@@ -149,7 +149,7 @@ class Agent:
         )
 
         # Active per-turn services (set during start, cleared on cancel)
-        self._tts: Optional[TTSService] = None
+        self._tts: Optional[object] = None
         self._player: Optional[AudioPlayer] = None
         self._active = False
 

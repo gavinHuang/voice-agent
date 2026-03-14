@@ -15,4 +15,4 @@ fi
 
 echo "Starting server..."
 cd "$(dirname "$0")/shuo"
-python3 main.py 2>&1 | tee /tmp/voice-agent-server.log
+PYTORCH_ENABLE_MPS_FALLBACK=1 .venv-kokoro/bin/python3 main.py 2>&1 | tee /tmp/voice-agent-server.log
