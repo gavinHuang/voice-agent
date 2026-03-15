@@ -366,6 +366,22 @@ class Agent:
         if self._tts_had_text:
             # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent
             await self._tts.flush()
+        elif self._dtmf_queue:
+            # DTMF-only turn (no speech): send tones directly then end turn
+            await self._tts.cancel()
+            self._tts = None
+            for digit in self._dtmf_queue:
+                audio = generate_dtmf_ulaw_b64(digit)
+                msg = __import__("json").dumps({
+                    "event": "media",
+                    "streamSid": self._stream_sid,
+                    "media": {"payload": audio},
+                })
+                await self._websocket.send_text(msg)
+            self._dtmf_queue.clear()
+            self._player = None
+            self._active = False
+            self._emit(AgentTurnDoneEvent())
         else:
             # HOLD_CONTINUE: nothing to say — skip TTS, end turn immediately
             await self._tts.cancel()
