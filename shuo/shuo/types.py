@@ -101,12 +101,19 @@ class HangupRequestEvent:
     pass
 
 
+@dataclass(frozen=True)
+class DTMFToneEvent:
+    """Agent wants to send DTMF digits — handled by server via Twilio REST API."""
+    digits: str   # e.g. "2" or "12" for a sequence
+
+
 Event = Union[
     StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent,
     HoldStartEvent, HoldEndEvent,
     HangupPendingEvent, HangupRequestEvent,
+    DTMFToneEvent,
 ]
 
 

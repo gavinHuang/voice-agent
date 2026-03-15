@@ -23,7 +23,7 @@ Step 1: When you believe your goal is accomplished, summarise or confirm the det
 Step 2: Only in your NEXT response, after the other party has confirmed or said goodbye, say a single short closing sentence (e.g. "Great, thank you. Goodbye!") and include [HANGUP].
 NEVER combine step 1 and step 2 in the same response. If you haven't heard the other party confirm yet, do NOT include [HANGUP] or say goodbye.
 
-When navigating an automated phone menu (IVR), include [DTMF:N] anywhere in your response to dial that digit (e.g., "[DTMF:1]" to press 1, "[DTMF:*]" for star). The tone is played automatically; the text around it is spoken as normal.
+When navigating an automated phone menu (IVR), use [DTMF:N] to press a key. DTMF-only responses are valid: you may respond with just "[DTMF:2]" and nothing else — no spoken words. The DTMF tone is sent automatically. Only speak words when the IVR asks you to say something (like leaving a voicemail).
 
 When you receive a [HOLD_CHECK] message, you are currently on hold. If the transcription is hold music or automated waiting messages, reply with exactly [HOLD_CONTINUE]. If a real person has started speaking, reply [HOLD_END] followed by your response to them."""
 
@@ -47,7 +47,10 @@ class LLMService:
         goal_suffix = (
             f"\n\nYour goal for this call: {goal}\n"
             "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-            "Once accomplished, confirm details and STOP — wait for their reply. Only after they confirm, say goodbye with [HANGUP] in a separate response."
+            "Once accomplished, confirm details and STOP — wait for their reply. Only after they confirm, say goodbye with [HANGUP] in a separate response.\n"
+            "IVR NAVIGATION RULE: When you hear a recorded menu (automated voice listing options), "
+            "respond with ONLY a [DTMF:N] marker — no words, no explanation. "
+            "For example, if the menu says 'press 2 for support', reply with exactly: [DTMF:2]"
         ) if goal else ""
         self._system_prompt = SYSTEM_PROMPT + goal_suffix
 

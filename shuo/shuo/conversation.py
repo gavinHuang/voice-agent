@@ -28,6 +28,7 @@ from .types import (
     Event, StreamStartEvent, StreamStopEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupRequestEvent,
+    DTMFToneEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 from .state import process_event
@@ -52,6 +53,8 @@ async def run_conversation_over_twilio(
     get_saved_state: Optional[Callable[[str], Optional[dict]]] = None,
     tts_pool: Optional[TTSPool] = None,
     flux_pool: Optional[FluxPool] = None,
+    ivr_mode: Optional[Callable[[], bool]] = None,
+    on_dtmf: Optional[Callable[[str], None]] = None,
 ) -> None:
     """
     Main event loop for a single call.
@@ -203,6 +206,11 @@ async def run_conversation_over_twilio(
                     if agent:
                         await agent.cancel_turn()
 
+            # ─── DTMF DISPATCH ──────────────────────────────────────
+            if isinstance(event, DTMFToneEvent):
+                if on_dtmf:
+                    on_dtmf(event.digits)
+
             # ─── INITIAL GREETING / HANDBACK RESPONSE ───────────────
             if isinstance(event, StreamStartEvent):
                 if saved:
@@ -212,13 +220,17 @@ async def run_conversation_over_twilio(
                         state = replace(state, phase=Phase.RESPONDING)
                         await agent.start_turn(_handback_prompt)
                 else:
-                    initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
-                    opener = initial_msg or (
-                        "[CALL_STARTED]" if goal else ""
-                    )
-                    if opener and agent:
-                        state = replace(state, phase=Phase.RESPONDING)
-                        await agent.start_turn(opener)
+                    # IVR mode: suppress opener — agent listens first, responds only
+                    # after the IVR's EndOfTurn fires (no greeting from agent).
+                    _is_ivr = ivr_mode() if ivr_mode else False
+                    if not _is_ivr:
+                        initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
+                        opener = initial_msg or (
+                            "[CALL_STARTED]" if goal else ""
+                        )
+                        if opener and agent:
+                            state = replace(state, phase=Phase.RESPONDING)
+                            await agent.start_turn(opener)
 
             # ─── EXIT CHECK ─────────────────────────────────────────
             if isinstance(event, StreamStopEvent):

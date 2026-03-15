@@ -45,6 +45,9 @@ _draining = False          # Set True on SIGTERM — reject new calls
 _active_calls = 0          # Count of live WebSocket conversations
 _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
 
+# ── DTMF reconnect state (keyed by Twilio call_sid) ──────────────────
+_dtmf_pending: dict = {}   # call_sid -> {history, goal, phone, ivr_mode}
+
 # ── Global pre-warmed service pools ──────────────────────────────────
 _tts_pool: Optional[TTSPool] = None
 _flux_pool: Optional[FluxPool] = None
@@ -207,6 +210,21 @@ async def twiml():
     </Connect>
 </Response>"""
     
+    return Response(content=twiml_response, media_type="application/xml")
+
+
+@app.api_route("/twiml/ivr-dtmf", methods=["GET", "POST"])
+async def twiml_ivr_dtmf(digit: str = Query(..., description="DTMF digit(s) to play")):
+    """
+    Return TwiML that plays DTMF digit(s) to the remote party then reconnects
+    the WebSocket stream. Used by the agent to navigate IVR menus via REST API.
+    """
+    public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+    twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Play digits="{digit}"/>
+    <Redirect>{public_url}/twiml</Redirect>
+</Response>"""
     return Response(content=twiml_response, media_type="application/xml")
 
 
@@ -548,7 +566,7 @@ async def websocket_endpoint(websocket: WebSocket):
     _active_calls += 1
 
     # Mutable context — call_id may change if this is a reconnection
-    ctx = {"call_id": uuid.uuid4().hex[:8]}
+    ctx = {"call_id": uuid.uuid4().hex[:8], "ivr_mode": False}
     dashboard_bus.create(ctx["call_id"])
     dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx["call_id"]))
 
@@ -598,11 +616,64 @@ async def websocket_endpoint(websocket: WebSocket):
         pending = dashboard_registry.pop_pending(call_sid)
         goal = pending["goal"] or os.getenv("CALL_GOAL", "")
         phone = pending["phone"]
+        ctx["ivr_mode"] = pending.get("ivr_mode", False)
         dashboard_registry.update(ctx["call_id"], goal=goal, phone=phone, call_sid=call_sid)
         return goal
 
+    def on_dtmf(digits: str) -> None:
+        """Save agent history and redirect the call to play DTMF via REST API."""
+        c = dashboard_registry.get(ctx["call_id"])
+        if not c or not c.call_sid:
+            logger.warning("on_dtmf: no call_sid found, cannot redirect")
+            return
+        call_sid = c.call_sid
+        agent = c.agent
+
+        async def _do_dtmf():
+            history = agent.history if agent else []
+            _dtmf_pending[call_sid] = {
+                "history": history,
+                "goal": c.goal,
+                "phone": c.phone,
+                "ivr_mode": True,
+            }
+            try:
+                from twilio.rest import Client
+                loop = asyncio.get_event_loop()
+                client = Client(
+                    os.getenv("TWILIO_ACCOUNT_SID"),
+                    os.getenv("TWILIO_AUTH_TOKEN"),
+                )
+                public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+                dtmf_url = f"{public_url}/twiml/ivr-dtmf?digit={digits}"
+                logger.info(f"DTMF redirect: digit={digits!r} url={dtmf_url}")
+                await loop.run_in_executor(
+                    None, lambda: client.calls(call_sid).update(url=dtmf_url, method="POST")
+                )
+            except Exception as e:
+                logger.warning(f"DTMF redirect failed: {e}")
+                _dtmf_pending.pop(call_sid, None)
+
+        asyncio.create_task(_do_dtmf())
+
     def get_saved_state(call_sid: str):
-        """Check if this stream reconnects a call that was in take-over."""
+        """Check if this stream reconnects after a DTMF redirect or take-over."""
+        # DTMF reconnect: agent pressed a key, call was redirected
+        saved_dtmf = _dtmf_pending.pop(call_sid, None)
+        if saved_dtmf:
+            ctx["ivr_mode"] = True
+            goal = saved_dtmf["goal"]
+            phone = saved_dtmf["phone"]
+            dashboard_registry.update(ctx["call_id"], goal=goal, phone=phone, call_sid=call_sid)
+            logger.info(f"DTMF reconnect for call_sid={call_sid} goal={goal!r}")
+            return {
+                "history": saved_dtmf["history"],
+                "takeover_transcript": [],  # Empty → no handback prompt, agent listens
+                "goal": goal,
+                "phone": phone,
+            }
+
+        # Takeover reconnect: check if this stream reconnects a call that was in take-over.
         existing = dashboard_registry.find_by_call_sid(call_sid)
         if existing and existing.call_id != ctx["call_id"] and existing.saved_history:
             result = {
@@ -643,6 +714,8 @@ async def websocket_endpoint(websocket: WebSocket):
             on_hangup=on_hangup,
             get_saved_state=get_saved_state,
             tts_pool=_tts_pool,
+            ivr_mode=lambda: ctx["ivr_mode"],
+            on_dtmf=on_dtmf,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")

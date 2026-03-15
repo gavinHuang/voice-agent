@@ -39,13 +39,13 @@ _calls: Dict[str, ActiveCall] = {}
 _pending: Dict[str, Dict[str, str]] = {}
 
 
-def set_pending(call_sid: str, phone: str, goal: str) -> None:
-    _pending[call_sid] = {"phone": phone, "goal": goal}
+def set_pending(call_sid: str, phone: str, goal: str, ivr_mode: bool = False) -> None:
+    _pending[call_sid] = {"phone": phone, "goal": goal, "ivr_mode": ivr_mode}
 
 
-def pop_pending(call_sid: str) -> Dict[str, str]:
-    """Return {phone, goal} for the call SID, or empty strings if not found."""
-    return _pending.pop(call_sid, {"phone": "", "goal": ""})
+def pop_pending(call_sid: str) -> Dict:
+    """Return {phone, goal, ivr_mode} for the call SID, or defaults if not found."""
+    return _pending.pop(call_sid, {"phone": "", "goal": "", "ivr_mode": False})
 
 
 def register(call: ActiveCall) -> None:

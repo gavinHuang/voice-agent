@@ -269,6 +269,7 @@ async def handback(call_id: str):
 class CallRequest(BaseModel):
     phone: str
     goal: str = ""
+    ivr_mode: bool = False  # When True: suppress opener, force DTMF-only navigation
 
 
 @router.post("/call")
@@ -278,15 +279,18 @@ async def start_call(body: CallRequest):
 
     Stores the goal keyed by call SID so the agent picks it up when the
     WebSocket stream_start event arrives.
+
+    Set ivr_mode=True when calling an automated IVR system — suppresses the
+    opening greeting and forces DTMF-only navigation mode.
     """
     phone = body.phone.strip()
     if not phone.startswith("+") and not phone.startswith("client:"):
         phone = f"+{phone}"
 
     try:
-        from shuo.services.twilio_client import make_outbound_call
+        from shuo.shuo.services.twilio_client import make_outbound_call
         call_sid = make_outbound_call(phone)
-        registry.set_pending(call_sid, phone=phone, goal=body.goal)
+        registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode)
         return {"status": "calling", "to": phone, "call_sid": call_sid}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

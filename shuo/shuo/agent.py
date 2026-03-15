@@ -31,7 +31,7 @@ from .services.player import AudioPlayer
 from .services.dtmf import generate_dtmf_ulaw_b64
 from .tracer import Tracer
 from .log import ServiceLogger
-from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent
+from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent, DTMFToneEvent
 
 log = ServiceLogger("Agent")
 
@@ -367,21 +367,14 @@ class Agent:
             # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent
             await self._tts.flush()
         elif self._dtmf_queue:
-            # DTMF-only turn (no speech): send tones directly then end turn
+            # DTMF-only turn (no speech): emit event so server sends via Twilio REST
+            digits = "".join(self._dtmf_queue)
+            self._dtmf_queue.clear()
             await self._tts.cancel()
             self._tts = None
-            for digit in self._dtmf_queue:
-                audio = generate_dtmf_ulaw_b64(digit)
-                msg = __import__("json").dumps({
-                    "event": "media",
-                    "streamSid": self._stream_sid,
-                    "media": {"payload": audio},
-                })
-                await self._websocket.send_text(msg)
-            self._dtmf_queue.clear()
             self._player = None
             self._active = False
-            self._emit(AgentTurnDoneEvent())
+            self._emit(DTMFToneEvent(digits=digits))
         else:
             # HOLD_CONTINUE: nothing to say — skip TTS, end turn immediately
             await self._tts.cancel()
