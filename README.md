@@ -191,20 +191,69 @@ This uses the Twilio REST redirect mechanism rather than in-band audio, so the D
 
 The `ivr/` module is a standalone FastAPI server that simulates a configurable IVR system. Use it for local testing without needing a real phone system.
 
-**Start:**
+#### End-to-end setup
+
+You need two servers (shuo + IVR) and two public URLs (one per server). Free options:
+
+- **shuo** — ngrok on port 3040: `ngrok http 3040`
+- **IVR** — localhost.run on port 8001: `ssh -R 80:localhost:8001 nokey@localhost.run`
+
+> ngrok free tier only allows one tunnel at a time. `localhost.run` gives a second free tunnel via SSH — no account needed.
+
+**Step 1 — Start the shuo server**
 
 ```bash
-IVR_BASE_URL=https://your-tunnel-url python3 -m uvicorn ivr.server:app --port 8001
+# from project root
+python3 -m uvicorn shuo.shuo.server:app --port 3040 --env-file shuo/.env
 ```
 
-The IVR server needs its own public URL (separate from the shuo server). Use a second tunnel:
+Start ngrok: `ngrok http 3040`, then set `TWILIO_PUBLIC_URL` in `shuo/.env` to the ngrok `https://` URL.
+
+**Step 2 — Start the IVR server**
 
 ```bash
-# second ngrok session (paid), or:
+# from project root — IVR_BASE_URL must point to IVR's own public URL
+IVR_BASE_URL=https://xxxx.lhr.life python3 -m uvicorn ivr.server:app --port 8001
+```
+
+Start the localhost.run tunnel:
+
+```bash
 ssh -R 80:localhost:8001 nokey@localhost.run
+# prints: xxxx.lhr.life tunneled with tls termination, https://xxxx.lhr.life
 ```
 
-Set that URL as the voice URL on a second Twilio number, then call that number with IVR Mode enabled.
+**Step 3 — Buy or configure a Twilio number for the IVR**
+
+In [Twilio Console](https://console.twilio.com) → Phone Numbers → Manage → set the number's **Voice URL** to:
+
+```
+https://xxxx.lhr.life/twiml   (POST)
+```
+
+Update this URL each time the localhost.run tunnel restarts (the subdomain changes).
+
+**Step 4 — Place a call**
+
+Open `https://your-ngrok-url/dashboard` and fill in:
+
+- **Phone** — the IVR Twilio number (e.g. `+61257610747`)
+- **Goal** — what the agent should find out (e.g. `Find out the pricing for the starter plan`)
+- **IVR Mode** — ✅ enable this
+
+Or via the API:
+
+```bash
+curl -X POST http://localhost:3040/dashboard/call \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+61257610747",
+    "goal": "Find out the pricing for the starter plan",
+    "ivr_mode": true
+  }'
+```
+
+The agent will call the IVR number, listen to the menu, press the right keys with `[DTMF:N]`, and navigate to the answer.
 
 **Configuration — `ivr/flows/example.yaml`:**
 
