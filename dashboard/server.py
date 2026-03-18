@@ -288,7 +288,7 @@ async def start_call(body: CallRequest):
         phone = f"+{phone}"
 
     try:
-        from shuo.shuo.services.twilio_client import make_outbound_call
+        from shuo.services.twilio_client import make_outbound_call
         call_sid = make_outbound_call(phone)
         registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode)
         return {"status": "calling", "to": phone, "call_sid": call_sid}

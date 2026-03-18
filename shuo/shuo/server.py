@@ -40,6 +40,16 @@ logger = get_logger("shuo.server")
 app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
 app.include_router(dashboard_router)
 
+# ── Mount IVR mock server at /ivr-mock ───────────────────────────────
+try:
+    import sys as _sys, os as _os
+    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
+    from ivr.server import app as _ivr_app
+    app.mount("/ivr-mock", _ivr_app)
+    logger.info("IVR mock mounted at /ivr-mock")
+except Exception as _e:
+    pass  # IVR mock not available
+
 # ── Graceful shutdown / connection draining ───────────────────────────
 _draining = False          # Set True on SIGTERM — reject new calls
 _active_calls = 0          # Count of live WebSocket conversations

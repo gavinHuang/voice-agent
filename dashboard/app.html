@@ -442,6 +442,13 @@
         <textarea id="nc-goal" rows="2"
           placeholder="e.g. Confirm the customer's appointment for tomorrow at 2pm"></textarea>
       </div>
+      <div class="form-row">
+        <label></label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;width:auto">
+          <input type="checkbox" id="nc-ivr-mode" style="width:auto;flex:none">
+          <span style="font-size:0.82rem;color:var(--muted)">IVR mode <span style="font-size:0.75rem">(suppress greeting, DTMF navigation)</span></span>
+        </label>
+      </div>
       <div id="call-form-actions">
         <button class="btn-call" id="btn-place-call" onclick="placeCall()">Place Call</button>
         <span id="call-form-msg"></span>
@@ -954,10 +961,11 @@ function toggleNewCallForm() {
 }
 
 async function placeCall() {
-  const phone = document.getElementById('nc-phone').value.trim();
-  const goal  = document.getElementById('nc-goal').value.trim();
-  const btn   = document.getElementById('btn-place-call');
-  const msg   = document.getElementById('call-form-msg');
+  const phone   = document.getElementById('nc-phone').value.trim();
+  const goal    = document.getElementById('nc-goal').value.trim();
+  const ivrMode = document.getElementById('nc-ivr-mode').checked;
+  const btn     = document.getElementById('btn-place-call');
+  const msg     = document.getElementById('call-form-msg');
 
   if (!phone) {
     setFormMsg('Phone number is required', 'error');
@@ -968,7 +976,7 @@ async function placeCall() {
   setFormMsg('Placing call...', '');
 
   try {
-    const r = await api('/dashboard/call', 'POST', { phone, goal });
+    const r = await api('/dashboard/call', 'POST', { phone, goal, ivr_mode: ivrMode });
     const data = await r.json();
     if (!r.ok) {
       setFormMsg(`Error: ${data.error || r.statusText}`, 'error');
