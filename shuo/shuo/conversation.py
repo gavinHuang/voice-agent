@@ -203,7 +203,11 @@ async def run_conversation_over_twilio(
                         await agent.start_turn(action.transcript, hold_check=action.hold_check)
 
                 elif isinstance(action, ResetAgentTurnAction):
-                    if agent:
+                    # In IVR mode the remote party is an automated system —
+                    # suppress barge-in so its background audio doesn't
+                    # cancel the agent's response before audio is played.
+                    _in_ivr = ivr_mode and ivr_mode()
+                    if agent and not _in_ivr:
                         await agent.cancel_turn()
 
             # ─── DTMF DISPATCH ──────────────────────────────────────
