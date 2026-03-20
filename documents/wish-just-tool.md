@@ -14,6 +14,7 @@ In this system, there can be:
 # Key Commponents 
 ## Cli
 The system should be able to expose all it's capabilities via command line, including the backend/ngrok webrtc, etc.
+This is to enable it become a plugable component to Agent system such as OpenClaw (via Skill)
 
 ## Voice Agent
 An agent with capability to do TTS/STT/DTMF, It should inherently able to interact with telcom network (e.g. via twilio). it can be configured to be an IVR system.
