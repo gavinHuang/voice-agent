@@ -17,7 +17,7 @@
 
 - [x] **CLI-01**: `voice-agent serve` starts the backend server (equivalent to current `main.py`)
 - [x] **CLI-02**: `voice-agent call <phone>` places an outbound call with `--goal` and `--identity` flags
-- [ ] **CLI-03**: `voice-agent local-call` runs a call between two agents using `LocalISP` (no Twilio)
+- [x] **CLI-03**: `voice-agent local-call` runs a call between two agents using `LocalISP` (no Twilio)
 - [x] **CLI-04**: `voice-agent bench` runs IVR benchmark scenarios from a YAML file
 - [x] **CLI-05**: All CLI commands accept YAML config files; flags are overrides
 
@@ -93,7 +93,7 @@
 | BUG-04 | Phase 2 | Complete |
 | CLI-01 | Phase 3 | Complete |
 | CLI-02 | Phase 3 | Complete |
-| CLI-03 | Phase 3 | Pending |
+| CLI-03 | Phase 3 | Complete |
 | CLI-04 | Phase 3 | Complete |
 | CLI-05 | Phase 3 | Complete |
 | BENCH-01 | Phase 4 | Pending |

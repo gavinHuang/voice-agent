@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: ISP Abstraction** - Define ISP protocol, implement LocalISP, inject into VoiceSession (completed 2026-03-21)
 - [x] **Phase 2: Bug Fixes** - Eliminate race conditions and plug hung-call / disk-leak issues (completed 2026-03-21)
-- [ ] **Phase 3: CLI** - `voice-agent` command covering serve, call, local-call, bench
+- [x] **Phase 3: CLI** - `voice-agent` command covering serve, call, local-call, bench (completed 2026-03-21)
 - [ ] **Phase 4: IVR Benchmark** - YAML scenario runner with metrics using LocalISP
 - [ ] **Phase 5: Security Hardening** - Dashboard auth, Twilio signature validation, rate limiting, trace rotation
 - [ ] **Phase 6: Agent Framework Migration** - pydantic-ai replaces custom marker protocol
@@ -60,7 +60,7 @@ Plans:
   3. `voice-agent local-call` runs a full agent-to-agent conversation in-process using LocalISP — no Twilio credentials needed
   4. `voice-agent bench` accepts a YAML scenario file and runs benchmark scenarios
   5. Every command accepts a YAML config file; CLI flags are treated as overrides of config file values
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 03-01-PLAN.md — pyproject.toml + Click CLI with serve, call, bench subcommands + config loading + tests
 - [ ] 03-02-PLAN.md — local-call subcommand with concurrent LocalISP conversations + live transcript + tests
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. ISP Abstraction | 3/3 | Complete    | 2026-03-21 |
 | 2. Bug Fixes | 2/2 | Complete    | 2026-03-21 |
-| 3. CLI | 1/2 | In Progress|  |
+| 3. CLI | 2/2 | Complete   | 2026-03-21 |
 | 4. IVR Benchmark | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Agent Framework Migration | 0/TBD | Not started | - |

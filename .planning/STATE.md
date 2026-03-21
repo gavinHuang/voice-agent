@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md (CLI Foundation)
-last_updated: "2026-03-21T11:31:10.767Z"
+stopped_at: Completed 03-02-PLAN.md (local-call subcommand)
+last_updated: "2026-03-21T11:34:16.523Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 5
 ---
 
@@ -56,6 +56,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 02-bug-fixes P01 | 4min | 3 tasks | 4 files |
 | Phase 02-bug-fixes P02 | 2min | 2 tasks | 3 files |
 | Phase 03-cli P01 | 13min | 2 tasks | 3 files |
+| Phase 03-cli P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,9 @@ Recent decisions affecting current work:
 - [Phase 03-cli]: Deferred imports inside Click commands: shuo.server and uvicorn imported inside function body to avoid dashboard ImportError at CLI startup
 - [Phase 03-cli]: Identity prepended to goal string and written to CALL_GOAL env var: server reads CALL_GOAL when processing the call without server changes
 - [Phase 03-cli]: _ServerModuleContext test pattern: inject fake shuo.server + uvicorn into sys.modules for dashboard-dependent CLI command tests
+- [Phase 03-cli]: asyncio.wait(FIRST_COMPLETED) used to terminate concurrent tasks on first hangup — cleaner than polling
+- [Phase 03-cli]: Deferred imports inside _run_local_call keep top-level imports lightweight and avoid circular imports
+- [Phase 03-cli]: Per-subcommand env check for local-call: only DEEPGRAM/GROQ/ELEVENLABS required, not Twilio
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:31:10.765Z
-Stopped at: Completed 03-01-PLAN.md (CLI Foundation)
+Last session: 2026-03-21T11:34:16.521Z
+Stopped at: Completed 03-02-PLAN.md (local-call subcommand)
 Resume file: None
