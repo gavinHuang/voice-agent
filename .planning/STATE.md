@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-21T22:21:04.047Z"
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-21T22:48:04.519Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 14
+  completed_plans: 13
   percent: 5
 ---
 
@@ -62,6 +62,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 04-ivr-benchmark P03 | 5 | 1 tasks | 2 files |
 | Phase 05-security-hardening P01 | 5min | 2 tasks | 2 files |
 | Phase 05-security-hardening P02 | 3min | 2 tasks | 3 files |
+| Phase 06-agent-framework-migration P01 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,9 @@ Recent decisions affecting current work:
 - [Phase 05-security-hardening]: autouse fixture resets _call_limiter._hits between tests: module-level limiter retains state across test functions
 - [Phase 05-security-hardening]: verify_twilio_signature extracts form body for POST routes: dial-action carries Twilio form params required for correct signature computation
 - [Phase 05-security-hardening]: cleanup_traces applies age filter then count cap: both constraints enforced independently at server startup
+- [Phase 06-agent-framework-migration]: Per-instance pydantic-ai Agent (not module-level): GROQ_API_KEY validated at construction time; per-instance avoids import-time API key check
+- [Phase 06-agent-framework-migration]: LLMTurnContext.goal_suffix via dynamic @agent.system_prompt decorator: keeps Agent stateless while allowing per-call goal customization
+- [Phase 06-agent-framework-migration]: iter() with ModelRequestNode/CallToolsNode: correct approach for text streaming + tool execution (run_stream() deprecated; silences tools)
 
 ### Pending Todos
 
@@ -121,6 +125,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:21:04.045Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-agent-framework-migration/06-CONTEXT.md
+Last session: 2026-03-21T22:48:04.517Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None
