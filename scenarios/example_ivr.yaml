@@ -1,0 +1,34 @@
+scenarios:
+  - id: navigate-to-sales
+    description: "Agent navigates to sales department via DTMF"
+    agent:
+      goal: "Navigate the IVR to reach the sales department"
+      identity: "Customer"
+    timeout: 30
+    success_criteria:
+      transcript_contains:
+        - "sales"
+      dtmf_sequence: "1"
+      max_turns: 5
+
+  - id: navigate-to-tech-support
+    description: "Agent navigates through support menu to tech support"
+    agent:
+      goal: "Navigate the IVR to reach technical support"
+      identity: "Customer"
+    timeout: 30
+    success_criteria:
+      transcript_contains:
+        - "technical support"
+        - "describe your issue"
+      dtmf_sequence: "21"
+      max_turns: 8
+
+  - id: timeout-no-input
+    description: "Agent times out when given an unachievable goal"
+    agent:
+      goal: "Wait silently and do not press any buttons"
+      identity: "Confused caller"
+    timeout: 10
+    success_criteria:
+      max_turns: 20
