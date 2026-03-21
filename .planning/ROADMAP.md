@@ -120,4 +120,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. CLI | 2/2 | Complete    | 2026-03-21 |
 | 4. IVR Benchmark | 3/3 | Complete    | 2026-03-21 |
 | 5. Security Hardening | 2/2 | Complete    | 2026-03-21 |
-| 6. Agent Framework Migration | 2/2 | Complete   | 2026-03-21 |
+| 6. Agent Framework Migration | 2/2 | Complete    | 2026-03-21 |
