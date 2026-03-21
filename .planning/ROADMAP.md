@@ -60,7 +60,10 @@ Plans:
   3. `voice-agent local-call` runs a full agent-to-agent conversation in-process using LocalISP — no Twilio credentials needed
   4. `voice-agent bench` accepts a YAML scenario file and runs benchmark scenarios
   5. Every command accepts a YAML config file; CLI flags are treated as overrides of config file values
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — pyproject.toml + Click CLI with serve, call, bench subcommands + config loading + tests
+- [ ] 03-02-PLAN.md — local-call subcommand with concurrent LocalISP conversations + live transcript + tests
 
 ### Phase 4: IVR Benchmark
 **Goal**: A repeatable benchmark suite can evaluate how reliably the LLM agent navigates IVR systems, with structured metrics output
@@ -104,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. ISP Abstraction | 3/3 | Complete    | 2026-03-21 |
 | 2. Bug Fixes | 2/2 | Complete    | 2026-03-21 |
-| 3. CLI | 0/TBD | Not started | - |
+| 3. CLI | 0/2 | Not started | - |
 | 4. IVR Benchmark | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Agent Framework Migration | 0/TBD | Not started | - |
