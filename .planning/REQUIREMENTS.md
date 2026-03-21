@@ -38,8 +38,8 @@
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: `_dtmf_pending` dict access is protected by an asyncio lock
-- [ ] **BUG-02**: TTS pool eviction is atomic (TOCTOU race eliminated)
+- [x] **BUG-01**: `_dtmf_pending` dict access is protected by an asyncio lock
+- [x] **BUG-02**: TTS pool eviction is atomic (TOCTOU race eliminated)
 - [ ] **BUG-03**: Token observer callback runs in a non-blocking context (does not block LLM stream)
 - [ ] **BUG-04**: Calls with no activity for N seconds are automatically hung up (configurable timeout)
 
@@ -87,8 +87,8 @@
 | ISP-03 | Phase 1 | Complete |
 | ISP-04 | Phase 1 | Complete |
 | ISP-05 | Phase 1 | Complete |
-| BUG-01 | Phase 2 | Pending |
-| BUG-02 | Phase 2 | Pending |
+| BUG-01 | Phase 2 | Complete |
+| BUG-02 | Phase 2 | Complete |
 | BUG-03 | Phase 2 | Pending |
 | BUG-04 | Phase 2 | Pending |
 | CLI-01 | Phase 3 | Pending |

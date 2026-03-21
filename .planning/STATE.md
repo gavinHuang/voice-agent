@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md (Wire ISP into conversation.py and server.py)
-last_updated: "2026-03-21T09:29:46.578Z"
+stopped_at: Completed 02-01-PLAN.md (Test scaffold + BUG-01/BUG-02 fixes)
+last_updated: "2026-03-21T09:52:49.161Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 5
 ---
 
@@ -53,6 +53,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 01-isp-abstraction P01 | 1 | 2 tasks | 3 files |
 | Phase 01-isp-abstraction P02 | 2min | 2 tasks | 4 files |
 | Phase 01-isp-abstraction P03 | 4min | 2 tasks | 3 files |
+| Phase 02-bug-fixes P01 | 4min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 01-isp-abstraction]: on_hangup not passed to run_conversation: TwilioISP.hangup() handles REST call entirely; server has no additional hangup bookkeeping
 - [Phase 01-isp-abstraction]: isp.stop() called in both HangupRequestEvent and finally block: idempotent by design
 - [Phase 01-isp-abstraction]: MockISP fires on_start() synchronously during start(): simpler than async task, sufficient for test assertions
+- [Phase 02-bug-fixes]: _dtmf_lock initialized at module level (not in _warmup): test env has no FastAPI startup so _warmup never fires; Python 3.10+ confirmed safe
+- [Phase 02-bug-fixes]: cancel() always outside asyncio.Lock scope in TTSPool: collect-then-cancel pattern avoids serializing I/O under lock
 
 ### Pending Todos
 
@@ -86,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:26:52.874Z
-Stopped at: Completed 01-03-PLAN.md (Wire ISP into conversation.py and server.py)
+Last session: 2026-03-21T09:52:49.159Z
+Stopped at: Completed 02-01-PLAN.md (Test scaffold + BUG-01/BUG-02 fixes)
 Resume file: None
