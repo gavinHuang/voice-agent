@@ -38,6 +38,33 @@ from .log import Logger, get_logger
 
 logger = get_logger("shuo.conversation")
 
+CALL_INACTIVITY_TIMEOUT = float(os.getenv("CALL_INACTIVITY_TIMEOUT", "300"))
+
+
+async def _inactivity_watchdog(
+    event_queue: asyncio.Queue,
+    timeout: float,
+    last_activity: Optional[list] = None,  # mutable single-element list [float] for shared state
+) -> None:
+    """Hang up if no meaningful call activity for `timeout` seconds.
+
+    Activity events (StreamStart, FluxEndOfTurn, AgentTurnDone, HoldStart, HoldEnd)
+    update last_activity[0]. MediaEvents do NOT count — a silent-but-connected call
+    streaming audio silence should still be caught.
+    """
+    if last_activity is None:
+        last_activity = [asyncio.get_event_loop().time()]
+    try:
+        while True:
+            await asyncio.sleep(min(5.0, timeout))
+            now = asyncio.get_event_loop().time()
+            if now - last_activity[0] > timeout:
+                logger.warning(f"Inactivity timeout ({timeout}s) — requesting hangup")
+                await event_queue.put(HangupRequestEvent())
+                return
+    except asyncio.CancelledError:
+        pass
+
 
 async def run_conversation(
     isp,
@@ -95,6 +122,8 @@ async def run_conversation(
     # ── Initialize ──────────────────────────────────────────────────
 
     state = AppState()
+    watchdog: Optional[asyncio.Task] = None
+    last_activity = [asyncio.get_event_loop().time()]
     await isp.start(on_isp_media, on_isp_start, on_isp_stop)
 
     # Allow LocalISP (and MockISP) to push DTMFToneEvents directly into
@@ -111,6 +140,11 @@ async def run_conversation(
             event = await event_queue.get()
 
             event_log.event(event)
+
+            # Update watchdog activity tracker for meaningful events
+            if isinstance(event, (StreamStartEvent, FluxEndOfTurnEvent, AgentTurnDoneEvent,
+                                   HoldStartEvent, HoldEndEvent)):
+                last_activity[0] = asyncio.get_event_loop().time()
 
             # Initialize services on stream start
             if isinstance(event, StreamStartEvent):
@@ -233,6 +267,12 @@ async def run_conversation(
                             state = replace(state, phase=Phase.RESPONDING)
                             await agent.start_turn(opener)
 
+            # Start inactivity watchdog on first StreamStart — auto-hangup if no meaningful events
+            if isinstance(event, StreamStartEvent) and watchdog is None:
+                watchdog = asyncio.create_task(
+                    _inactivity_watchdog(event_queue, CALL_INACTIVITY_TIMEOUT, last_activity)
+                )
+
             # ─── EXIT CHECK ─────────────────────────────────────────
             if isinstance(event, StreamStopEvent):
                 break
@@ -251,6 +291,14 @@ async def run_conversation(
         raise
 
     finally:
+        # Cancel watchdog
+        if watchdog is not None and not watchdog.done():
+            watchdog.cancel()
+            try:
+                await watchdog
+            except asyncio.CancelledError:
+                pass
+
         await isp.stop()  # idempotent — may have been called already in hangup path
 
         if agent:
