@@ -201,13 +201,17 @@ def call_cmd(ctx: click.Context, phone: str, goal: str | None, identity: str | N
 
 @cli.command()
 @click.option("--dataset", type=str, default=None, help="YAML scenario file")
+@click.option("--output", type=str, default=None, help="JSON output file for results")
 @click.pass_context
-def bench(ctx: click.Context, dataset: str | None) -> None:
-    """Run benchmark suite (stub — Phase 4)."""
+def bench(ctx: click.Context, dataset: str | None, output: str | None) -> None:
+    """Run IVR benchmark scenarios."""
     cfg = ctx.obj["config"].get("bench", {})
     effective_dataset = dataset if dataset is not None else cfg.get("dataset")
-    click.echo(f"bench: dataset={effective_dataset!r}")
-    click.echo("Benchmark runner not yet implemented (Phase 4).")
+    if not effective_dataset:
+        click.echo("Error: --dataset required (or set bench.dataset in config)", err=True)
+        sys.exit(1)
+    from shuo.bench import run_benchmark
+    asyncio.run(run_benchmark(effective_dataset, output_path=output))
 
 
 def _make_observer(label: str):

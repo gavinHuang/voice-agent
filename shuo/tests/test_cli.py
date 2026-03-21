@@ -74,21 +74,19 @@ from shuo.cli import cli
 # bench (no env / server needed)
 # =============================================================================
 
-def test_bench_stub():
-    """bench prints stub message and dataset path."""
+def test_bench_requires_dataset():
+    """bench exits with non-zero and error message when no --dataset given."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["bench", "--dataset", "test.yaml"])
-    assert result.exit_code == 0, result.output
-    assert "not yet implemented" in result.output.lower()
-    assert "test.yaml" in result.output
+    result = runner.invoke(cli, ["bench"])
+    assert result.exit_code != 0
+    assert "dataset required" in (result.output + (result.stderr or "")).lower()
 
 
 def test_bench_no_dataset():
-    """bench with no dataset prints None for dataset."""
+    """bench exits with non-zero when no --dataset flag and no config."""
     runner = CliRunner()
     result = runner.invoke(cli, ["bench"])
-    assert result.exit_code == 0, result.output
-    assert "not yet implemented" in result.output.lower()
+    assert result.exit_code != 0
 
 
 # =============================================================================
@@ -97,47 +95,59 @@ def test_bench_no_dataset():
 
 def test_config_file_loaded():
     """bench uses dataset from YAML config when no --dataset flag given."""
+    from unittest.mock import AsyncMock
     runner = CliRunner()
     with runner.isolated_filesystem():
         with open("voice-agent.yaml", "w") as f:
             f.write("bench:\n  dataset: from_config.yaml\n")
-        result = runner.invoke(cli, ["bench"])
+        with patch("shuo.bench.run_benchmark", new_callable=AsyncMock, return_value=[]) as mock_rb:
+            result = runner.invoke(cli, ["bench"])
     assert result.exit_code == 0, result.output
-    assert "from_config.yaml" in result.output
+    mock_rb.assert_called_once()
+    call_args = mock_rb.call_args
+    assert call_args[0][0] == "from_config.yaml"
 
 
 def test_flag_overrides_config():
     """--dataset flag overrides the value from YAML config."""
+    from unittest.mock import AsyncMock
     runner = CliRunner()
     with runner.isolated_filesystem():
         with open("voice-agent.yaml", "w") as f:
             f.write("bench:\n  dataset: from_config.yaml\n")
-        result = runner.invoke(cli, ["bench", "--dataset", "from_flag.yaml"])
+        with patch("shuo.bench.run_benchmark", new_callable=AsyncMock, return_value=[]) as mock_rb:
+            result = runner.invoke(cli, ["bench", "--dataset", "from_flag.yaml"])
     assert result.exit_code == 0, result.output
-    assert "from_flag.yaml" in result.output
-    assert "from_config.yaml" not in result.output
+    mock_rb.assert_called_once()
+    assert mock_rb.call_args[0][0] == "from_flag.yaml"
 
 
 def test_config_auto_detect():
     """voice-agent.yaml in cwd is auto-loaded when --config is not specified."""
+    from unittest.mock import AsyncMock
     runner = CliRunner()
     with runner.isolated_filesystem():
         with open("voice-agent.yaml", "w") as f:
             f.write("bench:\n  dataset: auto_detected.yaml\n")
-        result = runner.invoke(cli, ["bench"])
+        with patch("shuo.bench.run_benchmark", new_callable=AsyncMock, return_value=[]) as mock_rb:
+            result = runner.invoke(cli, ["bench"])
     assert result.exit_code == 0, result.output
-    assert "auto_detected.yaml" in result.output
+    mock_rb.assert_called_once()
+    assert mock_rb.call_args[0][0] == "auto_detected.yaml"
 
 
 def test_explicit_config_flag():
     """--config path loads the specified file instead of auto-detect."""
+    from unittest.mock import AsyncMock
     runner = CliRunner()
     with runner.isolated_filesystem():
         with open("custom.yaml", "w") as f:
             f.write("bench:\n  dataset: custom_dataset.yaml\n")
-        result = runner.invoke(cli, ["--config", "custom.yaml", "bench"])
+        with patch("shuo.bench.run_benchmark", new_callable=AsyncMock, return_value=[]) as mock_rb:
+            result = runner.invoke(cli, ["--config", "custom.yaml", "bench"])
     assert result.exit_code == 0, result.output
-    assert "custom_dataset.yaml" in result.output
+    mock_rb.assert_called_once()
+    assert mock_rb.call_args[0][0] == "custom_dataset.yaml"
 
 
 # =============================================================================
