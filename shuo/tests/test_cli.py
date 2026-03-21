@@ -236,3 +236,143 @@ def test_call_identity_prepended_to_goal():
         call_goal = os.environ.get("CALL_GOAL", "")
         assert "You are John Smith" in call_goal
         assert "check balance" in call_goal
+
+
+# =============================================================================
+# local-call
+# =============================================================================
+
+_LOCAL_CALL_ENV = {
+    "DEEPGRAM_API_KEY": "x",
+    "GROQ_API_KEY": "x",
+    "ELEVENLABS_API_KEY": "x",
+}
+
+
+def test_local_call_help():
+    """local-call --help shows all four flags and exits 0."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["local-call", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--caller-goal" in result.output
+    assert "--callee-goal" in result.output
+    assert "--caller-identity" in result.output
+    assert "--callee-identity" in result.output
+
+
+@patch("shuo.conversation.run_conversation")
+@patch("shuo.services.local_isp.LocalISP")
+@patch.dict(os.environ, _LOCAL_CALL_ENV)
+def test_local_call_runs(mock_isp_cls, mock_run_conv):
+    """local-call creates two ISP instances, pairs them, runs two conversations."""
+    from unittest.mock import AsyncMock
+    mock_run_conv.__class__ = AsyncMock
+    mock_run_conv.side_effect = None
+    mock_run_conv.return_value = None
+
+    # Make run_conversation an async function that returns immediately
+    async def _noop(*args, **kwargs):
+        return None
+
+    mock_run_conv.side_effect = _noop
+
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "local-call",
+        "--caller-goal", "ask about balance",
+        "--callee-goal", "answer questions",
+    ])
+    assert result.exit_code == 0, result.output
+    assert mock_run_conv.call_count == 2
+    assert mock_isp_cls.pair.called
+
+
+@patch("shuo.conversation.run_conversation")
+@patch("shuo.services.local_isp.LocalISP")
+def test_local_call_config_merge(mock_isp_cls, mock_run_conv):
+    """local-call reads caller/callee goals from YAML config when no flags given."""
+    async def _noop(*args, **kwargs):
+        return None
+
+    mock_run_conv.side_effect = _noop
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(), patch.dict(os.environ, _LOCAL_CALL_ENV):
+        with open("voice-agent.yaml", "w") as f:
+            f.write(
+                "local_call:\n"
+                "  caller:\n"
+                "    goal: ask about balance\n"
+                "  callee:\n"
+                "    goal: answer questions\n"
+            )
+        result = runner.invoke(cli, ["local-call"])
+    assert result.exit_code == 0, result.output
+    assert mock_run_conv.call_count == 2
+
+    # Extract the get_goal callbacks and verify their return values
+    call_args_list = mock_run_conv.call_args_list
+    caller_get_goal = call_args_list[0][1]["get_goal"]
+    callee_get_goal = call_args_list[1][1]["get_goal"]
+    assert caller_get_goal("dummy_sid") == "ask about balance"
+    assert callee_get_goal("dummy_sid") == "answer questions"
+
+
+@patch("shuo.conversation.run_conversation")
+@patch("shuo.services.local_isp.LocalISP")
+def test_local_call_flag_overrides_config(mock_isp_cls, mock_run_conv):
+    """--caller-goal flag overrides the value from YAML config."""
+    async def _noop(*args, **kwargs):
+        return None
+
+    mock_run_conv.side_effect = _noop
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(), patch.dict(os.environ, _LOCAL_CALL_ENV):
+        with open("voice-agent.yaml", "w") as f:
+            f.write(
+                "local_call:\n"
+                "  caller:\n"
+                "    goal: from config\n"
+            )
+        result = runner.invoke(cli, ["local-call", "--caller-goal", "from flag"])
+    assert result.exit_code == 0, result.output
+
+    call_args_list = mock_run_conv.call_args_list
+    caller_get_goal = call_args_list[0][1]["get_goal"]
+    assert caller_get_goal("dummy_sid") == "from flag"
+
+
+@patch("shuo.cli.load_dotenv")
+def test_local_call_env_check(mock_load_dotenv):
+    """local-call exits with error when required env vars are missing."""
+    runner = CliRunner()
+    with patch.dict(os.environ, {}, clear=True):
+        result = runner.invoke(cli, ["local-call", "--caller-goal", "x", "--callee-goal", "y"])
+    assert result.exit_code != 0 or "Missing" in (result.output + (result.stderr or ""))
+
+
+@patch("shuo.conversation.run_conversation")
+@patch("shuo.services.local_isp.LocalISP")
+@patch.dict(os.environ, _LOCAL_CALL_ENV)
+def test_local_call_identity_in_goal(mock_isp_cls, mock_run_conv):
+    """--caller-identity is folded into the goal string as 'You are {identity}.'"""
+    async def _noop(*args, **kwargs):
+        return None
+
+    mock_run_conv.side_effect = _noop
+
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "local-call",
+        "--caller-identity", "John",
+        "--caller-goal", "check balance",
+        "--callee-goal", "answer",
+    ])
+    assert result.exit_code == 0, result.output
+
+    call_args_list = mock_run_conv.call_args_list
+    caller_get_goal = call_args_list[0][1]["get_goal"]
+    goal_str = caller_get_goal("dummy_sid")
+    assert "You are John" in goal_str
+    assert "check balance" in goal_str
