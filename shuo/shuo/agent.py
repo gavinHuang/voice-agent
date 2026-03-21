@@ -10,16 +10,13 @@ Owns conversation history across turns.
 
 TTS connections are managed by TTSPool (see services/tts_pool.py).
 
-Marker protocol (embedded in LLM output, stripped before TTS):
-    [DTMF:N]         -- dial digit N; tone appended after TTS audio
-    [HOLD]           -- agent is entering hold mode
-    [HOLD_CONTINUE]  -- still on hold; suppress TTS, end turn silently
-    [HOLD_END]       -- real person detected; exit hold, speak normally
+Tool effects (DTMF, hold, hangup) are delivered via pydantic-ai tool calls
+in LLMService. Agent reads them from LLMService.turn_context after each turn.
 """
 
 import asyncio
 import time
-from typing import Optional, Callable, List, Dict, Any
+from typing import Optional, Callable, List, Any
 
 from .services.llm import LLMService
 from .services.tts import create_tts
@@ -36,76 +33,6 @@ log = ServiceLogger("Agent")
 def _ms_since(t0: float) -> int:
     """Milliseconds elapsed since t0."""
     return int((time.monotonic() - t0) * 1000)
-
-
-# =============================================================================
-# MARKER SCANNER
-# =============================================================================
-
-class MarkerScanner:
-    """
-    Strips [DTMF:N] / [HOLD*] markers from streaming LLM text.
-
-    Feed tokens one at a time; receives (clean_text, markers) back.
-    Buffers partial markers across token boundaries.
-
-    Known markers:
-        HOLD, HOLD_END, HOLD_CONTINUE
-        DTMF:0 ... DTMF:9, DTMF:*, DTMF:#
-    """
-
-    KNOWN = {"HOLD", "HOLD_END", "HOLD_CONTINUE", "HANGUP"}
-    MAX_BUF = 20  # Max chars to buffer before giving up on a potential marker
-
-    def __init__(self) -> None:
-        self._buf = ""
-        self._in_marker = False
-
-    def feed(self, token: str) -> tuple[str, list[str]]:
-        """Process one token. Returns (clean_text, list_of_markers)."""
-        clean = ""
-        markers: list[str] = []
-
-        for ch in token:
-            if not self._in_marker:
-                if ch == "[":
-                    self._in_marker = True
-                    self._buf = ""
-                else:
-                    clean += ch
-            else:
-                if ch == "]":
-                    inner = self._buf
-                    if inner in self.KNOWN or self._is_dtmf(inner):
-                        markers.append(inner)
-                        # Marker stripped — nothing added to clean
-                    else:
-                        # Not a recognised marker; emit as literal text
-                        clean += "[" + inner + "]"
-                    self._in_marker = False
-                    self._buf = ""
-                elif len(self._buf) < self.MAX_BUF:
-                    self._buf += ch
-                else:
-                    # Buffer overflow — not a valid marker, flush as literal text
-                    clean += "[" + self._buf + ch
-                    self._in_marker = False
-                    self._buf = ""
-
-        return clean, markers
-
-    def flush(self) -> str:
-        """Flush any remaining buffered content at end of stream."""
-        if self._in_marker:
-            remaining = "[" + self._buf
-            self._in_marker = False
-            self._buf = ""
-            return remaining
-        return ""
-
-    @staticmethod
-    def _is_dtmf(inner: str) -> bool:
-        return len(inner) == 6 and inner.startswith("DTMF:") and inner[5] in "0123456789*#"
 
 
 # =============================================================================
@@ -161,12 +88,9 @@ class Agent:
         self._got_first_token = False
         self._got_first_audio = False
 
-        # Per-turn marker state
-        self._scanner = MarkerScanner()
+        # Per-turn state (tool effects read from turn_context in _on_llm_done)
         self._dtmf_queue: List[str] = []
         self._tts_had_text: bool = False
-        self._pending_hold_start: bool = False
-        self._pending_hold_end: bool = False
         self._pending_hangup: bool = False
 
     @property
@@ -174,13 +98,13 @@ class Agent:
         return self._active
 
     @property
-    def history(self) -> List[Dict[str, str]]:
+    def history(self) -> list:
         """Read-only access to conversation history (owned by LLM)."""
         return self._llm.history
 
     def restore_history(
         self,
-        saved_history: List[Dict[str, str]],
+        saved_history: list,
         takeover_transcript: List[str],
     ) -> Optional[str]:
         """
@@ -213,12 +137,9 @@ class Agent:
         self._got_first_token = False
         self._got_first_audio = False
 
-        # Reset per-turn marker state
-        self._scanner = MarkerScanner()
+        # Reset per-turn state
         self._dtmf_queue = []
         self._tts_had_text = False
-        self._pending_hold_start = False
-        self._pending_hold_end = False
         self._pending_hangup = False
 
         # Begin tracing this turn
@@ -286,9 +207,8 @@ class Agent:
         """
         Inject a DTMF tone into the outbound audio stream (dashboard control).
 
-        Generates the tone as μ-law audio and sends it directly to Twilio,
-        where it is played to the remote party — the same path used by the
-        agent's own [DTMF:N] marker mechanism.
+        Generates the tone as u-law audio and sends it directly to Twilio,
+        where it is played to the remote party.
         """
         audio = generate_dtmf_ulaw_b64(digit)
         await self._isp.send_audio(audio)
@@ -301,7 +221,7 @@ class Agent:
     # ── Internal Callbacks ──────────────────────────────────────────
 
     async def _on_llm_token(self, token: str) -> None:
-        """LLM produced a token -> scan for markers, feed clean text to TTS."""
+        """LLM produced a text token -> forward to TTS."""
         if not self._active or not self._tts:
             return
 
@@ -310,56 +230,55 @@ class Agent:
             self._t_first_token = time.monotonic()
             self._tracer.mark(self._turn, "llm_first_token")
             self._tracer.begin(self._turn, "tts")
-            log.info(f"⏱  LLM first token  +{_ms_since(self._t0)}ms")
+            log.info(f"LLM first token  +{_ms_since(self._t0)}ms")
 
-        clean_text, markers = self._scanner.feed(token)
-
-        for m in markers:
-            if m.startswith("DTMF:"):
-                self._dtmf_queue.append(m[5:])
-            elif m == "HOLD":
-                self._pending_hold_start = True
-            elif m == "HOLD_END":
-                self._pending_hold_end = True
-            elif m == "HANGUP":
-                self._pending_hangup = True
-                self._emit(HangupPendingEvent())  # Block new turns immediately
-            # HOLD_CONTINUE is silently absorbed — no TTS, stay in hold
-
-        if clean_text:
+        if token:
             self._tts_had_text = True
-            await self._tts.send(clean_text)
+            await self._tts.send(token)
             # Schedule observer on next event-loop turn — never block the LLM token stream (BUG-03)
             if self._on_token_observed:
-                asyncio.get_event_loop().call_soon(self._on_token_observed, clean_text)
+                asyncio.get_event_loop().call_soon(self._on_token_observed, token)
 
     async def _on_llm_done(self) -> None:
-        """LLM finished -> flush scanner, fire hold events, flush TTS."""
+        """LLM finished -> read tool effects, fire events, flush TTS."""
         if not self._active or not self._tts:
             return
 
         self._tracer.end(self._turn, "llm")
 
-        # Flush any partial marker buffer
-        remaining = self._scanner.flush()
-        if remaining:
-            self._tts_had_text = True
-            await self._tts.send(remaining)
+        # Read tool side effects from LLMService
+        ctx = self._llm.turn_context
+
+        # Copy DTMF queue for _on_tts_done to append after speech
+        self._dtmf_queue = list(ctx.dtmf_queue)
+
+        # hold_continue MUST be checked FIRST — if true, skip TTS entirely
+        # (Pitfall 4 from research: if any text token came before the tool call,
+        # _tts_had_text would be True, but hold_continue overrides it)
+        if ctx.hold_continue:
+            await self._tts.cancel()
+            self._tts = None
+            self._player = None
+            self._active = False
+            self._emit(AgentTurnDoneEvent())
+            return
 
         # Fire hold state events
-        if self._pending_hold_start:
+        if ctx.hold_start:
             self._emit(HoldStartEvent())
-            self._pending_hold_start = False
-
-        if self._pending_hold_end:
+        if ctx.hold_end:
             self._emit(HoldEndEvent())
-            self._pending_hold_end = False
+
+        # Set hangup flag for _on_playback_done to read after audio plays
+        if ctx.hangup_pending:
+            self._pending_hangup = True
+            self._emit(HangupPendingEvent())  # Block new turns immediately
 
         if self._tts_had_text:
             # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent
             await self._tts.flush()
         elif self._dtmf_queue:
-            # DTMF-only turn (no speech): emit event so server sends via Twilio REST
+            # DTMF-only turn (no speech)
             digits = "".join(self._dtmf_queue)
             self._dtmf_queue.clear()
             await self._tts.cancel()
@@ -368,7 +287,7 @@ class Agent:
             self._active = False
             self._emit(DTMFToneEvent(digits=digits))
         else:
-            # HOLD_CONTINUE: nothing to say — skip TTS, end turn immediately
+            # No text, no DTMF, no hold_continue — empty turn, end silently
             await self._tts.cancel()
             self._tts = None
             self._player = None
@@ -387,7 +306,7 @@ class Agent:
             self._tracer.begin(self._turn, "player")
             ttft = _ms_since(self._t0)
             since_token = int((self._t_first_audio - self._t_first_token) * 1000) if self._got_first_token else 0
-            log.info(f"⏱  TTS first audio  +{ttft}ms  (TTS latency {since_token}ms)")
+            log.info(f"TTS first audio  +{ttft}ms  (TTS latency {since_token}ms)")
 
         await self._player.send_chunk(audio_base64)
 
@@ -414,7 +333,7 @@ class Agent:
         self._tracer.end(self._turn, "player")
 
         total = _ms_since(self._t0)
-        log.info(f"⏱  Turn complete    +{total}ms total")
+        log.info(f"Turn complete    +{total}ms total")
 
         self._active = False
         self._tts = None
