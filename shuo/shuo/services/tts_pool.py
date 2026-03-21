@@ -60,6 +60,7 @@ class TTSPool:
         self._running = False
         self._fill_event = asyncio.Event()
         self._fill_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()  # Protects concurrent access to self._ready
 
     @property
     def available(self) -> int:
@@ -86,10 +87,15 @@ class TTSPool:
         otherwise blocks to create a fresh one.
         """
         # Try to grab a warm, non-stale connection
-        while self._ready:
-            entry = self._ready.pop(0)
+        while True:
+            async with self._lock:
+                if self._ready:
+                    entry = self._ready.pop(0)
+                else:
+                    entry = None
+            if entry is None:
+                break
             age = time.monotonic() - entry.created_at
-
             if age < self._ttl:
                 entry.tts.bind(on_audio, on_done)
                 age_ms = int(age * 1000)
@@ -99,7 +105,7 @@ class TTSPool:
             else:
                 age_ms = int(age * 1000)
                 log.info(f"Discarded stale connection (idle {age_ms}ms)")
-                await entry.tts.cancel()
+                await entry.tts.cancel()  # outside lock — never hold lock during I/O
 
         # No warm connections available -- create fresh (blocking)
         log.info("Pool empty, connecting fresh...")
@@ -121,9 +127,11 @@ class TTSPool:
                 pass
             self._fill_task = None
 
-        for entry in self._ready:
-            await entry.tts.cancel()
-        self._ready.clear()
+        async with self._lock:
+            entries = list(self._ready)
+            self._ready.clear()
+        for entry in entries:
+            await entry.tts.cancel()  # outside lock — never hold lock during I/O
 
     def _trigger_fill(self) -> None:
         """Signal the fill loop to check pool levels."""
@@ -168,15 +176,18 @@ class TTSPool:
     async def _evict_stale(self) -> None:
         """Remove connections that have been idle past TTL."""
         now = time.monotonic()
-        fresh: List[_Entry] = []
-
-        for entry in self._ready:
-            age = now - entry.created_at
-            if age < self._ttl:
-                fresh.append(entry)
-            else:
-                age_ms = int(age * 1000)
-                log.info(f"Evicted stale connection (idle {age_ms}ms)")
-                await entry.tts.cancel()
-
-        self._ready = fresh
+        stale: List[_Entry] = []
+        async with self._lock:
+            fresh: List[_Entry] = []
+            for entry in self._ready:
+                age = now - entry.created_at
+                if age < self._ttl:
+                    fresh.append(entry)
+                else:
+                    stale.append(entry)
+            self._ready = fresh
+        # Cancel outside lock — never hold lock during I/O
+        for entry in stale:
+            age_ms = int((now - entry.created_at) * 1000)
+            log.info(f"Evicted stale connection (idle {age_ms}ms)")
+            await entry.tts.cancel()
