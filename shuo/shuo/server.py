@@ -19,8 +19,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, WebSocket, Response, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, Response, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
+from twilio.request_validator import RequestValidator
 from openai import AsyncOpenAI
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
@@ -37,6 +38,51 @@ from dashboard.server import router as dashboard_router
 from dashboard import bus as dashboard_bus, registry as dashboard_registry
 
 logger = get_logger("shuo.server")
+
+
+async def verify_twilio_signature(
+    request: Request,
+    x_twilio_signature: str = Header(None, alias="X-Twilio-Signature"),
+) -> None:
+    """FastAPI dependency that validates the Twilio request signature.
+
+    Skipped when TWILIO_AUTH_TOKEN is not set (dev-friendly).
+    Raises HTTP 403 if signature is missing or invalid.
+
+    For POST routes that carry form data (e.g. /twiml/dial-action/{call_id}),
+    Twilio signs the request against the form params, so we extract the form
+    body and pass it to the validator.  For GET or form-less POST routes
+    Twilio signs against the query-string URL alone (empty params dict).
+    """
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+    if not auth_token:
+        return  # Skip validation in dev when no auth token configured
+
+    if not x_twilio_signature:
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
+    # Reconstruct the URL as Twilio sees it using the public base URL.
+    public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+    if public_url:
+        url = public_url.rstrip("/") + str(request.url.path)
+        if request.url.query:
+            url += "?" + str(request.url.query)
+    else:
+        url = str(request.url)
+
+    # For POST requests, Twilio signs against the form parameters.
+    # We must pass the actual form dict; an empty dict will cause 403 for
+    # routes that Twilio POSTs with form data (e.g. dial-action callbacks).
+    params: dict = {}
+    content_type = request.headers.get("content-type", "")
+    if request.method == "POST" and "application/x-www-form-urlencoded" in content_type:
+        form_data = await request.form()
+        params = dict(form_data)
+
+    validator = RequestValidator(auth_token)
+    if not validator.validate(url, params, x_twilio_signature):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
 
 app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
 app.include_router(dashboard_router)
@@ -127,7 +173,7 @@ async def phone():
     return FileResponse(_SOFTPHONE_DIR / "phone.html")
 
 
-@app.api_route("/twiml/conference/{call_id}", methods=["GET", "POST"])
+@app.api_route("/twiml/conference/{call_id}", methods=["GET", "POST"], dependencies=[Depends(verify_twilio_signature)])
 async def twiml_conference(call_id: str):
     """Return TwiML to join a takeover conference (used by softphone leg)."""
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -140,7 +186,7 @@ async def twiml_conference(call_id: str):
     return Response(content=twiml_response, media_type="application/xml")
 
 
-@app.api_route("/twiml/dial-action/{call_id}", methods=["GET", "POST"])
+@app.api_route("/twiml/dial-action/{call_id}", methods=["GET", "POST"], dependencies=[Depends(verify_twilio_signature)])
 async def dial_action(call_id: str):
     """
     Called by Twilio when the callee's <Dial><Conference> ends.
@@ -191,7 +237,7 @@ async def dial_action(call_id: str):
     return Response(content=twiml_response, media_type="application/xml")
 
 
-@app.api_route("/twiml", methods=["GET", "POST"])
+@app.api_route("/twiml", methods=["GET", "POST"], dependencies=[Depends(verify_twilio_signature)])
 async def twiml():
     """
     Return TwiML instructing Twilio to connect a WebSocket stream.
@@ -225,7 +271,7 @@ async def twiml():
     return Response(content=twiml_response, media_type="application/xml")
 
 
-@app.api_route("/twiml/ivr-dtmf", methods=["GET", "POST"])
+@app.api_route("/twiml/ivr-dtmf", methods=["GET", "POST"], dependencies=[Depends(verify_twilio_signature)])
 async def twiml_ivr_dtmf(digit: str = Query(..., description="DTMF digit(s) to play")):
     """
     Return TwiML that plays DTMF digit(s) to the remote party then reconnects
