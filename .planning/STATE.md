@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-21T12:07:49.867Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-21T12:32:36.182Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
   percent: 5
 ---
 
@@ -57,6 +57,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 02-bug-fixes P02 | 2min | 2 tasks | 3 files |
 | Phase 03-cli P01 | 13min | 2 tasks | 3 files |
 | Phase 03-cli P02 | 2min | 2 tasks | 2 files |
+| Phase 04-ivr-benchmark P01 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [Phase 03-cli]: asyncio.wait(FIRST_COMPLETED) used to terminate concurrent tasks on first hangup — cleaner than polling
 - [Phase 03-cli]: Deferred imports inside _run_local_call keep top-level imports lightweight and avoid circular imports
 - [Phase 03-cli]: Per-subcommand env check for local-call: only DEEPGRAM/GROQ/ELEVENLABS required, not Twilio
+- [Phase 04-ivr-benchmark]: SuccessCriteria.transcript_contains defaults to empty list (not None) — simplifies evaluate_criteria loop
+- [Phase 04-ivr-benchmark]: ScenarioConfig.ivr_flow defaults to None — runner supplies the default path, data model stays neutral
+- [Phase 04-ivr-benchmark]: dtmf_pass uses join(dtmf_log) == dtmf_sequence for exact multi-digit matching without per-element indexing
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:07:49.865Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-ivr-benchmark/04-CONTEXT.md
+Last session: 2026-03-21T12:32:36.180Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None

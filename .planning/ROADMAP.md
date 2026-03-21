@@ -74,7 +74,7 @@ Plans:
   2. `voice-agent bench --dataset scenarios.yaml` runs all scenarios, each spawning a LocalISP-connected agent + IVR pair
   3. The runner prints a metrics report with success rate, average turns, DTMF accuracy, and wall-clock latency per scenario
   4. At least 3 sample scenarios covering the example IVR flow are included and pass against the existing mock IVR server
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 - [ ] 04-01-PLAN.md — YAML scenario schema, data model, success criteria evaluation + test scaffold
 - [ ] 04-02-PLAN.md — IVR driver, benchmark runner, metrics report, CLI wiring
@@ -112,6 +112,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. ISP Abstraction | 3/3 | Complete    | 2026-03-21 |
 | 2. Bug Fixes | 2/2 | Complete    | 2026-03-21 |
 | 3. CLI | 2/2 | Complete    | 2026-03-21 |
-| 4. IVR Benchmark | 0/3 | Not started | - |
+| 4. IVR Benchmark | 1/3 | In Progress|  |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Agent Framework Migration | 0/TBD | Not started | - |

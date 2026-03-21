@@ -23,9 +23,9 @@
 
 ### IVR Benchmark
 
-- [ ] **BENCH-01**: Benchmark scenario YAML schema defined (id, description, agent configs, success criteria, timeout)
+- [x] **BENCH-01**: Benchmark scenario YAML schema defined (id, description, agent configs, success criteria, timeout)
 - [ ] **BENCH-02**: Benchmark runner spawns agent ↔ IVR pairs using `LocalISP`
-- [ ] **BENCH-03**: Success criteria support: `transcript_contains`, `dtmf_sequence`, `max_turns`
+- [x] **BENCH-03**: Success criteria support: `transcript_contains`, `dtmf_sequence`, `max_turns`
 - [ ] **BENCH-04**: Runner outputs metrics: success rate, average turns, DTMF accuracy, wall-clock latency
 - [ ] **BENCH-05**: At least 3 sample scenarios provided covering the example IVR flow
 
@@ -96,9 +96,9 @@
 | CLI-03 | Phase 3 | Complete |
 | CLI-04 | Phase 3 | Complete |
 | CLI-05 | Phase 3 | Complete |
-| BENCH-01 | Phase 4 | Pending |
+| BENCH-01 | Phase 4 | Complete |
 | BENCH-02 | Phase 4 | Pending |
-| BENCH-03 | Phase 4 | Pending |
+| BENCH-03 | Phase 4 | Complete |
 | BENCH-04 | Phase 4 | Pending |
 | BENCH-05 | Phase 4 | Pending |
 | SEC-01 | Phase 5 | Pending |
