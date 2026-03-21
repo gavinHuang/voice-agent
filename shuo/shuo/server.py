@@ -25,7 +25,8 @@ from openai import AsyncOpenAI
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 
-from .conversation import run_conversation_over_twilio
+from .conversation import run_conversation
+from .services.twilio_isp import TwilioISP
 from .services.twilio_client import make_outbound_call, parse_twilio_message
 from .services.flux import FluxService
 from .services.tts_pool import TTSPool
@@ -597,26 +598,8 @@ async def websocket_endpoint(websocket: WebSocket):
         dashboard_registry.update(ctx["call_id"], agent=agent)
 
     def on_hangup():
-        c = dashboard_registry.get(ctx["call_id"])
-        if not c or not c.call_sid:
-            return
-        call_sid = c.call_sid
-
-        async def _do_hangup():
-            try:
-                from twilio.rest import Client
-                loop = asyncio.get_event_loop()
-                client = Client(
-                    os.getenv("TWILIO_ACCOUNT_SID"),
-                    os.getenv("TWILIO_AUTH_TOKEN"),
-                )
-                await loop.run_in_executor(
-                    None, lambda: client.calls(call_sid).update(status="completed")
-                )
-            except Exception as e:
-                logger.warning(f"Hangup REST call failed: {e}")
-
-        return asyncio.create_task(_do_hangup())
+        # Dashboard bookkeeping only — actual REST hangup is handled by TwilioISP.hangup()
+        pass
 
     logger.info(f"Call connected  (active: {_active_calls})")
 
@@ -631,40 +614,23 @@ async def websocket_endpoint(websocket: WebSocket):
         return goal
 
     def on_dtmf(digits: str) -> None:
-        """Save agent history and redirect the call to play DTMF via REST API."""
+        """Save agent history for reconnection after DTMF redirect.
+
+        The actual REST redirect is handled by TwilioISP.send_dtmf().
+        """
         c = dashboard_registry.get(ctx["call_id"])
         if not c or not c.call_sid:
-            logger.warning("on_dtmf: no call_sid found, cannot redirect")
+            logger.warning("on_dtmf: no call_sid found")
             return
         call_sid = c.call_sid
         agent = c.agent
-
-        async def _do_dtmf():
-            history = agent.history if agent else []
-            _dtmf_pending[call_sid] = {
-                "history": history,
-                "goal": c.goal,
-                "phone": c.phone,
-                "ivr_mode": True,
-            }
-            try:
-                from twilio.rest import Client
-                loop = asyncio.get_event_loop()
-                client = Client(
-                    os.getenv("TWILIO_ACCOUNT_SID"),
-                    os.getenv("TWILIO_AUTH_TOKEN"),
-                )
-                public_url = os.getenv("TWILIO_PUBLIC_URL", "")
-                dtmf_url = f"{public_url}/twiml/ivr-dtmf?digit={digits}"
-                logger.info(f"DTMF redirect: digit={digits!r} url={dtmf_url}")
-                await loop.run_in_executor(
-                    None, lambda: client.calls(call_sid).update(url=dtmf_url, method="POST")
-                )
-            except Exception as e:
-                logger.warning(f"DTMF redirect failed: {e}")
-                _dtmf_pending.pop(call_sid, None)
-
-        asyncio.create_task(_do_dtmf())
+        history = agent.history if agent else []
+        _dtmf_pending[call_sid] = {
+            "history": history,
+            "goal": c.goal,
+            "phone": c.phone,
+            "ivr_mode": True,
+        }
 
     def get_saved_state(call_sid: str):
         """Check if this stream reconnects after a DTMF redirect or take-over."""
@@ -714,18 +680,18 @@ async def websocket_endpoint(websocket: WebSocket):
             return result
         return None
 
+    isp = TwilioISP(websocket)
     try:
-        await run_conversation_over_twilio(
-            websocket,
+        await run_conversation(
+            isp,
             observer=observer,
             should_suppress_agent=should_suppress_agent,
             on_agent_ready=on_agent_ready,
             get_goal=get_goal,
-            on_hangup=on_hangup,
+            on_dtmf=on_dtmf,
             get_saved_state=get_saved_state,
             tts_pool=_tts_pool,
             ivr_mode=lambda: ctx["ivr_mode"],
-            on_dtmf=on_dtmf,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")

@@ -9,7 +9,6 @@ TTS could flush, resulting in text shown on UI but no voice played.
 """
 
 import asyncio
-import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,61 +18,58 @@ from shuo.types import (
     StreamStartEvent, StreamStopEvent,
     ResetAgentTurnAction, StartAgentTurnAction,
 )
-from shuo.conversation import run_conversation_over_twilio
+from shuo.conversation import run_conversation
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── MockISP ───────────────────────────────────────────────────────────────────
 
-def _twilio_msg(event_type: str, **kwargs) -> str:
-    """Build a JSON Twilio WebSocket message."""
-    if event_type == "connected":
-        return json.dumps({"event": "connected"})
-    if event_type == "start":
-        return json.dumps({
-            "event": "start",
-            "start": {
-                "streamSid": kwargs.get("stream_sid", "test-stream-sid"),
-                "callSid": kwargs.get("call_sid", "test-call-sid"),
-                "customParameters": {},
-            },
-        })
-    if event_type == "stop":
-        return json.dumps({"event": "stop"})
-    raise ValueError(f"Unknown event: {event_type}")
-
-
-class MockWebSocket:
+class MockISP:
     """
-    Fake Twilio WebSocket.
+    Fake ISP for testing.
 
-    Feeds a pre-baked list of messages, then blocks until the conversation
-    loop closes or we push a stop event via stop().
+    Fires on_start(stream_sid, call_sid, phone) during start() to simulate
+    stream initialization. Accepts all ISP methods as no-ops or tracked calls.
+    Supports push_stop() to trigger on_stop() and end the conversation loop.
     """
 
-    def __init__(self, messages: list[str]):
-        self._messages = list(messages)
-        self._idx = 0
-        self._stop_event = asyncio.Event()
-        self.sent: list[str] = []
+    def __init__(self, stream_sid="test-stream-sid", call_sid="test-call-sid", phone=""):
+        self._stream_sid = stream_sid
+        self._call_sid = call_sid
+        self._phone = phone
+        self._on_stop = None
+        self.sent_audio: list[str] = []
+        self.sent_dtmf: list[str] = []
+        self._inject = None  # Set by conversation loop for LocalISP-style DTMF injection
 
-    async def receive_text(self) -> str:
-        if self._idx < len(self._messages):
-            msg = self._messages[self._idx]
-            self._idx += 1
-            return msg
-        # Block until externally stopped
-        await self._stop_event.wait()
-        return _twilio_msg("stop")
+    async def start(self, on_media, on_start, on_stop):
+        self._on_stop = on_stop
+        await on_start(self._stream_sid, self._call_sid, self._phone)
 
-    async def send_text(self, data: str) -> None:
-        self.sent.append(data)
+    async def stop(self):
+        pass
 
-    async def close(self) -> None:
-        self._stop_event.set()
+    async def send_audio(self, payload: str):
+        self.sent_audio.append(payload)
 
-    def push_stop(self) -> None:
-        self._stop_event.set()
+    async def send_clear(self):
+        pass
 
+    async def send_dtmf(self, digit: str):
+        self.sent_dtmf.append(digit)
+
+    async def hangup(self):
+        pass
+
+    async def call(self, phone: str, twiml_url: str):
+        pass
+
+    async def push_stop(self):
+        """Trigger on_stop() to push StreamStopEvent into the conversation loop."""
+        if self._on_stop:
+            await self._on_stop()
+
+
+# ── Flux helpers ──────────────────────────────────────────────────────────────
 
 class MockFluxService:
     """
@@ -158,10 +154,7 @@ async def test_ivr_barge_in_suppressed():
     flux_pool = MockFluxPool(flux)
     tts_pool = MockTTSPool()
 
-    ws = MockWebSocket([
-        _twilio_msg("connected"),
-        _twilio_msg("start", stream_sid="sid-1", call_sid="call-1"),
-    ])
+    mock_isp = MockISP(stream_sid="sid-1", call_sid="call-1")
 
     captured_agent = {}
 
@@ -170,9 +163,6 @@ async def test_ivr_barge_in_suppressed():
 
     # Patch Agent.cancel_turn to track calls
     cancel_turn_calls = []
-
-    async def fake_cancel_turn(self):
-        cancel_turn_calls.append("cancelled")
 
     async def run_test():
         with patch("shuo.conversation.Agent") as MockAgent:
@@ -187,8 +177,8 @@ async def test_ivr_barge_in_suppressed():
             MockAgent.return_value = agent_instance
 
             task = asyncio.create_task(
-                run_conversation_over_twilio(
-                    websocket=ws,
+                run_conversation(
+                    mock_isp,
                     ivr_mode=lambda: True,
                     on_agent_ready=on_agent_ready,
                     tts_pool=tts_pool,
@@ -217,7 +207,7 @@ async def test_ivr_barge_in_suppressed():
             )
 
             # Clean up
-            ws.push_stop()
+            await mock_isp.push_stop()
             try:
                 await asyncio.wait_for(task, timeout=1.0)
             except (asyncio.TimeoutError, Exception):
@@ -240,10 +230,7 @@ async def test_normal_mode_barge_in_still_works():
     flux_pool = MockFluxPool(flux)
     tts_pool = MockTTSPool()
 
-    ws = MockWebSocket([
-        _twilio_msg("connected"),
-        _twilio_msg("start", stream_sid="sid-2", call_sid="call-2"),
-    ])
+    mock_isp = MockISP(stream_sid="sid-2", call_sid="call-2")
 
     cancel_turn_calls = []
 
@@ -259,8 +246,8 @@ async def test_normal_mode_barge_in_still_works():
             MockAgent.return_value = agent_instance
 
             task = asyncio.create_task(
-                run_conversation_over_twilio(
-                    websocket=ws,
+                run_conversation(
+                    mock_isp,
                     ivr_mode=lambda: False,   # Normal mode
                     tts_pool=tts_pool,
                     flux_pool=flux_pool,
@@ -284,7 +271,7 @@ async def test_normal_mode_barge_in_still_works():
                 f"Expected 1 cancel_turn call in normal mode, got {len(cancel_turn_calls)}"
             )
 
-            ws.push_stop()
+            await mock_isp.push_stop()
             try:
                 await asyncio.wait_for(task, timeout=1.0)
             except (asyncio.TimeoutError, Exception):
