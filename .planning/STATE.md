@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-21T21:51:22.987Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-21T22:03:35.589Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
   percent: 5
 ---
 
@@ -60,6 +60,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 04-ivr-benchmark P01 | 2min | 2 tasks | 3 files |
 | Phase 04-ivr-benchmark P02 | 3min | 2 tasks | 4 files |
 | Phase 04-ivr-benchmark P03 | 5 | 1 tasks | 2 files |
+| Phase 05-security-hardening P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,10 @@ Recent decisions affecting current work:
 - [Phase 04-ivr-benchmark]: Patch shuo.conversation.run_conversation (not shuo.bench.run_conversation): deferred import inside run_scenario requires patching the source module
 - [Phase 04-ivr-benchmark]: conftest.py adds project root to sys.path: ivr package importable without modifying pyproject.toml
 - [Phase 04-ivr-benchmark]: Per-scenario fake agents break after confirming goal reached: avoids per-step timeout delays in tests
+- [Phase 05-security-hardening]: verify_api_key as FastAPI Depends() instead of middleware: route-scoped, skips WebSocket naturally
+- [Phase 05-security-hardening]: WebSocket close code 4003 before accept(): distinguishes auth rejection, avoids partial handshake
+- [Phase 05-security-hardening]: In-process _RateLimiter instead of slowapi: not installed; sliding window sufficient for single-process
+- [Phase 05-security-hardening]: autouse fixture resets _call_limiter._hits between tests: module-level limiter retains state across test functions
 
 ### Pending Todos
 
@@ -113,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T21:51:22.985Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-security-hardening/05-CONTEXT.md
+Last session: 2026-03-21T22:03:35.587Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None

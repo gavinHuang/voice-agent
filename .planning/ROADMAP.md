@@ -89,7 +89,7 @@ Plans:
   2. A webhook request without a valid Twilio signature is rejected before any processing occurs
   3. The `/call` endpoint rejects requests that exceed the configured rate limit per IP
   4. Trace files in `/tmp/shuo/` are bounded — old files are cleaned up automatically, and disk usage does not grow unbounded
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 05-01-PLAN.md — Dashboard API key auth + rate limiting on /call
 - [ ] 05-02-PLAN.md — Twilio webhook signature validation + trace file rotation
@@ -116,5 +116,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Bug Fixes | 2/2 | Complete    | 2026-03-21 |
 | 3. CLI | 2/2 | Complete    | 2026-03-21 |
 | 4. IVR Benchmark | 3/3 | Complete    | 2026-03-21 |
-| 5. Security Hardening | 0/2 | Not started | - |
+| 5. Security Hardening | 1/2 | In Progress|  |
 | 6. Agent Framework Migration | 0/TBD | Not started | - |

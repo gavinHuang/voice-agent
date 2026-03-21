@@ -31,9 +31,9 @@
 
 ### Security
 
-- [ ] **SEC-01**: Dashboard requires authentication (token or basic auth) — unauthenticated requests get 401
+- [x] **SEC-01**: Dashboard requires authentication (token or basic auth) — unauthenticated requests get 401
 - [ ] **SEC-02**: Twilio webhook requests are validated with signature verification before processing
-- [ ] **SEC-03**: `/call` endpoint is rate-limited (max N calls per minute per IP)
+- [x] **SEC-03**: `/call` endpoint is rate-limited (max N calls per minute per IP)
 - [ ] **SEC-04**: Trace files in `/tmp/shuo/` are rotated/cleaned (max age or max count enforced)
 
 ### Bug Fixes
@@ -101,9 +101,9 @@
 | BENCH-03 | Phase 4 | Complete |
 | BENCH-04 | Phase 4 | Complete |
 | BENCH-05 | Phase 4 | Complete |
-| SEC-01 | Phase 5 | Pending |
+| SEC-01 | Phase 5 | Complete |
 | SEC-02 | Phase 5 | Pending |
-| SEC-03 | Phase 5 | Pending |
+| SEC-03 | Phase 5 | Complete |
 | SEC-04 | Phase 5 | Pending |
 | AGENT-01 | Phase 6 | Pending |
 | AGENT-02 | Phase 6 | Pending |
