@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-21T06:45:19.331Z"
-last_activity: 2026-03-20 — Roadmap created
+status: executing
+stopped_at: Completed 01-01-PLAN.md (ISP Protocol and LocalISP)
+last_updated: "2026-03-21T09:17:30.649Z"
+last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 5
 ---
 
 # Project State
@@ -26,30 +26,31 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 1 of 6 (ISP Abstraction)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-20 — Roadmap created
+Plan: 1 of TBD in current phase
+Status: In Progress
+Last activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 1 min
+- Total execution time: 0.02 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-isp-abstraction | 1 | 1 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
+- Last 5 plans: 01-01 (1 min)
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01-isp-abstraction P01 | 1 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -62,6 +63,10 @@ Recent decisions affecting current work:
 - ISP protocol via Python Protocol (structural typing): No ABCs needed; duck typing with type hints is sufficient
 - Security before agent framework: Auth gap is a live risk; framework migration is quality-of-life
 - pydantic-ai for agent framework: Typed tool calls replace fragile marker scanning
+- on_media callback receives decoded bytes (not base64 str): Decoding happens inside send_audio, keeping callers type-clean
+- DTMF injection uses _inject callable set externally: Conversation loop owns event routing, LocalISP does not
+- [Phase 01-isp-abstraction]: on_media callback receives decoded bytes (not base64 str): Decoding in send_audio keeps callers type-clean
+- [Phase 01-isp-abstraction]: DTMF injection uses _inject callable set externally: Conversation loop owns event routing, LocalISP does not
 
 ### Pending Todos
 
@@ -74,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T06:45:19.329Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-isp-abstraction/01-CONTEXT.md
+Last session: 2026-03-21T09:17:30.647Z
+Stopped at: Completed 01-01-PLAN.md (ISP Protocol and LocalISP)
+Resume file: None

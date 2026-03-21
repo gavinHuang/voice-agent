@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The existing Twilio integration continues to handle real calls identically to before the refactor
   3. All 26 existing unit tests pass against the refactored code
   4. `VoiceSession` can be constructed with either `TwilioISP` or `LocalISP` by passing the instance at construction time
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 - [ ] 01-01-PLAN.md — ISP Protocol definition + LocalISP implementation with tests
 - [ ] 01-02-PLAN.md — TwilioISP implementation + refactor AudioPlayer and Agent to use ISP
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ISP Abstraction | 0/3 | Planning complete | - |
+| 1. ISP Abstraction | 1/3 | In Progress|  |
 | 2. Bug Fixes | 0/TBD | Not started | - |
 | 3. CLI | 0/TBD | Not started | - |
 | 4. IVR Benchmark | 0/TBD | Not started | - |
