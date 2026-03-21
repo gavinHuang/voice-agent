@@ -10,32 +10,28 @@ This is the explicit, readable loop that drives the entire system:
             dispatch(action)                            # I/O
 
 Events come from:
-- Twilio WebSocket (audio packets)
+- ISP (audio packets, stream start/stop)
 - Deepgram Flux (turn events)
 - Agent (playback complete)
 """
 
-import json
 import os
 import asyncio
 from dataclasses import replace
 from typing import Callable, Optional
-
-from fastapi import WebSocket
 
 from .types import (
     AppState, Phase,
     Event, StreamStartEvent, StreamStopEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupRequestEvent,
-    DTMFToneEvent,
+    DTMFToneEvent, MediaEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 from .state import process_event
 from .services.flux import FluxService
 from .services.flux_pool import FluxPool
 from .services.tts_pool import TTSPool
-from .services.twilio_client import parse_twilio_message
 from .agent import Agent
 from .tracer import Tracer
 from .log import Logger, get_logger
@@ -43,8 +39,8 @@ from .log import Logger, get_logger
 logger = get_logger("shuo.conversation")
 
 
-async def run_conversation_over_twilio(
-    websocket: WebSocket,
+async def run_conversation(
+    isp,
     observer: Optional[Callable[[dict], None]] = None,
     should_suppress_agent: Optional[Callable[[], bool]] = None,
     on_agent_ready: Optional[Callable[["Agent"], None]] = None,
@@ -61,7 +57,7 @@ async def run_conversation_over_twilio(
 
     1. Create shared event queue
     2. Create Flux service (always-on STT + turn detection)
-    3. Start Twilio reader
+    3. Start ISP (registers callbacks, begins reading stream)
     4. On StreamStart, create Agent
     5. Process events through pure state machine
     6. Dispatch actions inline
@@ -85,27 +81,27 @@ async def run_conversation_over_twilio(
     async def on_flux_start_of_turn() -> None:
         await event_queue.put(FluxStartOfTurnEvent())
 
-    # ── Twilio WebSocket Reader ─────────────────────────────────────
+    # ── ISP Callbacks (push events to queue) ────────────────────────
 
-    async def read_twilio() -> None:
-        """Background task to read from Twilio and push to event queue."""
-        try:
-            while True:
-                raw = await websocket.receive_text()
-                data = json.loads(raw)
-                event = parse_twilio_message(data)
-                if event:
-                    await event_queue.put(event)
-                    if isinstance(event, StreamStopEvent):
-                        break
-        except Exception as e:
-            event_log.error("Twilio reader", e)
-            await event_queue.put(StreamStopEvent())
+    async def on_isp_media(audio_bytes: bytes) -> None:
+        await event_queue.put(MediaEvent(audio_bytes=audio_bytes))
+
+    async def on_isp_start(stream_sid_: str, call_sid: str, phone: str) -> None:
+        await event_queue.put(StreamStartEvent(stream_sid=stream_sid_, call_sid=call_sid, phone=phone))
+
+    async def on_isp_stop() -> None:
+        await event_queue.put(StreamStopEvent())
 
     # ── Initialize ──────────────────────────────────────────────────
 
     state = AppState()
-    reader_task = asyncio.create_task(read_twilio())
+    await isp.start(on_isp_media, on_isp_start, on_isp_stop)
+
+    # Allow LocalISP (and MockISP) to push DTMFToneEvents directly into
+    # the conversation's event queue via an _inject hook.
+    if hasattr(isp, '_inject'):
+        isp._inject = event_queue.put_nowait
+
     saved: Optional[dict] = None          # Set on reconnection after take-over
     _handback_prompt: Optional[str] = None  # Set when handback has a transcript
 
@@ -143,7 +139,7 @@ async def run_conversation_over_twilio(
                 if _own_tts_pool:
                     await tts_pool.start()
                 agent = Agent(
-                    websocket=websocket,
+                    isp=isp,
                     stream_sid=event.stream_sid,
                     emit=lambda e: event_queue.put_nowait(e),
                     tts_pool=tts_pool,
@@ -213,7 +209,8 @@ async def run_conversation_over_twilio(
             # ─── DTMF DISPATCH ──────────────────────────────────────
             if isinstance(event, DTMFToneEvent):
                 if on_dtmf:
-                    on_dtmf(event.digits)
+                    on_dtmf(event.digits)  # server bookkeeping (e.g. save history for reconnect)
+                await isp.send_dtmf(event.digits)  # actual DTMF action via ISP
 
             # ─── INITIAL GREETING / HANDBACK RESPONSE ───────────────
             if isinstance(event, StreamStartEvent):
@@ -242,20 +239,11 @@ async def run_conversation_over_twilio(
 
             if isinstance(event, HangupRequestEvent):
                 if on_hangup:
-                    result = on_hangup()
-                    # Await the hangup coroutine/task so the Twilio REST
-                    # call completes before we tear down the WebSocket.
-                    if asyncio.isfuture(result) or asyncio.iscoroutine(result):
-                        try:
-                            await result
-                        except Exception:
-                            pass
+                    on_hangup()  # server bookkeeping
+                await isp.hangup()  # actual hangup via ISP
                 if observer:
                     observer({"type": "stream_stop"})
-                try:
-                    await websocket.close()
-                except Exception:
-                    pass
+                await isp.stop()  # stop the ISP reader
                 break
 
     except Exception as e:
@@ -263,11 +251,7 @@ async def run_conversation_over_twilio(
         raise
 
     finally:
-        reader_task.cancel()
-        try:
-            await reader_task
-        except asyncio.CancelledError:
-            pass
+        await isp.stop()  # idempotent — may have been called already in hangup path
 
         if agent:
             await agent.cleanup()
