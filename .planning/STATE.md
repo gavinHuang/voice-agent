@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-21T22:03:35.589Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-21T22:07:43.450Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 5
 ---
 
@@ -61,6 +61,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 04-ivr-benchmark P02 | 3min | 2 tasks | 4 files |
 | Phase 04-ivr-benchmark P03 | 5 | 1 tasks | 2 files |
 | Phase 05-security-hardening P01 | 5min | 2 tasks | 2 files |
+| Phase 05-security-hardening P02 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,8 @@ Recent decisions affecting current work:
 - [Phase 05-security-hardening]: WebSocket close code 4003 before accept(): distinguishes auth rejection, avoids partial handshake
 - [Phase 05-security-hardening]: In-process _RateLimiter instead of slowapi: not installed; sliding window sufficient for single-process
 - [Phase 05-security-hardening]: autouse fixture resets _call_limiter._hits between tests: module-level limiter retains state across test functions
+- [Phase 05-security-hardening]: verify_twilio_signature extracts form body for POST routes: dial-action carries Twilio form params required for correct signature computation
+- [Phase 05-security-hardening]: cleanup_traces applies age filter then count cap: both constraints enforced independently at server startup
 
 ### Pending Todos
 
@@ -118,6 +121,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:03:35.587Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-03-21T22:07:43.448Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
