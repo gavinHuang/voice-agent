@@ -1,7 +1,10 @@
 """Unit tests for BENCH-01 (scenario loading), BENCH-03 (criteria evaluation),
 BENCH-02 and BENCH-04 (IVRDriver, BenchISP, run_scenario, run_benchmark).
+BENCH-05 (e2e: sample scenarios pass against IVR mock server).
 """
 import asyncio
+import os
+from pathlib import Path
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from shuo.bench import (
@@ -15,6 +18,16 @@ from shuo.bench import (
     IVRDriver,
     _extract_say_and_gather,
     print_metrics_report,
+    _find_free_port,
+    _start_ivr_server,
+    _wait_for_ivr_ready,
+    run_scenario,
+    run_benchmark,
+)
+
+# Absolute path to scenarios/example_ivr.yaml — two levels above this file
+_SCENARIOS_PATH = str(
+    Path(__file__).parent.parent.parent / "scenarios" / "example_ivr.yaml"
 )
 
 
@@ -379,3 +392,213 @@ def test_metrics_report_fields():
     assert "FAIL" in output
     assert "50%" in output or "50" in output  # success rate
     assert "1.23" in output or "1.2" in output  # latency value
+
+
+# =============================================================================
+# BENCH-05: E2E — sample scenarios load and validate (schema check)
+# =============================================================================
+
+
+def test_sample_scenarios_valid():
+    """load_scenarios returns 3 valid ScenarioConfig objects from example_ivr.yaml."""
+    scenarios = load_scenarios(_SCENARIOS_PATH)
+
+    assert isinstance(scenarios, list)
+    assert len(scenarios) == 3
+
+    ids = [s.id for s in scenarios]
+    assert "navigate-to-sales" in ids
+    assert "navigate-to-tech-support" in ids
+    assert "timeout-no-input" in ids
+
+    for s in scenarios:
+        assert isinstance(s, ScenarioConfig)
+        assert s.id, "scenario id must be non-empty"
+        assert s.description, "scenario description must be non-empty"
+        assert "goal" in s.agent, "scenario agent must have a 'goal' key"
+        assert isinstance(s.success_criteria, SuccessCriteria)
+
+
+# =============================================================================
+# BENCH-05: E2E — sample scenarios pass against real IVR server
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_sample_scenarios_pass():
+    """All 3 sample scenarios pass when run against the real IVR mock server.
+
+    run_conversation is mocked to simulate the agent's DTMF responses for each
+    scenario, so no real LLM API keys are required.
+    """
+    from shuo.types import FluxEndOfTurnEvent
+
+    # ---------------------------------------------------------------------------
+    # Per-scenario fake agent factories
+    # ---------------------------------------------------------------------------
+
+    def _make_fake_conversation(scenario_id: str):
+        """Return an async fake run_conversation for the given scenario."""
+
+        async def _fake(isp, *, observer=None, get_goal=None, **kwargs):
+            # Set the _inject hook so IVRDriver can start driving
+            event_queue: asyncio.Queue = asyncio.Queue()
+            isp._inject = event_queue.put_nowait
+
+            if scenario_id == "navigate-to-sales":
+                # Press "1" when the main menu is heard; exit after sales greeting
+                dtmf_sent = False
+                while True:
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        break
+                    if observer:
+                        observer({"type": "transcript", "text": event.transcript})
+                    text_lower = event.transcript.lower()
+                    if not dtmf_sent and "press 1 for sales" in text_lower:
+                        await isp.send_dtmf("1")
+                        dtmf_sent = True
+                    elif dtmf_sent and "thank you for your interest" in text_lower:
+                        # Reached sales department — conversation done
+                        break
+
+            elif scenario_id == "navigate-to-tech-support":
+                # Press "2" at main_menu, then "1" at support_menu
+                support_pressed = False
+                while True:
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        break
+                    if observer:
+                        observer({"type": "transcript", "text": event.transcript})
+                    text_lower = event.transcript.lower()
+                    if not support_pressed and "press 2 for support" in text_lower:
+                        await isp.send_dtmf("2")
+                        support_pressed = True
+                    elif support_pressed and "press 1 for technical" in text_lower:
+                        await isp.send_dtmf("1")
+                    elif "please describe your issue" in text_lower:
+                        # Reached tech support — conversation done
+                        break
+
+            else:
+                # timeout-no-input: set _inject and do nothing
+                # The scenario will be cancelled by the timeout in run_scenario
+                await asyncio.sleep(15.0)
+
+        return _fake
+
+    # ---------------------------------------------------------------------------
+    # Start the IVR server once for all 3 scenarios
+    # ---------------------------------------------------------------------------
+    port = _find_free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    _start_ivr_server(port)
+    await _wait_for_ivr_ready(base_url, timeout=10.0)
+
+    scenarios = load_scenarios(_SCENARIOS_PATH)
+    scenario_map = {s.id: s for s in scenarios}
+
+    # ---------------------------------------------------------------------------
+    # navigate-to-sales
+    # ---------------------------------------------------------------------------
+    sales_scenario = scenario_map["navigate-to-sales"]
+    fake_sales = _make_fake_conversation("navigate-to-sales")
+    with patch("shuo.conversation.run_conversation", side_effect=fake_sales):
+        sales_result = await run_scenario(sales_scenario, base_url)
+
+    assert sales_result.passed is True, (
+        f"navigate-to-sales failed: dtmf_log={sales_result.dtmf_log!r}, "
+        f"transcript={sales_result.transcript!r}, error={sales_result.error!r}"
+    )
+    assert sales_result.dtmf_log == ["1"]
+    assert any("sales" in line.lower() for line in sales_result.transcript)
+
+    # ---------------------------------------------------------------------------
+    # navigate-to-tech-support
+    # ---------------------------------------------------------------------------
+    tech_scenario = scenario_map["navigate-to-tech-support"]
+    fake_tech = _make_fake_conversation("navigate-to-tech-support")
+    with patch("shuo.conversation.run_conversation", side_effect=fake_tech):
+        tech_result = await run_scenario(tech_scenario, base_url)
+
+    assert tech_result.passed is True, (
+        f"navigate-to-tech-support failed: dtmf_log={tech_result.dtmf_log!r}, "
+        f"transcript={tech_result.transcript!r}, error={tech_result.error!r}"
+    )
+    assert tech_result.dtmf_log == ["2", "1"]
+
+    # ---------------------------------------------------------------------------
+    # timeout-no-input
+    # ---------------------------------------------------------------------------
+    timeout_scenario = scenario_map["timeout-no-input"]
+    fake_timeout = _make_fake_conversation("timeout-no-input")
+    with patch("shuo.conversation.run_conversation", side_effect=fake_timeout):
+        timeout_result = await run_scenario(timeout_scenario, base_url)
+
+    assert timeout_result.passed is True, (
+        f"timeout-no-input failed: turns={timeout_result.turns!r}, "
+        f"error={timeout_result.error!r}"
+    )
+    assert timeout_result.turns <= 20
+
+
+# =============================================================================
+# BENCH-05: CLI bench command integration test
+# =============================================================================
+
+
+def test_cli_bench_integration(tmp_path):
+    """bench CLI command runs, calls run_benchmark, and prints scenario IDs."""
+    from click.testing import CliRunner
+    from shuo.cli import bench, cli
+
+    pre_built_results = [
+        ScenarioResult(
+            scenario_id="navigate-to-sales",
+            passed=True,
+            criteria=CriteriaResult(True, True, True, True),
+            turns=2,
+            dtmf_log=["1"],
+            transcript=["Press 1 for sales.", "Thank you for your interest."],
+            wall_clock_s=0.5,
+        ),
+        ScenarioResult(
+            scenario_id="navigate-to-tech-support",
+            passed=True,
+            criteria=CriteriaResult(True, True, True, True),
+            turns=4,
+            dtmf_log=["2", "1"],
+            transcript=["Press 2 for support.", "Press 1 for technical support.", "Describe your issue."],
+            wall_clock_s=0.8,
+        ),
+        ScenarioResult(
+            scenario_id="timeout-no-input",
+            passed=True,
+            criteria=CriteriaResult(True, True, True, True),
+            turns=2,
+            dtmf_log=[],
+            transcript=[],
+            wall_clock_s=10.0,
+        ),
+    ]
+
+    async def _fake_run_benchmark(dataset_path, output_path=None):
+        print_metrics_report(pre_built_results)
+        return pre_built_results
+
+    runner = CliRunner()
+    with patch("shuo.bench.run_benchmark", side_effect=_fake_run_benchmark):
+        result = runner.invoke(
+            cli,
+            ["bench", "--dataset", _SCENARIOS_PATH],
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, f"CLI exited with {result.exit_code}: {result.output}"
+    assert "Benchmark Results" in result.output or "navigate-to-sales" in result.output
+    assert "navigate-to-sales" in result.output
+    assert "navigate-to-tech-support" in result.output
+    assert "timeout-no-input" in result.output
