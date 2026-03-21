@@ -1,5 +1,9 @@
-"""Unit tests for BENCH-01 (scenario loading) and BENCH-03 (criteria evaluation)."""
+"""Unit tests for BENCH-01 (scenario loading), BENCH-03 (criteria evaluation),
+BENCH-02 and BENCH-04 (IVRDriver, BenchISP, run_scenario, run_benchmark).
+"""
+import asyncio
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 from shuo.bench import (
     ScenarioConfig,
     SuccessCriteria,
@@ -7,6 +11,10 @@ from shuo.bench import (
     ScenarioResult,
     load_scenarios,
     evaluate_criteria,
+    BenchISP,
+    IVRDriver,
+    _extract_say_and_gather,
+    print_metrics_report,
 )
 
 
@@ -173,3 +181,201 @@ def test_criteria_none_vacuous():
     assert result.transcript_pass is True
     assert result.dtmf_pass is True
     assert result.turns_pass is True
+
+
+# =============================================================================
+# _extract_say_and_gather (BENCH-04 helper)
+# =============================================================================
+
+def test_extract_say_and_gather_say_redirect():
+    """Parse a <Say> + <Redirect> TwiML (say node)."""
+    xml = (
+        '<?xml version="1.0"?>'
+        '<Response>'
+        '<Say>Welcome to the IVR system.</Say>'
+        '<Redirect>http://127.0.0.1:9999/ivr/step?node=main_menu</Redirect>'
+        '</Response>'
+    )
+    say, gather_node, redirect_node, has_hangup = _extract_say_and_gather(xml)
+    assert say == "Welcome to the IVR system."
+    assert gather_node is None
+    assert redirect_node == "main_menu"
+    assert has_hangup is False
+
+
+def test_extract_say_and_gather_menu_gather():
+    """Parse a <Gather> TwiML (menu node)."""
+    xml = (
+        '<?xml version="1.0"?>'
+        '<Response>'
+        '<Gather action="http://127.0.0.1:9999/ivr/gather?node=main_menu" '
+        'method="POST" timeout="5" numDigits="1">'
+        '<Say>Press 1 for sales.</Say>'
+        '</Gather>'
+        '<Redirect>http://127.0.0.1:9999/ivr/step?node=main_menu</Redirect>'
+        '</Response>'
+    )
+    say, gather_node, redirect_node, has_hangup = _extract_say_and_gather(xml)
+    assert say == "Press 1 for sales."
+    assert gather_node == "main_menu"
+    assert has_hangup is False
+
+
+def test_extract_say_and_gather_hangup():
+    """Parse a pure <Hangup/> TwiML."""
+    xml = '<?xml version="1.0"?><Response><Hangup/></Response>'
+    say, gather_node, redirect_node, has_hangup = _extract_say_and_gather(xml)
+    assert say == ""
+    assert gather_node is None
+    assert redirect_node is None
+    assert has_hangup is True
+
+
+# =============================================================================
+# BenchISP DTMF capture (BENCH-02)
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_bench_isp_captures_dtmf():
+    """BenchISP.send_dtmf appends to dtmf_log and enqueues digit."""
+    isp = BenchISP()
+    await isp.send_dtmf("1")
+    await isp.send_dtmf("2")
+    assert isp.dtmf_log == ["1", "2"]
+    assert isp._dtmf_queue.qsize() == 2
+
+
+# =============================================================================
+# run_scenario wires BenchISP + run_conversation (BENCH-02)
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_run_scenario_wires_localISP(tmp_path):
+    """run_scenario creates a BenchISP, wires it to run_conversation, returns ScenarioResult."""
+    from shuo.bench import run_scenario
+
+    scenario = ScenarioConfig(
+        id="test-01",
+        description="Test wiring",
+        agent={"goal": "Navigate the IVR", "identity": "Customer"},
+        success_criteria=SuccessCriteria(transcript_contains=["welcome"]),
+        timeout=5,
+    )
+
+    async def _fake_run_conversation(isp, **kwargs):
+        # Simulate: conversation fires observer with a transcript event then stops
+        observer = kwargs.get("observer")
+        if observer:
+            observer({"type": "transcript", "text": "welcome to the system"})
+        # Also simulate _inject being set so IVRDriver can proceed
+        await asyncio.sleep(0.05)
+
+    with patch("shuo.conversation.run_conversation", side_effect=_fake_run_conversation), \
+         patch("shuo.bench.IVRDriver") as MockDriver:
+        # Make IVRDriver.drive a coroutine that returns immediately
+        driver_instance = MagicMock()
+        driver_instance._turn_count = 2
+        driver_instance.drive = AsyncMock(return_value=None)
+        MockDriver.return_value = driver_instance
+
+        result = await run_scenario(scenario, "http://127.0.0.1:9999")
+
+    assert isinstance(result, ScenarioResult)
+    assert result.scenario_id == "test-01"
+    assert "welcome to the system" in result.transcript
+    assert result.turns == 2
+
+
+# =============================================================================
+# run_benchmark does not require API keys (BENCH-02)
+# =============================================================================
+
+def test_bench_no_api_keys(tmp_path):
+    """run_benchmark can be called without DEEPGRAM_API_KEY, GROQ_API_KEY, ELEVENLABS_API_KEY."""
+    import os
+    from shuo.bench import run_benchmark
+
+    yaml_file = tmp_path / "scenarios.yaml"
+    yaml_file.write_text(
+        "scenarios:\n"
+        "  - id: s1\n"
+        "    description: No API keys needed\n"
+        "    agent:\n"
+        "      goal: Navigate\n"
+        "      identity: Customer\n"
+        "    success_criteria: {}\n"
+    )
+
+    async def _fake_run_benchmark(dataset_path, output_path=None):
+        # Import must succeed without env vars
+        from shuo.bench import load_scenarios, BenchISP, IVRDriver
+        scenarios = load_scenarios(dataset_path)
+        assert len(scenarios) == 1
+        return []
+
+    with patch("shuo.bench._find_free_port", return_value=19999), \
+         patch("shuo.bench._start_ivr_server"), \
+         patch("shuo.bench._wait_for_ivr_ready", new_callable=AsyncMock), \
+         patch("shuo.bench.run_scenario", new_callable=AsyncMock, return_value=ScenarioResult(
+             scenario_id="s1",
+             passed=True,
+             criteria=CriteriaResult(True, True, True, True),
+             turns=1,
+             dtmf_log=[],
+             transcript=["hello"],
+             wall_clock_s=0.5,
+         )), \
+         patch.dict(os.environ, {}, clear=False):
+        # Explicitly unset API keys to confirm no check happens
+        for key in ["DEEPGRAM_API_KEY", "GROQ_API_KEY", "ELEVENLABS_API_KEY"]:
+            os.environ.pop(key, None)
+
+        results = asyncio.run(run_benchmark(str(yaml_file)))
+        assert len(results) == 1
+        assert results[0].passed is True
+
+
+# =============================================================================
+# print_metrics_report (BENCH-02)
+# =============================================================================
+
+def test_metrics_report_fields():
+    """print_metrics_report outputs PASS/FAIL, success rate, and latency."""
+    from click.testing import CliRunner
+    import click
+
+    results = [
+        ScenarioResult(
+            scenario_id="scenario-pass",
+            passed=True,
+            criteria=CriteriaResult(True, True, True, True),
+            turns=3,
+            dtmf_log=["1"],
+            transcript=["Press 1 for sales."],
+            wall_clock_s=1.23,
+        ),
+        ScenarioResult(
+            scenario_id="scenario-fail",
+            passed=False,
+            criteria=CriteriaResult(True, False, True, False),
+            turns=2,
+            dtmf_log=["9"],
+            transcript=["Error"],
+            wall_clock_s=0.77,
+        ),
+    ]
+
+    output_lines = []
+
+    @click.command()
+    def _capture():
+        print_metrics_report(results)
+
+    runner = CliRunner()
+    res = runner.invoke(_capture)
+    output = res.output
+
+    assert "PASS" in output
+    assert "FAIL" in output
+    assert "50%" in output or "50" in output  # success rate
+    assert "1.23" in output or "1.2" in output  # latency value

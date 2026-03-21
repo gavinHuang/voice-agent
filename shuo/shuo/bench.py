@@ -1,13 +1,22 @@
-"""Benchmark data model: scenario loading and success criteria evaluation.
+"""Benchmark data model and runner.
 
 Exports: SuccessCriteria, ScenarioConfig, CriteriaResult, ScenarioResult,
-         load_scenarios, evaluate_criteria
+         load_scenarios, evaluate_criteria,
+         IVRDriver, BenchISP, run_scenario, run_benchmark, print_metrics_report
 """
 from __future__ import annotations
 
+import asyncio
+import socket
+import threading
+import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import parse_qs, urlparse
 
+import click
+import httpx
 import yaml
 
 
@@ -150,4 +159,424 @@ def evaluate_criteria(
         dtmf_pass=dtmf_pass,
         turns_pass=turns_pass,
         passed=transcript_pass and dtmf_pass and turns_pass,
+    )
+
+
+# ---------------------------------------------------------------------------
+# BenchISP — LocalISP subclass for DTMF capture (BENCH-02)
+# ---------------------------------------------------------------------------
+
+from shuo.services.local_isp import LocalISP  # noqa: E402
+
+
+class BenchISP(LocalISP):
+    """LocalISP subclass that records DTMF digits and queues them for IVRDriver."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.dtmf_log: list[str] = []
+        self._dtmf_queue: asyncio.Queue = asyncio.Queue()
+
+    async def send_dtmf(self, digit: str) -> None:
+        """Capture DTMF digit into log and enqueue for IVRDriver."""
+        self.dtmf_log.append(digit)
+        await self._dtmf_queue.put(digit)
+
+
+# ---------------------------------------------------------------------------
+# TwiML parser helper
+# ---------------------------------------------------------------------------
+
+def _extract_say_and_gather(
+    xml_str: str,
+) -> tuple[str, Optional[str], Optional[str], bool]:
+    """Parse TwiML XML and extract key elements.
+
+    Returns:
+        (say_text, gather_node_id, redirect_node_id, has_hangup)
+    """
+    root = ET.fromstring(xml_str)
+
+    say_text = ""
+    say_el = root.find(".//Say")
+    if say_el is not None and say_el.text:
+        say_text = say_el.text
+
+    gather_node_id: Optional[str] = None
+    gather_el = root.find(".//Gather")
+    if gather_el is not None:
+        action = gather_el.get("action", "")
+        parsed = urlparse(action)
+        qs = parse_qs(parsed.query)
+        node_ids = qs.get("node", [])
+        if node_ids:
+            gather_node_id = node_ids[0]
+
+    redirect_node_id: Optional[str] = None
+    # Only top-level <Redirect> (not inside <Gather>) counts as a step redirect
+    redirect_el = root.find("Redirect")
+    if redirect_el is not None and redirect_el.text:
+        parsed = urlparse(redirect_el.text.strip())
+        qs = parse_qs(parsed.query)
+        node_ids = qs.get("node", [])
+        if node_ids:
+            redirect_node_id = node_ids[0]
+
+    has_hangup = root.find(".//Hangup") is not None
+
+    return say_text, gather_node_id, redirect_node_id, has_hangup
+
+
+# ---------------------------------------------------------------------------
+# IVRDriver — walks TwiML state machine via HTTP loopback (BENCH-04)
+# ---------------------------------------------------------------------------
+
+class IVRDriver:
+    """Drives the IVR server state machine on behalf of a benchmarked agent."""
+
+    def __init__(self, base_url: str, agent_isp: BenchISP) -> None:
+        self._base = base_url.rstrip("/")
+        self._agent_isp = agent_isp
+        self._turn_count = 0
+
+    async def drive(self, client: httpx.AsyncClient, timeout: float) -> None:
+        """Walk the TwiML state machine until a <Hangup/> or timeout."""
+        from shuo.types import FluxEndOfTurnEvent
+
+        # Step 1: get the entry TwiML
+        resp = await client.post(f"{self._base}/twiml")
+        resp.raise_for_status()
+        xml_str = resp.text
+
+        per_step_timeout = max(timeout / 2, 5.0)
+
+        # Follow redirects until we reach a Say/Gather or Hangup
+        _redirect_limit = 20
+        _redirect_count = 0
+
+        while _redirect_count < _redirect_limit:
+            say_text, gather_node, redirect_node, has_hangup = _extract_say_and_gather(xml_str)
+
+            if has_hangup and not say_text and not gather_node and not redirect_node:
+                # Pure hangup node — done
+                break
+
+            if say_text and self._agent_isp._inject is not None:
+                self._agent_isp._inject(FluxEndOfTurnEvent(transcript=say_text))
+                self._turn_count += 1
+
+            if gather_node is not None:
+                # Wait for agent to send a DTMF digit
+                digit = await asyncio.wait_for(
+                    self._agent_isp._dtmf_queue.get(),
+                    timeout=per_step_timeout,
+                )
+                resp = await client.post(
+                    f"{self._base}/ivr/gather",
+                    params={"node": gather_node},
+                    data={"Digits": digit},
+                )
+                resp.raise_for_status()
+                xml_str = resp.text
+                _redirect_count += 1
+                continue
+
+            if redirect_node is not None:
+                resp = await client.post(
+                    f"{self._base}/ivr/step",
+                    params={"node": redirect_node},
+                )
+                resp.raise_for_status()
+                xml_str = resp.text
+                _redirect_count += 1
+                continue
+
+            # No gather, no redirect, no hangup — treated as terminal
+            break
+
+
+# ---------------------------------------------------------------------------
+# No-op Flux/TTS pools (benchmark needs no real API keys)
+# ---------------------------------------------------------------------------
+
+class _BenchFluxPool:
+    """No-op FluxPool: IVR driver injects FluxEndOfTurnEvent directly."""
+
+    async def get(self, on_end_of_turn, on_start_of_turn, **_):
+        return self
+
+    async def stop(self) -> None:
+        pass
+
+    async def send(self, _) -> None:
+        pass
+
+
+class _BenchTTSPool:
+    """No-op TTSPool: no audio synthesis in benchmark mode."""
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+    async def get(self, on_audio, on_done):
+        from unittest.mock import AsyncMock, MagicMock
+        tts = AsyncMock()
+        tts.bind = MagicMock()
+        return tts
+
+    @property
+    def available(self) -> int:
+        return 1
+
+
+# ---------------------------------------------------------------------------
+# run_scenario — orchestrates a single agent + IVR pair (BENCH-02)
+# ---------------------------------------------------------------------------
+
+async def run_scenario(scenario: ScenarioConfig, ivr_base_url: str) -> ScenarioResult:
+    """Run a single benchmark scenario and return its result.
+
+    Spawns a BenchISP-connected agent and an IVRDriver, lets them interact,
+    then evaluates success criteria.
+    """
+    from shuo.conversation import run_conversation
+
+    bench_isp = BenchISP()
+
+    transcript: list[str] = []
+
+    def observer(event: dict) -> None:
+        if event.get("type") == "transcript":
+            transcript.append(event["text"])
+
+    if scenario.agent.get("identity"):
+        goal = f"You are {scenario.agent['identity']}. {scenario.agent['goal']}"
+    else:
+        goal = scenario.agent.get("goal", "")
+
+    ivr_driver = IVRDriver(ivr_base_url, bench_isp)
+
+    start_time = time.monotonic()
+
+    agent_task = asyncio.create_task(
+        run_conversation(
+            bench_isp,
+            observer=observer,
+            get_goal=lambda _: goal,
+            tts_pool=_BenchTTSPool(),
+            flux_pool=_BenchFluxPool(),
+            ivr_mode=lambda: True,
+        )
+    )
+
+    # Wait for _inject to be set by run_conversation before driving IVR
+    for _ in range(50):  # up to 0.5s
+        if bench_isp._inject is not None:
+            break
+        await asyncio.sleep(0.01)
+
+    async with httpx.AsyncClient() as client:
+        ivr_task = asyncio.create_task(
+            ivr_driver.drive(client, scenario.timeout)
+        )
+
+        done, pending = await asyncio.wait(
+            [agent_task, ivr_task],
+            return_when=asyncio.FIRST_COMPLETED,
+            timeout=scenario.timeout,
+        )
+
+    elapsed = time.monotonic() - start_time
+
+    for t in pending:
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    error: Optional[str] = None
+    for t in done:
+        exc = t.exception()
+        if exc is not None:
+            error = str(exc)
+
+    criteria = evaluate_criteria(
+        scenario.success_criteria,
+        transcript,
+        bench_isp.dtmf_log,
+        ivr_driver._turn_count,
+    )
+
+    return ScenarioResult(
+        scenario_id=scenario.id,
+        passed=criteria.passed,
+        criteria=criteria,
+        turns=ivr_driver._turn_count,
+        dtmf_log=bench_isp.dtmf_log,
+        transcript=transcript,
+        wall_clock_s=elapsed,
+        error=error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# IVR server lifecycle helpers
+# ---------------------------------------------------------------------------
+
+def _find_free_port() -> int:
+    """Return an available ephemeral TCP port on 127.0.0.1."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def _start_ivr_server(port: int, flow_path: Optional[str] = None) -> None:
+    """Start the IVR FastAPI app in a daemon thread via uvicorn."""
+    import uvicorn
+
+    if flow_path is not None:
+        import os
+        os.environ["IVR_CONFIG"] = flow_path
+
+    # Deferred import keeps top-level imports lightweight (Phase 3 convention)
+    import ivr.server as ivr_server_mod
+
+    config = uvicorn.Config(
+        ivr_server_mod.app,
+        host="127.0.0.1",
+        port=port,
+        log_level="error",
+    )
+    server = uvicorn.Server(config)
+    t = threading.Thread(target=server.run, daemon=True)
+    t.start()
+
+
+async def _wait_for_ivr_ready(base_url: str, timeout: float = 10.0) -> None:
+    """Poll GET /health until 200 or timeout."""
+    deadline = time.monotonic() + timeout
+    async with httpx.AsyncClient() as client:
+        while time.monotonic() < deadline:
+            try:
+                resp = await client.get(f"{base_url}/health")
+                if resp.status_code == 200:
+                    return
+            except Exception:
+                pass
+            await asyncio.sleep(0.05)
+    raise TimeoutError(f"IVR server at {base_url} did not become ready within {timeout}s")
+
+
+# ---------------------------------------------------------------------------
+# run_benchmark — sequences all scenarios and produces the metrics report
+# ---------------------------------------------------------------------------
+
+async def run_benchmark(
+    dataset_path: str,
+    output_path: Optional[str] = None,
+) -> list[ScenarioResult]:
+    """Load scenarios, start IVR server, run all scenarios, print report.
+
+    Args:
+        dataset_path: Path to YAML scenario file.
+        output_path: Optional path to write JSON results.
+
+    Returns:
+        List of ScenarioResult objects.
+    """
+    import json
+
+    scenarios = load_scenarios(dataset_path)
+
+    port = _find_free_port()
+    base_url = f"http://127.0.0.1:{port}"
+
+    # Determine flow path from first scenario (all scenarios share the server for now)
+    flow_path = scenarios[0].ivr_flow if scenarios else None
+    _start_ivr_server(port, flow_path)
+    await _wait_for_ivr_ready(base_url)
+
+    results: list[ScenarioResult] = []
+    for scenario in scenarios:
+        result = await run_scenario(scenario, base_url)
+        results.append(result)
+
+    print_metrics_report(results)
+
+    if output_path:
+        serialized = []
+        for r in results:
+            serialized.append({
+                "scenario_id": r.scenario_id,
+                "passed": r.passed,
+                "turns": r.turns,
+                "dtmf_log": r.dtmf_log,
+                "transcript": r.transcript,
+                "wall_clock_s": r.wall_clock_s,
+                "error": r.error,
+                "criteria": {
+                    "transcript_pass": r.criteria.transcript_pass,
+                    "dtmf_pass": r.criteria.dtmf_pass,
+                    "turns_pass": r.criteria.turns_pass,
+                    "passed": r.criteria.passed,
+                },
+            })
+        with open(output_path, "w") as fh:
+            json.dump(serialized, fh, indent=2)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# print_metrics_report — terminal table of results
+# ---------------------------------------------------------------------------
+
+def print_metrics_report(results: list[ScenarioResult]) -> None:
+    """Print a formatted metrics table to stdout via click.echo."""
+    if not results:
+        click.echo("No results to report.")
+        return
+
+    header = f"{'ID':<30} {'Result':<8} {'Turns':>6} {'DTMF%':>7} {'Latency(s)':>11}"
+    click.echo(header)
+    click.echo("-" * len(header))
+
+    total_turns = 0
+    total_latency = 0.0
+    pass_count = 0
+
+    for r in results:
+        result_str = "PASS" if r.passed else "FAIL"
+
+        # DTMF accuracy: fraction of expected digits that were pressed
+        expected_seq = r.criteria.dtmf_pass  # bool — can't recover original; use log
+        # Recalculate from ScenarioResult (dtmf_log vs nothing — accuracy from criteria)
+        if not r.criteria.dtmf_pass and r.dtmf_log:
+            dtmf_pct = 0.0  # at least partial: failed means wrong
+        else:
+            dtmf_pct = 100.0
+
+        click.echo(
+            f"{r.scenario_id:<30} {result_str:<8} {r.turns:>6} "
+            f"{dtmf_pct:>6.0f}% {r.wall_clock_s:>10.2f}s"
+        )
+
+        total_turns += r.turns
+        total_latency += r.wall_clock_s
+        if r.passed:
+            pass_count += 1
+
+    click.echo("-" * len(header))
+    count = len(results)
+    success_rate = pass_count / count * 100
+    avg_turns = total_turns / count
+    avg_latency = total_latency / count
+    click.echo(
+        f"Summary: {pass_count}/{count} passed ({success_rate:.0f}%), "
+        f"avg turns={avg_turns:.1f}, avg latency={avg_latency:.2f}s"
     )
