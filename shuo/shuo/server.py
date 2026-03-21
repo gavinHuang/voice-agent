@@ -58,6 +58,7 @@ _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
 
 # ── DTMF reconnect state (keyed by Twilio call_sid) ──────────────────
 _dtmf_pending: dict = {}   # call_sid -> {history, goal, phone, ivr_mode}
+_dtmf_lock: asyncio.Lock = asyncio.Lock()  # Protects concurrent access to _dtmf_pending
 
 # ── Global pre-warmed service pools ──────────────────────────────────
 _tts_pool: Optional[TTSPool] = None
@@ -613,7 +614,7 @@ async def websocket_endpoint(websocket: WebSocket):
         dashboard_registry.update(ctx["call_id"], goal=goal, phone=phone, call_sid=call_sid)
         return goal
 
-    def on_dtmf(digits: str) -> None:
+    async def on_dtmf(digits: str) -> None:
         """Save agent history for reconnection after DTMF redirect.
 
         The actual REST redirect is handled by TwilioISP.send_dtmf().
@@ -625,17 +626,19 @@ async def websocket_endpoint(websocket: WebSocket):
         call_sid = c.call_sid
         agent = c.agent
         history = agent.history if agent else []
-        _dtmf_pending[call_sid] = {
-            "history": history,
-            "goal": c.goal,
-            "phone": c.phone,
-            "ivr_mode": True,
-        }
+        async with _dtmf_lock:
+            _dtmf_pending[call_sid] = {
+                "history": history,
+                "goal": c.goal,
+                "phone": c.phone,
+                "ivr_mode": True,
+            }
 
-    def get_saved_state(call_sid: str):
+    async def get_saved_state(call_sid: str):
         """Check if this stream reconnects after a DTMF redirect or take-over."""
         # DTMF reconnect: agent pressed a key, call was redirected
-        saved_dtmf = _dtmf_pending.pop(call_sid, None)
+        async with _dtmf_lock:
+            saved_dtmf = _dtmf_pending.pop(call_sid, None)
         if saved_dtmf:
             ctx["ivr_mode"] = True
             goal = saved_dtmf["goal"]

@@ -18,7 +18,7 @@ Events come from:
 import os
 import asyncio
 from dataclasses import replace
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from .types import (
     AppState, Phase,
@@ -46,7 +46,7 @@ async def run_conversation(
     on_agent_ready: Optional[Callable[["Agent"], None]] = None,
     get_goal: Optional[Callable[[str], str]] = None,
     on_hangup: Optional[Callable[[], None]] = None,
-    get_saved_state: Optional[Callable[[str], Optional[dict]]] = None,
+    get_saved_state: Optional[Callable[[str], "Awaitable[Optional[dict]]"]] = None,
     tts_pool: Optional[TTSPool] = None,
     flux_pool: Optional[FluxPool] = None,
     ivr_mode: Optional[Callable[[], bool]] = None,
@@ -117,7 +117,7 @@ async def run_conversation(
                 stream_sid = event.stream_sid
 
                 # Check for reconnection after take-over hand-back
-                saved = get_saved_state(event.call_sid) if get_saved_state else None
+                saved = (await get_saved_state(event.call_sid)) if get_saved_state else None
 
                 if saved:
                     goal = saved["goal"]
