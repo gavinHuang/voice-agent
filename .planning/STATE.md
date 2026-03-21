@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md (ISP Protocol and LocalISP)
-last_updated: "2026-03-21T09:17:30.649Z"
+stopped_at: Completed 01-02-PLAN.md (TwilioISP implementation and AudioPlayer/Agent refactor)
+last_updated: "2026-03-21T09:21:26.197Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 5
 ---
 
@@ -51,6 +51,7 @@ Progress: [█░░░░░░░░░] 5%
 
 *Updated after each plan completion*
 | Phase 01-isp-abstraction P01 | 1 | 2 tasks | 3 files |
+| Phase 01-isp-abstraction P02 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,8 @@ Recent decisions affecting current work:
 - DTMF injection uses _inject callable set externally: Conversation loop owns event routing, LocalISP does not
 - [Phase 01-isp-abstraction]: on_media callback receives decoded bytes (not base64 str): Decoding in send_audio keeps callers type-clean
 - [Phase 01-isp-abstraction]: DTMF injection uses _inject callable set externally: Conversation loop owns event routing, LocalISP does not
+- [Phase 01-isp-abstraction]: TwilioISP captures call_sid from StreamStartEvent during reader — available to REST methods without constructor injection
+- [Phase 01-isp-abstraction]: AudioPlayer stream_sid kept as optional param for call-site compatibility — ISP owns stream_sid for JSON formatting
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:17:30.647Z
-Stopped at: Completed 01-01-PLAN.md (ISP Protocol and LocalISP)
+Last session: 2026-03-21T09:21:26.195Z
+Stopped at: Completed 01-02-PLAN.md (TwilioISP implementation and AudioPlayer/Agent refactor)
 Resume file: None
