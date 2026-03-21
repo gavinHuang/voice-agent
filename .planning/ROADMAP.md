@@ -13,7 +13,7 @@ Six phases of targeted work on a production-grade codebase. Phase 1 builds the I
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: ISP Abstraction** - Define ISP protocol, implement LocalISP, inject into VoiceSession (completed 2026-03-21)
-- [ ] **Phase 2: Bug Fixes** - Eliminate race conditions and plug hung-call / disk-leak issues
+- [x] **Phase 2: Bug Fixes** - Eliminate race conditions and plug hung-call / disk-leak issues (completed 2026-03-21)
 - [ ] **Phase 3: CLI** - `voice-agent` command covering serve, call, local-call, bench
 - [ ] **Phase 4: IVR Benchmark** - YAML scenario runner with metrics using LocalISP
 - [ ] **Phase 5: Security Hardening** - Dashboard auth, Twilio signature validation, rate limiting, trace rotation
@@ -45,7 +45,7 @@ Plans:
   2. The TTS pool never dispenses an item that has already been evicted — the eviction path is atomic
   3. A slow token observer callback does not stall the LLM stream — the observer runs in a non-blocking context
   4. A call with no activity for a configurable number of seconds is automatically hung up, freeing its resources
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 02-01-PLAN.md — Test scaffold + BUG-01 (_dtmf_pending lock) + BUG-02 (TTS pool lock)
 - [ ] 02-02-PLAN.md — BUG-03 (non-blocking observer) + BUG-04 (inactivity watchdog)
@@ -103,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. ISP Abstraction | 3/3 | Complete    | 2026-03-21 |
-| 2. Bug Fixes | 1/2 | In Progress|  |
+| 2. Bug Fixes | 2/2 | Complete   | 2026-03-21 |
 | 3. CLI | 0/TBD | Not started | - |
 | 4. IVR Benchmark | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
