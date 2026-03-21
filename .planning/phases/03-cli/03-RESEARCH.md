@@ -1,24 +1,26 @@
 # Phase 3: CLI - Research
 
 **Researched:** 2026-03-21
-**Domain:** Python CLI frameworks, pyproject.toml packaging, YAML config loading, asyncio in CLI context
+**Domain:** Python CLI tooling, pyproject.toml packaging, YAML config, asyncio entry points
 **Confidence:** HIGH
+
+---
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
 ### Locked Decisions
 - Config file holds **behavioral settings only** — credentials stay in env vars
-- Structure uses **per-command sections** matching subcommand names (`serve`, `call`, `local_call`, `bench`)
+- Config uses **per-command sections** matching subcommand names (`serve`, `call`, `local_call`, `bench`)
 - Default config location: `voice-agent.yaml` in the **current working directory** (auto-loaded if present; `--config` flag overrides)
 - Flag values override config file values (flags win)
-- Both `local-call` sides are **LLM agents** — caller agent vs callee agent (no IVR mock)
-- Each agent has its own `goal` and `identity` via `local_call.caller` / `local_call.callee` in YAML (or `--caller-*` / `--callee-*` flags)
-- Terminal output: **live interleaved transcript** with speaker labels, printed in real-time
-- Call ends when a hangup is detected; a summary is printed on completion
-- **`pyproject.toml`** with `[project.scripts]` entry: `voice-agent = "shuo.cli:main"`
-- Installed via `pip install -e .` — `voice-agent` command available globally after install
-- CLI module lives at **`shuo/cli.py`** (sibling to `main.py` inside the `shuo/` directory)
+- Both sides of `local-call` are **LLM agents** — caller agent vs callee agent (no IVR mock)
+- Each agent has its own `goal` and `identity` via `local_call.caller` / `local_call.callee` sections (or `--caller-*` / `--callee-*` flags)
+- Terminal output: **live interleaved transcript** with speaker labels (`[CALLER]` / `[CALLEE]`), printed in real-time
+- Call ends when hangup detected; summary printed on completion
+- Package entry point via **`pyproject.toml`** with `[project.scripts]`: `voice-agent = "shuo.cli:main"`
+- Installed via `pip install -e .`
+- CLI module lives at **`shuo/cli.py`** (top level of the shuo directory, sibling to `main.py`)
 - `main.py` can remain for backwards compatibility or be deprecated
 
 ### Claude's Discretion
@@ -32,79 +34,93 @@
 - None — discussion stayed within phase scope.
 </user_constraints>
 
+---
+
 <phase_requirements>
 ## Phase Requirements
 
 | ID | Description | Research Support |
 |----|-------------|-----------------|
-| CLI-01 | `voice-agent serve` starts the backend server (equivalent to current `main.py`) | `start_server()`, `_handle_sigterm`, `check_environment()` in `main.py` are directly reusable; `uvicorn.run(app)` pattern documented below |
-| CLI-02 | `voice-agent call <phone>` places an outbound call with `--goal` and `--identity` flags | `make_outbound_call()` in `twilio_client.py` is directly callable; goal/identity currently set via env vars that the CLI must pass through |
-| CLI-03 | `voice-agent local-call` runs a call between two agents using `LocalISP` (no Twilio) | `LocalISP.pair()` + two `run_conversation()` coroutines via `asyncio.run()`; observer callback pattern for transcript printing |
-| CLI-04 | `voice-agent bench` runs IVR benchmark scenarios from a YAML file | Stub/delegator acceptable for Phase 3; Phase 4 owns BENCH-01–05 |
-| CLI-05 | All CLI commands accept YAML config files; flags are overrides | PyYAML 6.0.3 already installed; merge-then-override pattern documented below |
+| CLI-01 | `voice-agent serve` starts the backend server (equivalent to current `main.py`) | `start_server()`, SIGTERM drain, `check_environment()` in `main.py` are directly reusable; uvicorn daemon-thread pattern confirmed |
+| CLI-02 | `voice-agent call <phone>` places an outbound call with `--goal` and `--identity` flags | `make_outbound_call(to_number)` in `twilio_client.py` is the direct call site; server must start first (matches current `main.py` behavior) |
+| CLI-03 | `voice-agent local-call` runs a call between two agents using `LocalISP` (no Twilio) | `LocalISP.pair()` confirmed; `run_conversation()` with `observer` callback prints live transcript; `asyncio.gather()` runs both sides concurrently |
+| CLI-04 | `voice-agent bench` runs IVR benchmark scenarios from a YAML file | Phase 3 delivers CLI stub only; Phase 4 owns BENCH-01–05 runner logic |
+| CLI-05 | All CLI commands accept YAML config files; flags are overrides | PyYAML 6.0.3 already installed; `default=None` on Click options enables clean flag-wins detection |
 </phase_requirements>
+
+---
 
 ## Summary
 
-Phase 3 adds a `voice-agent` CLI entry point that wraps all existing platform capabilities. The codebase already has working `start_server()`, `make_outbound_call()`, `LocalISP.pair()`, and `run_conversation()` — this phase is primarily wiring, not new logic. The main technical decisions are framework choice, config-merge strategy, and how to run async conversation code from a synchronous CLI entry point.
+Phase 3 adds a `voice-agent` CLI entry point that unifies all existing platform capabilities behind a consistent interface with YAML config and flag-override support. The codebase already contains working `start_server()`, `make_outbound_call()`, `LocalISP.pair()`, and `run_conversation()` — this phase is composition, not new logic.
 
-Click 8.3.1 is already installed as a transitive dependency of uvicorn, making it the natural choice — zero additional dependency, battle-tested, excellent subcommand support. PyYAML 6.0.3 is also already installed. The config-merge pattern (load YAML, deep-merge with explicit flag values) is straightforward and covered by a well-established pattern shown below.
+Click 8.3.1 is already installed as a transitive uvicorn dependency, making it the zero-cost choice. PyYAML 6.0.3 is also already present. No new packages need to be installed. The entire CLI implementation is: create `shuo/cli.py` with a Click group and four subcommands, create `shuo/pyproject.toml` with the entry point declaration, and wire each subcommand to existing functions.
 
-The `local-call` subcommand is the most complex: it must run two `run_conversation()` coroutines concurrently within a single `asyncio.run()` call, wire observer callbacks for real-time transcript printing, and detect when either side hangs up to terminate the other cleanly.
+The `local-call` subcommand is the most complex: it must run two `run_conversation()` coroutines concurrently within a single `asyncio.run()` call, wire observer callbacks for live transcript printing to stdout, and terminate cleanly when either side hangs up. The `LocalISP` pair/start ordering constraint is a known footgun.
 
-**Primary recommendation:** Use Click 8.3.1 (already installed), PyYAML 6.0.3 (already installed), and `asyncio.run()` for async subcommands. No new dependencies required.
+**Primary recommendation:** Use Click 8.3.1 (already installed). `pyproject.toml` goes in `shuo/` (co-located with `main.py`). Keep config-merge logic as a small `_load_config()` / `_merge()` pair shared by all subcommands.
+
+---
 
 ## Standard Stack
 
 ### Core
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
-| click | 8.3.1 | CLI framework — subcommands, flags, help text | Already installed (uvicorn dep); mature, well-documented, no type annotations required |
-| pyyaml | 6.0.3 | YAML config file loading | Already installed; `yaml.safe_load()` is the standard pattern |
-| python-dotenv | >=1.0.0 | `.env` file loading (already used in `main.py`) | `load_dotenv()` call must be preserved in CLI entry point |
+| click | 8.3.1 | CLI framework — groups, commands, options, arguments | Already installed (uvicorn dep); group/command model maps perfectly to subcommand structure |
+| pyyaml | 6.0.3 | YAML config file loading | Already installed; `yaml.safe_load()` is the standard safe parse |
+| uvicorn | 0.41.0 | ASGI server used by `serve` subcommand | Already used in `main.py`; `uvicorn.Config` + `uvicorn.Server` pattern established |
+| python-dotenv | >=1.0.0 | Env var loading via `load_dotenv()` | Already in requirements.txt; used in `main.py`; CLI must preserve this |
 
 ### Supporting
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| asyncio (stdlib) | 3.14 | Run async subcommands from sync Click entry point | `asyncio.run()` wraps `local-call` async coroutines |
-| uvicorn | >=0.27.0 | Serves FastAPI app (already used) | `serve` subcommand passes `app` to `uvicorn.Config` |
+| asyncio (stdlib) | Python 3.x | Run two concurrent `run_conversation()` tasks in `local-call` | `asyncio.run()` + `asyncio.gather()` or `asyncio.wait()` |
+| setuptools | >=68 | pyproject.toml build backend | Needed for `pip install -e .` |
 
 ### Alternatives Considered
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
-| click | typer | Typer adds type hints, but it is not currently installed — adds a dependency for no functional gain here |
-| click | argparse | argparse is stdlib but has no native subcommand group concept as clean as `@cli.command()` |
-| pyyaml | tomllib | TOML is stdlib in 3.11+ but YAML is what was decided for config format |
+| Click | Typer | Typer is not installed; adds a dependency for no functional gain over Click |
+| Click | argparse | argparse has no native subcommand group concept as clean as `@cli.command()` |
+| pyyaml | tomllib (stdlib 3.11+) | YAML is the decided config format; TOML would change the file format |
 
-**Installation:** No new installs required. Click and PyYAML are already present.
+**Installation — no new packages needed:**
+```bash
+# Click and pyyaml are already present. Only pyproject.toml needs to be created.
+pip install -e .   # run from shuo/ directory after creating pyproject.toml
+```
 
-**Version verification (confirmed 2026-03-21):**
-- `click`: 8.3.1 (installed, `pip show click`)
-- `pyyaml`: 6.0.3 (installed, `pip show pyyaml`)
+**Version verification (confirmed 2026-03-21 via `importlib.metadata`):**
+- `click` 8.3.1
+- `pyyaml` 6.0.3
+- `uvicorn` 0.41.0
 - Python runtime: 3.14.2
+
+---
 
 ## Architecture Patterns
 
 ### Recommended Project Structure
 ```
 shuo/
-├── cli.py              # NEW — Click CLI entry point (shuo.cli:main)
-├── main.py             # KEEP for backwards compatibility
+├── pyproject.toml          # NEW — [project.scripts] entry point
+├── main.py                 # KEEP for backwards compatibility
+├── requirements.txt        # Unchanged
 └── shuo/
-    ├── server.py       # FastAPI app (unchanged)
-    ├── conversation.py # run_conversation() (unchanged)
+    ├── cli.py              # NEW — Click group + four subcommand functions
+    ├── conversation.py     # Unchanged — run_conversation() used by local-call
+    ├── server.py           # Unchanged — FastAPI app used by serve
     └── services/
-        ├── local_isp.py    # LocalISP.pair() (unchanged)
-        └── twilio_client.py # make_outbound_call() (unchanged)
+        ├── local_isp.py    # Unchanged — LocalISP.pair() used by local-call
+        └── twilio_client.py # Unchanged — make_outbound_call() used by call
 ```
 
-### Pattern 1: Click Subcommand Group with YAML Config
+### Pattern 1: Click Group with Shared Config Loading
 
-**What:** A top-level `cli` group with a `--config` option. Each subcommand reads config at invocation time via `click.pass_context`.
+**What:** A `@click.group()` defines the top-level `voice-agent` command with a `--config` flag. Each subcommand receives the loaded config via Click's context object.
+**When to use:** Always — this is the correct Click pattern for multi-subcommand CLIs with shared state.
 
-**When to use:** Always — every subcommand gets config-file values as defaults.
-
-**Example:**
 ```python
 # shuo/cli.py
 import os
@@ -113,14 +129,11 @@ import yaml
 from dotenv import load_dotenv
 from shuo.log import setup_logging
 
-def load_config(config_path: str) -> dict:
-    """Load YAML config file; return empty dict if not found."""
-    if config_path and os.path.exists(config_path):
-        with open(config_path) as f:
-            return yaml.safe_load(f) or {}
-    default = "voice-agent.yaml"
-    if os.path.exists(default):
-        with open(default) as f:
+def _load_config(config_path: str | None) -> dict:
+    """Load YAML config; auto-detect voice-agent.yaml in cwd if no path given."""
+    path = config_path or "voice-agent.yaml"
+    if os.path.exists(path):
+        with open(path) as f:
             return yaml.safe_load(f) or {}
     return {}
 
@@ -131,109 +144,86 @@ def cli(ctx, config):
     load_dotenv()
     setup_logging()
     ctx.ensure_object(dict)
-    ctx.obj["config"] = load_config(config)
+    ctx.obj["config"] = _load_config(config)
 
 def main():
     cli()
 ```
 
-### Pattern 2: Flag-wins Merge
+### Pattern 2: Flag-Wins Merge Per Subcommand
 
-**What:** Load config section for the subcommand, then overwrite keys where the CLI flag was explicitly provided.
+**What:** Load the per-command config section, then overwrite keys where CLI flags were explicitly provided (non-None).
+**When to use:** Every subcommand — flags always win over config file values, which always win over hardcoded defaults.
 
-**When to use:** Every subcommand that reads values from YAML.
-
-**Example:**
 ```python
 @cli.command()
-@click.option("--port", default=None, type=int)
-@click.option("--drain-timeout", default=None, type=int)
+@click.option("--port", default=None, type=int, help="Port to listen on")
+@click.option("--drain-timeout", default=None, type=int, help="Seconds to wait for call drain on SIGTERM")
 @click.pass_context
 def serve(ctx, port, drain_timeout):
     cfg = ctx.obj["config"].get("serve", {})
-    # Flags win — only override when explicitly given (not None)
-    if port is not None:
-        cfg["port"] = port
-    if drain_timeout is not None:
-        cfg["drain_timeout"] = drain_timeout
-    # Resolved values
-    resolved_port = cfg.get("port", int(os.getenv("PORT", "3040")))
-    resolved_drain = cfg.get("drain_timeout", 300)
-    ...
+    # Flag present (not None) always wins
+    effective_port = port if port is not None else cfg.get("port", int(os.getenv("PORT", "3040")))
+    effective_drain = drain_timeout if drain_timeout is not None else cfg.get("drain_timeout", 300)
+    # ... reuse start_server() and SIGTERM handler from main.py
 ```
 
-### Pattern 3: asyncio.run() for Async Subcommands
+### Pattern 3: local-call with Concurrent run_conversation
 
-**What:** `local-call` must run two concurrent `run_conversation()` coroutines. Wrap the async work in a single `asyncio.run()` call.
+**What:** Pair two `LocalISP` instances and run both `run_conversation()` coroutines concurrently with `asyncio.wait()`. When the first side completes (hangup), cancel the other.
+**When to use:** `local-call` subcommand exclusively.
 
-**When to use:** `local-call` subcommand; potentially others that need async execution.
-
-**Example:**
 ```python
 import asyncio
 from shuo.services.local_isp import LocalISP
 from shuo.conversation import run_conversation
 
 @cli.command("local-call")
-@click.option("--caller-goal", default="", help="Goal for the caller agent")
-@click.option("--caller-identity", default="", help="Identity for the caller agent")
-@click.option("--callee-goal", default="", help="Goal for the callee agent")
-@click.option("--callee-identity", default="", help="Identity for the callee agent")
+@click.option("--caller-goal", default=None)
+@click.option("--caller-identity", default=None)
+@click.option("--callee-goal", default=None)
+@click.option("--callee-identity", default=None)
 @click.pass_context
 def local_call(ctx, caller_goal, caller_identity, callee_goal, callee_identity):
     cfg = ctx.obj["config"].get("local_call", {})
-    # Merge: flag wins over config
-    caller_cfg = cfg.get("caller", {})
-    callee_cfg = cfg.get("callee", {})
-    if caller_goal:
+    caller_cfg = {**cfg.get("caller", {})}
+    callee_cfg = {**cfg.get("callee", {})}
+    if caller_goal is not None:
         caller_cfg["goal"] = caller_goal
-    if caller_identity:
-        caller_cfg["identity"] = caller_identity
-    if callee_goal:
+    if callee_goal is not None:
         callee_cfg["goal"] = callee_goal
-    if callee_identity:
-        callee_cfg["identity"] = callee_identity
-
     asyncio.run(_run_local_call(caller_cfg, callee_cfg))
-```
 
-### Pattern 4: Real-time Transcript Observer
-
-**What:** Pass an `observer` callback to `run_conversation()` that prints transcript events as they arrive. Speaker label is derived from which conversation is printing.
-
-**When to use:** `local-call` subcommand.
-
-**Example:**
-```python
 def make_observer(label: str):
     def observer(event: dict):
-        if event["type"] == "transcript":
+        if event.get("type") == "transcript":
             print(f"[{label}]: {event['text']}", flush=True)
     return observer
 
 async def _run_local_call(caller_cfg: dict, callee_cfg: dict):
-    isp_a = LocalISP()
-    isp_b = LocalISP()
-    LocalISP.pair(isp_a, isp_b)
+    isp_caller = LocalISP()
+    isp_callee = LocalISP()
+    LocalISP.pair(isp_caller, isp_callee)  # MUST happen before start()
 
-    caller_obs = make_observer("CALLER")
-    callee_obs = make_observer("CALLEE")
-
-    # Inject goal/identity via env vars or get_goal callback
-    os.environ["CALL_GOAL"] = caller_cfg.get("goal", "")
-
-    task_a = asyncio.create_task(
-        run_conversation(isp_a, observer=caller_obs)
+    task_caller = asyncio.create_task(
+        run_conversation(
+            isp_caller,
+            observer=make_observer("CALLER"),
+            get_goal=lambda _: caller_cfg.get("goal", ""),
+        )
     )
-    task_b = asyncio.create_task(
-        run_conversation(isp_b, observer=callee_obs)
+    task_callee = asyncio.create_task(
+        run_conversation(
+            isp_callee,
+            observer=make_observer("CALLEE"),
+            get_goal=lambda _: callee_cfg.get("goal", ""),
+        )
     )
 
     done, pending = await asyncio.wait(
-        [task_a, task_b],
+        [task_caller, task_callee],
         return_when=asyncio.FIRST_COMPLETED,
     )
-    # Cancel the remaining task when the first side hangs up
     for t in pending:
         t.cancel()
         try:
@@ -244,13 +234,11 @@ async def _run_local_call(caller_cfg: dict, callee_cfg: dict):
     print("\n[CALL ENDED]", flush=True)
 ```
 
-### Pattern 5: pyproject.toml Entry Point
+### Pattern 4: pyproject.toml Entry Point
 
-**What:** Declare `[project.scripts]` so `pip install -e .` registers `voice-agent` on `$PATH`.
+**What:** `[project.scripts]` in `pyproject.toml` registers the `voice-agent` command when installed.
+**When to use:** Required — this is the delivery mechanism for all five CLI requirements.
 
-**When to use:** Required — this is the delivery mechanism for CLI-01 through CLI-05.
-
-**Example:**
 ```toml
 # shuo/pyproject.toml
 [build-system]
@@ -279,223 +267,282 @@ dependencies = [
 voice-agent = "shuo.cli:main"
 ```
 
-**Note:** `pyproject.toml` goes in `shuo/` (the directory containing `main.py` and the `shuo/` package), not in the repo root. This is confirmed by the CONTEXT.md canonical reference.
+After `pip install -e .` from `shuo/`, `voice-agent` is on `$PATH`.
+
+### Pattern 5: bench Stub
+
+**What:** Thin entry point that accepts the YAML dataset flag and prints a clear "not yet implemented" message. Phase 4 replaces the body with real benchmark runner logic.
+**When to use:** `bench` subcommand in Phase 3.
+
+```python
+@cli.command()
+@click.option("--dataset", default=None, help="YAML scenario file")
+@click.pass_context
+def bench(ctx, dataset):
+    cfg = ctx.obj["config"].get("bench", {})
+    effective_dataset = dataset or cfg.get("dataset")
+    click.echo(f"bench: dataset={effective_dataset!r}")
+    click.echo("Benchmark runner not yet implemented (Phase 4).")
+```
 
 ### Anti-Patterns to Avoid
 
-- **Nesting asyncio event loops:** Never call `asyncio.run()` inside a function that is already inside a running event loop. For `local-call`, the entire async work goes in one top-level `asyncio.run()`.
-- **Passing goal/identity only through env vars:** The `call` and `local-call` subcommands accept these as explicit flags. The env var `CALL_GOAL` fallback exists, but explicit flags should take precedence.
-- **Reading config per-flag with `required=True`:** Config file provides defaults; flags should use `default=None` so the code can detect "was this flag explicitly set?"
-- **Putting pyproject.toml in the repo root:** The package root is `shuo/`; `pyproject.toml` belongs there alongside `requirements.txt`.
+- **Passing the raw config dict through global state or env vars:** Use Click's `ctx.obj` to pass config cleanly to subcommands.
+- **Calling `load_dotenv()` inside each subcommand:** Call it once in the `cli` group callback before any subcommand runs.
+- **Setting `required=True` on Click options that have config file fallbacks:** All options should use `default=None` so the code can detect "was this flag explicitly provided?"
+- **Calling `LocalISP.pair()` after `start()`:** `pair()` sets `_peer`; if `start()` runs first, `_peer` is None and audio is silently dropped.
+- **Placing `pyproject.toml` in the repo root instead of `shuo/`:** The Python package root is `shuo/`; `pyproject.toml` must be co-located with `main.py`.
+
+---
 
 ## Don't Hand-Roll
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| YAML loading with error messages | Custom parser | `yaml.safe_load()` + try/except `yaml.YAMLError` | safe_load prevents arbitrary object execution; error type is specific |
-| Subcommand dispatch | Manual `sys.argv` parsing + `if/elif` | `@cli.command()` + Click | Click handles help text, error messages, type coercion, `--help` for free |
-| Flag presence detection | Boolean sentinels | `default=None` on Click options | Click distinguishes "not provided" (None) from "provided as empty string" |
-| Running async from sync | Thread pool + queue | `asyncio.run()` | Direct event loop creation; no thread overhead for I/O-bound work |
-| Config file search path | Custom discovery logic | Check `--config` flag → CWD `voice-agent.yaml` → empty dict | Two-step logic; no need for XDG or platform-specific paths |
+| Subcommand dispatch and routing | Manual `sys.argv[1]` if/elif | `@click.group()` + `@cli.command()` | Click generates help text, error messages, type coercion, `--help` for free |
+| Flag presence detection | Separate boolean sentinel flags | `default=None` on Click options | Click returns `None` for unset options; one-line `if flag is not None:` check is sufficient |
+| YAML loading and error reporting | Custom file parser | `yaml.safe_load()` + `yaml.YAMLError` | safe_load prevents arbitrary object execution from malicious config files |
+| Async-from-sync bridging | Thread pool + queue bridge | `asyncio.run()` | Direct event loop; no thread overhead for I/O-bound async work |
+| Server threading for `serve` | Custom thread management | Reuse `start_server()` + daemon thread pattern from `main.py` | SIGTERM drain logic, uvicorn wiring already battle-tested in production |
 
-**Key insight:** Click plus PyYAML already cover 100% of CLI + config needs. The real work is wiring existing `run_conversation()`, `start_server()`, and `make_outbound_call()` into subcommand bodies.
+**Key insight:** Click + PyYAML cover 100% of CLI/config needs. All platform logic (`start_server`, `make_outbound_call`, `LocalISP.pair`, `run_conversation`) is already implemented and tested. The CLI is a thin composition layer.
+
+---
 
 ## Common Pitfalls
 
-### Pitfall 1: goal/identity Not Reaching Agent in local-call
+### Pitfall 1: LocalISP pair-before-start ordering
 
-**What goes wrong:** `run_conversation()` reads `CALL_GOAL` from env on `StreamStartEvent`. If the CLI sets the env var after `asyncio.run()` begins, the race may be benign — but the clean approach is passing a `get_goal` callback.
+**What goes wrong:** `isp_a._peer` is `None` until `LocalISP.pair(a, b)` is called. If either `start()` is called first, audio sent to the unpaired instance is silently dropped.
 
-**Why it happens:** `run_conversation()` was designed for server use where goal comes from env or `get_goal` callback at call time.
+**Why it happens:** `LocalISP.pair()` is a class method that sets `_peer` on both instances. It has no guard against being called after `start()`.
 
-**How to avoid:** Pass `get_goal=lambda call_sid: caller_cfg.get("goal", "")` to `run_conversation()` rather than setting env vars. Same for identity — currently the Agent reads `CALL_IDENTITY` env var; the CLI should set it before `asyncio.run()` or use the callback.
+**How to avoid:** Always call `LocalISP.pair(isp_caller, isp_callee)` before creating either `run_conversation()` task. The `asyncio.create_task()` calls schedule the coroutines but don't await them immediately — pairing before `create_task` is sufficient.
 
-**Warning signs:** `local-call` starts but agent greets with wrong identity or no goal.
+**Warning signs:** `local-call` runs silently with no transcript; agents appear to connect but never exchange audio.
 
-### Pitfall 2: Both LocalISP Tasks Starting Before Pair
+### Pitfall 2: local-call conversation never terminates
 
-**What goes wrong:** If `isp_a.start()` is called before `LocalISP.pair(isp_a, isp_b)`, `isp_a._peer` is None and audio is silently dropped.
+**What goes wrong:** Both `run_conversation()` tasks run until a `StreamStopEvent` or `HangupRequestEvent` arrives. If neither agent sends `[HANGUP]` and the inactivity watchdog doesn't fire, the call runs forever.
 
-**Why it happens:** `pair()` must happen before `start()` on either instance.
+**Why it happens:** Each `run_conversation()` exits only on `StreamStopEvent` (fired by `isp.stop()`) or `HangupRequestEvent`. `LocalISP.hangup()` fires the peer's `on_stop`, which puts `StreamStopEvent` into the peer's queue. The inactivity watchdog (from `CALL_INACTIVITY_TIMEOUT`) should terminate both sides eventually.
 
-**How to avoid:** Always call `LocalISP.pair(a, b)` before creating either `run_conversation()` task.
+**How to avoid:** Use `asyncio.wait(return_when=asyncio.FIRST_COMPLETED)` so the CLI exits as soon as one side completes. Cancel and await the other task. Do not use `asyncio.gather()` alone — it waits for both tasks.
 
-### Pitfall 3: asyncio.run() Called Inside Click's Context (Click 8 and async)
+**Warning signs:** `voice-agent local-call` never returns to the shell prompt.
 
-**What goes wrong:** If something higher up already has a running event loop (e.g., pytest-asyncio, Jupyter), calling `asyncio.run()` raises `RuntimeError: This event loop is already running`.
+### Pitfall 3: call subcommand needs server running first
 
-**Why it happens:** `asyncio.run()` creates and closes its own event loop; it cannot be called from within an already-running loop.
+**What goes wrong:** `make_outbound_call()` registers `TWILIO_PUBLIC_URL/twiml` with Twilio. Twilio immediately fetches that URL to get TwiML. If the FastAPI server is not running, the call fails at Twilio's end with a webhook fetch error.
 
-**How to avoid:** In the CLI entry point, `asyncio.run()` is called at the very top of the sync Click handler — no issue in production. In tests, use `pytest.mark.asyncio` and call the async function directly rather than going through Click's test runner.
+**Why it happens:** This is how the current `main.py` works too — it starts the server in a background thread, waits 2 seconds, then makes the call. The `call` subcommand must replicate this.
 
-### Pitfall 4: uvicorn Blocks the Main Thread in serve
+**How to avoid:** `voice-agent call` should start the server in a background daemon thread (identical to `serve`) before calling `make_outbound_call()`. Mirror `main.py` lines 97–107 exactly.
 
-**What goes wrong:** `uvicorn.Server.run()` is blocking. The existing `main.py` runs it in a daemon thread with `threading.Thread`. If the CLI tries to run it synchronously on the main thread, `SIGTERM` handling (signal.signal) still works, but `KeyboardInterrupt` handling may differ.
+**Warning signs:** Call SID is returned successfully but Twilio console shows "Failed to connect" or webhook fetch errors.
 
-**Why it happens:** `uvicorn.run()` blocks until server exits.
+### Pitfall 4: goal/identity not reaching Agent in local-call
 
-**How to avoid:** Mirror the `main.py` pattern exactly: run uvicorn in a daemon thread, keep the main thread alive with a `while True: time.sleep(1)` loop and `KeyboardInterrupt` handler.
+**What goes wrong:** `run_conversation()` reads goal via `get_goal(call_sid)` if provided, otherwise falls back to `os.getenv("CALL_GOAL", "")`. If neither is set, the agent starts with an empty goal.
 
-### Pitfall 5: pyproject.toml Missing from shuo/ Directory
+**Why it happens:** The conversation loop was designed for server use where goal often comes from per-call state. The CLI must inject goal explicitly.
 
-**What goes wrong:** `pip install -e .` from the wrong directory installs nothing; `voice-agent` command not found.
+**How to avoid:** Always pass `get_goal=lambda _: goal_string` to `run_conversation()`. Investigate `shuo/shuo/agent.py` before implementing to confirm how `identity` is consumed — it may be a constructor param or env var.
 
-**Why it happens:** `pyproject.toml` must be in the same directory as the top-level package.
+**Warning signs:** Agent in `local-call` starts with default/empty behavior, no goal-directed action.
 
-**How to avoid:** Create `shuo/pyproject.toml`. The shuo package is at `shuo/shuo/`, so `pyproject.toml` at `shuo/` is the correct package root. Verify with `pip show shuo` after install.
+### Pitfall 5: pyproject.toml in wrong directory
 
-### Pitfall 6: call Subcommand Needs Server Running
+**What goes wrong:** Running `pip install -e .` from the repo root instead of `shuo/` fails to find the `shuo` package at the expected import path, so `voice-agent: command not found` or `ModuleNotFoundError: No module named 'shuo.cli'`.
 
-**What goes wrong:** `voice-agent call <phone>` calls `make_outbound_call()`, which registers a TwiML URL with Twilio. If no server is listening at that URL, the call fails at Twilio's end.
+**Why it happens:** The project layout has `voice-agent/shuo/` as the Python package root. `pyproject.toml` must live in `shuo/` alongside `main.py`.
 
-**Why it happens:** `make_outbound_call()` passes `TWILIO_PUBLIC_URL/twiml` — Twilio will fetch that URL immediately.
+**How to avoid:** Create `pyproject.toml` at `/path/to/voice-agent/shuo/pyproject.toml`. Install with `pip install -e .` from inside `shuo/`, or `pip install -e ./shuo` from the repo root. Verify: `pip show shuo` should show `Location: .../voice-agent/shuo`.
 
-**How to avoid:** The `call` subcommand should start the server (same as `serve`) in a background thread before initiating the call. This matches the existing `main.py` behavior exactly.
+### Pitfall 6: Twilio env var check for non-Twilio subcommands
+
+**What goes wrong:** `check_environment()` from `main.py` validates all seven env vars including Twilio credentials. Calling it in `local-call` fails in any dev environment where Twilio isn't configured.
+
+**Why it happens:** `local-call` uses `LocalISP` — no Twilio vars are needed.
+
+**How to avoid:** Create per-subcommand env checks. `serve` and `call` need Twilio vars. `local-call` needs only `DEEPGRAM_API_KEY`, `GROQ_API_KEY`, `ELEVENLABS_API_KEY`. `bench` (Phase 3 stub) needs none.
+
+---
 
 ## Code Examples
 
 Verified patterns from existing source:
 
-### Existing start_server (reuse as-is)
+### Reusable: start_server from main.py
 ```python
-# Source: shuo/main.py lines 65-75
+# Source: shuo/main.py lines 65–75
 def start_server(port: int) -> None:
     global _uvicorn_server
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     _uvicorn_server = uvicorn.Server(config)
     _uvicorn_server.run()
 ```
+Import and call directly from `cli.py`; no need to duplicate.
 
-### Existing SIGTERM drain (reuse as-is)
+### Reusable: SIGTERM drain handler from main.py
 ```python
-# Source: shuo/main.py lines 110-144
-# _handle_sigterm polls server_module._active_calls until drain or timeout
-# signal.signal(signal.SIGTERM, _handle_sigterm) must be called in main thread
+# Source: shuo/main.py lines 110–144
+# signal.signal(signal.SIGTERM, _handle_sigterm) — must be registered on main thread
+# Polls server_module._active_calls until drain or DRAIN_TIMEOUT elapses
+# Then sets _uvicorn_server.should_exit = True
+```
+This is reusable as-is. Move the handler function into `cli.py`'s `serve` command body.
+
+### Reusable: make_outbound_call signature
+```python
+# Source: shuo/shuo/services/twilio_client.py lines 18–47
+def make_outbound_call(to_number: str) -> str:
+    """Returns call SID. Reads all Twilio config from env vars."""
 ```
 
-### Existing make_outbound_call (reuse as-is)
+### Key run_conversation parameters for local-call
 ```python
-# Source: shuo/shuo/services/twilio_client.py lines 18-47
-# make_outbound_call(to_number: str) -> str  (returns call SID)
-# Reads TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, TWILIO_PUBLIC_URL from env
-```
-
-### Existing run_conversation signature (key callbacks)
-```python
-# Source: shuo/shuo/conversation.py lines 69-81
+# Source: shuo/shuo/conversation.py lines 69–81
 async def run_conversation(
     isp,
-    observer: Optional[Callable[[dict], None]] = None,   # for transcript printing
+    observer: Optional[Callable[[dict], None]] = None,   # transcript events → stdout
     get_goal: Optional[Callable[[str], str]] = None,      # goal per call_sid
     on_hangup: Optional[Callable[[], None]] = None,
-    ...
+    # ... other optional params
 ) -> None:
 ```
 
-### Observer event types produced by run_conversation
+### Observer event types emitted by run_conversation
 ```python
-# "transcript"  → {"type": "transcript", "speaker": "callee", "text": "..."}
-# "stream_start" → {"type": "stream_start", "call_sid": ..., "phone": ...}
+# "transcript"   → {"type": "transcript", "speaker": "callee", "text": "..."}
+# "stream_start" → {"type": "stream_start", "call_sid": ..., "stream_sid": ..., "phone": ...}
 # "stream_stop"  → {"type": "stream_stop"}
-# "agent_token"  → {"type": "agent_token", "token": "..."}  (streaming)
+# "agent_token"  → {"type": "agent_token", "token": "..."}   (streaming tokens)
 # "agent_done"   → {"type": "agent_done"}
-# Note: "speaker": "callee" is what conversation.py emits;
-#       the local-call observer should override the label based on which
-#       isp instance (caller vs callee) the observer was registered for.
+# "phase_change" → {"type": "phase_change", "from": "...", "to": "..."}
+#
+# NOTE: "speaker": "callee" is hardcoded in conversation.py for all transcript events.
+# The local-call observer must use the label derived from WHICH isp instance the
+# observer was registered for (caller side vs callee side), not the speaker field.
 ```
 
-### YAML config schema (as decided in CONTEXT.md)
+### YAML config schema (from CONTEXT.md decisions)
 ```yaml
 serve:
   port: 3040
   drain_timeout: 300
 call:
-  goal: "..."
-  identity: "..."
+  goal: "Check account balance"
+  identity: "Account holder"
   phone: "+1234567890"
 local_call:
   caller:
-    goal: "..."
-    identity: "..."
+    goal: "Ask about account balance"
+    identity: "Customer"
   callee:
-    goal: "..."
-    identity: "..."
+    goal: "Answer banking questions"
+    identity: "Bank agent"
 bench:
   dataset: scenarios.yaml
 ```
+
+---
 
 ## State of the Art
 
 | Old Approach | Current Approach | When Changed | Impact |
 |--------------|------------------|--------------|--------|
+| `setup.py` with `entry_points` | `pyproject.toml` with `[project.scripts]` | PEP 517/518 (2017), PEP 621 (2021) | `pyproject.toml` is the standard; `setup.py` is deprecated |
+| `asyncio.get_event_loop().run_until_complete()` | `asyncio.run()` | Python 3.7 (2018) | `asyncio.run()` creates a fresh loop, handles cleanup; use it |
 | `python main.py +1234567890` | `voice-agent call +1234567890 --goal "..."` | Phase 3 | Clean subcommand interface with named flags |
-| Hard-coded goal in env var only | Config file + flag override | Phase 3 | Goal/identity configurable per-invocation |
-| No `local-call` | `voice-agent local-call` via LocalISP | Phase 3 | No Twilio credentials needed for agent testing |
 
 **Deprecated/outdated:**
-- Direct `python main.py` invocation: remains for backwards compatibility but `voice-agent serve` is the documented entry point going forward.
+- `setup.py` entry_points: Replaced by `[project.scripts]` in `pyproject.toml`. Do not create a `setup.py`.
+- `asyncio.get_event_loop()` as main entry: Deprecated in Python 3.10. Use `asyncio.run()`.
+
+---
 
 ## Open Questions
 
-1. **Agent identity field in run_conversation**
-   - What we know: `CALL_GOAL` env var is read in `conversation.py`; `goal` is passed to `Agent()` constructor at line 175
-   - What's unclear: Where does `identity` get consumed — is it an `Agent` constructor param, an env var, or part of the goal string?
-   - Recommendation: Read `shuo/shuo/agent.py` before implementing `call` and `local-call` to confirm how identity is injected; likely needs a `get_identity` callback or env var set before `asyncio.run()`.
+1. **How `identity` flows into Agent**
+   - What we know: `run_conversation()` has no `get_identity` parameter. `Agent()` is constructed inside `run_conversation()` with `goal=goal` (line 175 of `conversation.py`). There is no `identity` param visible in the `run_conversation()` signature.
+   - What's unclear: Whether `identity` is a separate `Agent` constructor arg, an env var (`CALL_IDENTITY`?), or embedded in the goal string at call time.
+   - Recommendation: Read `shuo/shuo/agent.py` before implementing `call` and `local-call`. If identity is not a `run_conversation()` param, pass it via env var set before `asyncio.run()`, or extend `run_conversation()` with a `get_identity` callback (a small, backward-compatible change).
 
-2. **bench subcommand stub interface**
-   - What we know: Phase 4 owns BENCH-01–05; Phase 3 just needs the CLI entry point
-   - What's unclear: Should `bench` in Phase 3 print "not yet implemented" or silently succeed?
-   - Recommendation: Implement as a thin stub that prints a clear "benchmark runner not yet available" message and exits 0; Phase 4 replaces the body.
+2. **`voice-agent call` — whether to block until call ends**
+   - What we know: `main.py` makes the outbound call then loops `while True: time.sleep(1)` until `KeyboardInterrupt`. The call itself is handled by inbound WebSocket from Twilio.
+   - What's unclear: Should `voice-agent call` return immediately after placing the call, or block until the call ends?
+   - Recommendation: Mirror current `main.py` behavior — block until `KeyboardInterrupt` so the server stays alive for the duration of the call.
+
+---
 
 ## Validation Architecture
 
 ### Test Framework
 | Property | Value |
 |----------|-------|
-| Framework | pytest 7.x + pytest-asyncio |
-| Config file | none (no pytest.ini or setup.cfg detected) |
-| Quick run command | `cd shuo && python3 -m pytest tests/ -q` |
-| Full suite command | `cd shuo && python3 -m pytest tests/ -v` |
+| Framework | pytest 9.0.2 + pytest-asyncio 1.3.0 |
+| Config file | None detected (no pytest.ini; asyncio mode set via `@pytest.mark.asyncio`) |
+| Quick run command | `cd /path/to/voice-agent/shuo && python -m pytest tests/test_cli.py -q` |
+| Full suite command | `cd /path/to/voice-agent/shuo && python -m pytest tests/ --ignore=tests/test_bug_fixes.py -q` |
+
+**Current test status (2026-03-21):** 34 tests pass. One pre-existing failure in `test_bug_fixes.py::test_dtmf_pending_sequential` due to missing `dashboard` module (`from dashboard.server import router` in `server.py`) — unrelated to Phase 3.
 
 ### Phase Requirements → Test Map
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| CLI-01 | `voice-agent serve` invokes uvicorn | unit (Click test runner) | `pytest tests/test_cli.py::test_serve_starts_server -x` | ❌ Wave 0 |
-| CLI-02 | `voice-agent call <phone>` calls `make_outbound_call` | unit (mock Twilio) | `pytest tests/test_cli.py::test_call_invokes_outbound -x` | ❌ Wave 0 |
-| CLI-03 | `voice-agent local-call` runs two paired conversations | unit (async, no network) | `pytest tests/test_cli.py::test_local_call_runs -x` | ❌ Wave 0 |
-| CLI-04 | `voice-agent bench` accepts YAML file arg | unit (stub verification) | `pytest tests/test_cli.py::test_bench_stub -x` | ❌ Wave 0 |
-| CLI-05 | YAML config loaded; flags override config values | unit (parametrized) | `pytest tests/test_cli.py::test_config_flag_override -x` | ❌ Wave 0 |
+| CLI-01 | `serve` invokes uvicorn on configured port | unit (mock uvicorn) | `pytest tests/test_cli.py::test_serve_starts_server -x` | ❌ Wave 0 |
+| CLI-02 | `call <phone>` invokes `make_outbound_call` with correct phone | unit (mock twilio_client) | `pytest tests/test_cli.py::test_call_invokes_outbound -x` | ❌ Wave 0 |
+| CLI-03 | `local-call` runs two paired conversations, prints transcript | integration (no network) | `pytest tests/test_cli.py::test_local_call_runs -x` | ❌ Wave 0 |
+| CLI-04 | `bench` accepts `--dataset` flag, prints stub message | unit | `pytest tests/test_cli.py::test_bench_stub -x` | ❌ Wave 0 |
+| CLI-05 | YAML config values used when flags absent; flags override | unit (parametrized) | `pytest tests/test_cli.py::test_config_flag_override -x` | ❌ Wave 0 |
+
+**Test tooling note:** Use `click.testing.CliRunner` for all CLI tests — it captures stdout and isolates filesystem. Example:
+```python
+from click.testing import CliRunner
+from shuo.cli import cli
+
+def test_bench_stub():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["bench", "--dataset", "test.yaml"])
+    assert result.exit_code == 0
+    assert "not yet implemented" in result.output
+```
 
 ### Sampling Rate
-- **Per task commit:** `cd shuo && python3 -m pytest tests/ -q`
-- **Per wave merge:** `cd shuo && python3 -m pytest tests/ -v`
-- **Phase gate:** Full suite green (42 existing + new CLI tests) before `/gsd:verify-work`
+- **Per task commit:** `python -m pytest tests/test_cli.py -q`
+- **Per wave merge:** `python -m pytest tests/ --ignore=tests/test_bug_fixes.py -q`
+- **Phase gate:** Full suite (34 existing + new CLI tests) green before `/gsd:verify-work`
 
 ### Wave 0 Gaps
-- [ ] `shuo/tests/test_cli.py` — covers CLI-01 through CLI-05 (use `click.testing.CliRunner` for sync commands; `asyncio.run()` or pytest-asyncio for async internals)
+- [ ] `shuo/tests/test_cli.py` — covers CLI-01 through CLI-05 using `CliRunner`
+- [ ] `shuo/pyproject.toml` — required for entry point registration (not a test file, but needed before any CLI test can import `shuo.cli`)
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct code inspection of `shuo/main.py`, `shuo/shuo/conversation.py`, `shuo/shuo/services/local_isp.py`, `shuo/shuo/services/twilio_client.py` — all reusable assets confirmed
-- `pip show click` — version 8.3.1 confirmed installed 2026-03-21
-- `pip show pyyaml` — version 6.0.3 confirmed installed 2026-03-21
+- Direct code inspection: `shuo/main.py`, `shuo/shuo/conversation.py`, `shuo/shuo/services/local_isp.py`, `shuo/shuo/services/twilio_client.py` — all reusable assets confirmed by reading source
+- `importlib.metadata` — click 8.3.1, pyyaml 6.0.3, uvicorn 0.41.0 confirmed installed 2026-03-21
 - `python3 --version` — 3.14.2 confirmed
-- `python3 -m pytest tests/ --collect-only` — 42 tests confirmed, no pytest.ini exists
+- `python -m pytest` — 34 tests pass (excluding pre-existing dashboard env issue), pytest 9.0.2
 
 ### Secondary (MEDIUM confidence)
-- Click official docs pattern for subcommand groups with `pass_context` — matches Click 8.x documented API
-- `pyproject.toml` `[project.scripts]` pattern — PEP 517/518 standard, setuptools >=68 required
+- Click 8.x group/context pattern — standard documented API, confirmed present in installed version
+- PEP 621 `[project.scripts]` — canonical Python packaging standard, widely adopted
 
 ### Tertiary (LOW confidence)
 - None
 
+---
+
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH — both libraries confirmed installed, versions verified
-- Architecture: HIGH — based on direct reading of all referenced source files
-- Pitfalls: HIGH — derived from actual code behavior (goal via env var, server threading model, pair-before-start ordering)
+- Standard stack: HIGH — all packages confirmed installed with exact versions
+- Architecture: HIGH — patterns derived directly from reading all referenced source files; no guesswork
+- Pitfalls: HIGH — derived from actual code behavior (pair-before-start ordering in LocalISP, SIGTERM threading in main.py, goal-via-env pattern in conversation.py)
 
 **Research date:** 2026-03-21
-**Valid until:** 2026-06-21 (stable domain — Click 8.x, PyYAML 6.x are not fast-moving)
+**Valid until:** 2026-06-21 (stable domain — Click 8.x, PyYAML 6.x, uvicorn are not fast-moving)
