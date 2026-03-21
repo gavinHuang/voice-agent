@@ -5,12 +5,9 @@ Manages its own independent playback loop that drips audio
 chunks at the correct rate, regardless of other activity.
 """
 
-import json
 import base64
 import asyncio
 from typing import List, Optional, Callable
-
-from fastapi import WebSocket
 
 from ..log import ServiceLogger
 
@@ -30,12 +27,11 @@ class AudioPlayer:
     
     def __init__(
         self,
-        websocket: WebSocket,
-        stream_sid: str,
+        isp,
+        stream_sid: str = "",
         on_done: Optional[Callable[[], None]] = None,
     ):
-        self._websocket = websocket
-        self._stream_sid = stream_sid
+        self._isp = isp
         self._on_done = on_done
         
         self._chunks: List[str] = []
@@ -146,20 +142,9 @@ class AudioPlayer:
             self._running = False
     
     async def _send_audio(self, payload: str) -> None:
-        """Send a single audio chunk to Twilio."""
-        message = {
-            "event": "media",
-            "streamSid": self._stream_sid,
-            "media": {
-                "payload": payload
-            }
-        }
-        await self._websocket.send_text(json.dumps(message))
-    
+        """Send a single audio chunk via ISP."""
+        await self._isp.send_audio(payload)
+
     async def _send_clear(self) -> None:
-        """Send clear message to Twilio to flush audio buffer."""
-        message = {
-            "event": "clear",
-            "streamSid": self._stream_sid
-        }
-        await self._websocket.send_text(json.dumps(message))
+        """Send clear message via ISP to flush audio buffer."""
+        await self._isp.send_clear()

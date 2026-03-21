@@ -18,11 +18,8 @@ Marker protocol (embedded in LLM output, stripped before TTS):
 """
 
 import asyncio
-import json
 import time
 from typing import Optional, Callable, List, Dict, Any
-
-from fastapi import WebSocket
 
 from .services.llm import LLMService
 from .services.tts import create_tts
@@ -126,7 +123,7 @@ class Agent:
 
     def __init__(
         self,
-        websocket: WebSocket,
+        isp,
         stream_sid: str,
         emit: Callable[[Any], None],
         tts_pool: TTSPool,
@@ -134,7 +131,7 @@ class Agent:
         goal: str = "",
         on_token_observed: Optional[Callable[[str], None]] = None,
     ):
-        self._websocket = websocket
+        self._isp = isp
         self._stream_sid = stream_sid
         self._emit = emit
         self._tts_pool = tts_pool
@@ -238,8 +235,7 @@ class Agent:
 
         # Create player
         self._player = AudioPlayer(
-            websocket=self._websocket,
-            stream_sid=self._stream_sid,
+            isp=self._isp,
             on_done=self._on_playback_done,
         )
 
@@ -295,12 +291,7 @@ class Agent:
         agent's own [DTMF:N] marker mechanism.
         """
         audio = generate_dtmf_ulaw_b64(digit)
-        msg = json.dumps({
-            "event": "media",
-            "streamSid": self._stream_sid,
-            "media": {"payload": audio},
-        })
-        await self._websocket.send_text(msg)
+        await self._isp.send_audio(audio)
 
     async def cleanup(self) -> None:
         """Final cleanup when call ends."""
