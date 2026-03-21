@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-21T22:48:04.519Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-21T22:51:56.548Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
   percent: 5
 ---
 
@@ -63,6 +63,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 05-security-hardening P01 | 5min | 2 tasks | 2 files |
 | Phase 05-security-hardening P02 | 3min | 2 tasks | 3 files |
 | Phase 06-agent-framework-migration P01 | 6min | 2 tasks | 3 files |
+| Phase 06-agent-framework-migration P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,8 @@ Recent decisions affecting current work:
 - [Phase 06-agent-framework-migration]: Per-instance pydantic-ai Agent (not module-level): GROQ_API_KEY validated at construction time; per-instance avoids import-time API key check
 - [Phase 06-agent-framework-migration]: LLMTurnContext.goal_suffix via dynamic @agent.system_prompt decorator: keeps Agent stateless while allowing per-call goal customization
 - [Phase 06-agent-framework-migration]: iter() with ModelRequestNode/CallToolsNode: correct approach for text streaming + tool execution (run_stream() deprecated; silences tools)
+- [Phase 06-agent-framework-migration]: server.py unchanged: agent.history returns List[ModelMessage] in-process; type-consistent with restore_history/llm.set_history
+- [Phase 06-agent-framework-migration]: history/restore_history typed as generic list: avoids importing pydantic-ai types into agent.py
 
 ### Pending Todos
 
@@ -125,6 +128,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:48:04.517Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-21T22:51:56.546Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None

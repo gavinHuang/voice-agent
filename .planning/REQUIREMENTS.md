@@ -47,8 +47,8 @@
 
 - [x] **AGENT-01**: `LLMAgent` is migrated to pydantic-ai with typed tool definitions
 - [x] **AGENT-02**: `[DTMF:N]`, `[HOLD]`, `[HANGUP]` markers replaced by structured `AgentResponse` type
-- [ ] **AGENT-03**: Marker scanner (`MarkerScanner`) is removed after migration
-- [ ] **AGENT-04**: All existing agent behaviors (DTMF, hold detection, hangup) work identically after migration
+- [x] **AGENT-03**: Marker scanner (`MarkerScanner`) is removed after migration
+- [x] **AGENT-04**: All existing agent behaviors (DTMF, hold detection, hangup) work identically after migration
 - [x] **AGENT-05**: LLM provider (Groq/OpenAI-compatible) is configurable via pydantic-ai model selection
 
 ## v2 Requirements
@@ -107,8 +107,8 @@
 | SEC-04 | Phase 5 | Complete |
 | AGENT-01 | Phase 6 | Complete |
 | AGENT-02 | Phase 6 | Complete |
-| AGENT-03 | Phase 6 | Pending |
-| AGENT-04 | Phase 6 | Pending |
+| AGENT-03 | Phase 6 | Complete |
+| AGENT-04 | Phase 6 | Complete |
 | AGENT-05 | Phase 6 | Complete |
 
 **Coverage:**

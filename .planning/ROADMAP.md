@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: CLI** - `voice-agent` command covering serve, call, local-call, bench (completed 2026-03-21)
 - [x] **Phase 4: IVR Benchmark** - YAML scenario runner with metrics using LocalISP (completed 2026-03-21)
 - [x] **Phase 5: Security Hardening** - Dashboard auth, Twilio signature validation, rate limiting, trace rotation (completed 2026-03-21)
-- [ ] **Phase 6: Agent Framework Migration** - pydantic-ai replaces custom marker protocol
+- [x] **Phase 6: Agent Framework Migration** - pydantic-ai replaces custom marker protocol (completed 2026-03-21)
 
 ## Phase Details
 
@@ -103,7 +103,7 @@ Plans:
   2. The `MarkerScanner` class is deleted from the codebase
   3. All existing agent behaviors (DTMF navigation, hold detection, hangup) work identically after migration — verified by the existing test suite
   4. The LLM provider (Groq or any OpenAI-compatible endpoint) is selectable via config without code changes
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 06-01-PLAN.md — Test scaffold + pydantic-ai LLMService rewrite with typed tools
 - [ ] 06-02-PLAN.md — Remove MarkerScanner from Agent, wire tool context, full regression
@@ -120,4 +120,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. CLI | 2/2 | Complete    | 2026-03-21 |
 | 4. IVR Benchmark | 3/3 | Complete    | 2026-03-21 |
 | 5. Security Hardening | 2/2 | Complete    | 2026-03-21 |
-| 6. Agent Framework Migration | 1/2 | In Progress|  |
+| 6. Agent Framework Migration | 2/2 | Complete   | 2026-03-21 |
