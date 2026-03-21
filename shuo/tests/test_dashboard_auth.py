@@ -173,6 +173,15 @@ def test_websocket_open_when_auth_disabled(monkeypatch):
 # Task 2: Rate limiting on POST /call
 # =============================================================================
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset the in-process rate limiter state between tests to prevent pollution."""
+    import dashboard.server as srv
+    srv._call_limiter._hits.clear()
+    yield
+    srv._call_limiter._hits.clear()
+
+
 def _make_call_client(monkeypatch, limit="3"):
     """Helper: build TestClient with rate limit env set, auth disabled."""
     monkeypatch.delenv("DASHBOARD_API_KEY", raising=False)

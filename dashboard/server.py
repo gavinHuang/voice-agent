@@ -14,10 +14,11 @@ Routes (all under /dashboard):
 import os
 import time
 import asyncio
+import collections
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -32,9 +33,48 @@ _HERE = Path(__file__).parent
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
+# ── Auth dependency ───────────────────────────────────────────────────────────
+
+def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")) -> None:
+    """Verify X-API-Key header against DASHBOARD_API_KEY env var.
+
+    Auth is disabled (passes through) when DASHBOARD_API_KEY is unset or empty.
+    """
+    expected = os.getenv("DASHBOARD_API_KEY", "")
+    if not expected:
+        return  # Auth disabled when env var unset
+    if x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
+
+
+# ── Rate limiter ──────────────────────────────────────────────────────────────
+
+class _RateLimiter:
+    """In-process per-IP rate limiter using a sliding window."""
+
+    def __init__(self):
+        self._hits: dict[str, list[float]] = collections.defaultdict(list)
+
+    def check(self, ip: str, limit: int, window: float) -> tuple[bool, int]:
+        """Return (allowed, retry_after_seconds). Prunes expired entries."""
+        now = time.monotonic()
+        cutoff = now - window
+        hits = self._hits[ip]
+        # Prune old entries
+        self._hits[ip] = hits = [t for t in hits if t > cutoff]
+        if len(hits) >= limit:
+            retry_after = int(hits[0] - cutoff) + 1
+            return False, retry_after
+        hits.append(now)
+        return True, 0
+
+
+_call_limiter = _RateLimiter()
+
+
 # ── Pages ────────────────────────────────────────────────────────────────────
 
-@router.get("/")
+@router.get("/", dependencies=[Depends(verify_api_key)])
 async def dashboard_page():
     """Serve the supervisor dashboard UI."""
     return FileResponse(_HERE / "app.html")
@@ -43,13 +83,17 @@ async def dashboard_page():
 # ── WebSocket event stream ────────────────────────────────────────────────────
 
 @router.websocket("/ws")
-async def dashboard_ws(websocket: WebSocket):
+async def dashboard_ws(websocket: WebSocket, token: str = Query(None)):
     """
     Push all call events to a connected supervisor browser.
 
     On connect: sends current active call state.
     Ongoing: forwards every event from every call (tagged with call_id).
     """
+    expected = os.getenv("DASHBOARD_API_KEY", "")
+    if expected and token != expected:
+        await websocket.close(code=4003, reason="Missing or invalid token")
+        return
     await websocket.accept()
     q = dashboard_bus.subscribe_global()
 
@@ -78,7 +122,7 @@ async def dashboard_ws(websocket: WebSocket):
 
 # ── Call list ─────────────────────────────────────────────────────────────────
 
-@router.get("/calls")
+@router.get("/calls", dependencies=[Depends(verify_api_key)])
 async def list_calls():
     """Return all active calls as JSON."""
     return JSONResponse({
@@ -96,7 +140,7 @@ async def list_calls():
 
 # ── Control: hang up ──────────────────────────────────────────────────────────
 
-@router.post("/calls/{call_id}/hangup")
+@router.post("/calls/{call_id}/hangup", dependencies=[Depends(verify_api_key)])
 async def hangup(call_id: str):
     """Terminate the call via Twilio REST API."""
     call = registry.get(call_id)
@@ -145,7 +189,7 @@ async def hangup(call_id: str):
 
 # ── Control: takeover / handback ─────────────────────────────────────────────
 
-@router.post("/calls/{call_id}/takeover")
+@router.post("/calls/{call_id}/takeover", dependencies=[Depends(verify_api_key)])
 async def takeover(call_id: str):
     """
     Join the live call as a three-way conference.
@@ -215,7 +259,7 @@ async def takeover(call_id: str):
     return {"status": "ok"}
 
 
-@router.post("/calls/{call_id}/handback")
+@router.post("/calls/{call_id}/handback", dependencies=[Depends(verify_api_key)])
 async def handback(call_id: str):
     """
     Remove the human from the conference and return control to the agent.
@@ -272,8 +316,8 @@ class CallRequest(BaseModel):
     ivr_mode: bool = False  # When True: suppress opener, force DTMF-only navigation
 
 
-@router.post("/call")
-async def start_call(body: CallRequest):
+@router.post("/call", dependencies=[Depends(verify_api_key)])
+async def start_call(body: CallRequest, request: Request):
     """
     Trigger an outbound call from the dashboard UI.
 
@@ -283,6 +327,16 @@ async def start_call(body: CallRequest):
     Set ivr_mode=True when calling an automated IVR system — suppresses the
     opening greeting and forces DTMF-only navigation mode.
     """
+    limit = int(os.getenv("CALL_RATE_LIMIT", "10"))
+    ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = _call_limiter.check(ip, limit, window=60.0)
+    if not allowed:
+        return JSONResponse(
+            {"error": "Rate limit exceeded"},
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+        )
+
     phone = body.phone.strip()
     if not phone.startswith("+") and not phone.startswith("client:"):
         phone = f"+{phone}"
@@ -300,7 +354,7 @@ class DTMFRequest(BaseModel):
     digit: str
 
 
-@router.post("/calls/{call_id}/dtmf")
+@router.post("/calls/{call_id}/dtmf", dependencies=[Depends(verify_api_key)])
 async def inject_dtmf(call_id: str, body: DTMFRequest):
     """
     Inject a DTMF tone into the call audio stream.
@@ -334,7 +388,7 @@ class SummarizeRequest(BaseModel):
     transcript: List[dict]   # [{role: "user"|"agent", text: str}, ...]
 
 
-@router.post("/summarize")
+@router.post("/summarize", dependencies=[Depends(verify_api_key)])
 async def summarize_call(body: SummarizeRequest):
     """
     Generate a brief outcome summary for a completed call using the LLM.
