@@ -103,12 +103,15 @@ Plans:
   2. The `MarkerScanner` class is deleted from the codebase
   3. All existing agent behaviors (DTMF navigation, hold detection, hangup) work identically after migration — verified by the existing test suite
   4. The LLM provider (Groq or any OpenAI-compatible endpoint) is selectable via config without code changes
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Test scaffold + pydantic-ai LLMService rewrite with typed tools
+- [ ] 06-02-PLAN.md — Remove MarkerScanner from Agent, wire tool context, full regression
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -117,4 +120,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. CLI | 2/2 | Complete    | 2026-03-21 |
 | 4. IVR Benchmark | 3/3 | Complete    | 2026-03-21 |
 | 5. Security Hardening | 2/2 | Complete    | 2026-03-21 |
-| 6. Agent Framework Migration | 0/TBD | Not started | - |
+| 6. Agent Framework Migration | 0/2 | Not started | - |
