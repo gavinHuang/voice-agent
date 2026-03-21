@@ -1,0 +1,238 @@
+"""
+Tests for the voice-agent CLI (serve, call, bench subcommands + YAML config).
+
+Uses Click's CliRunner for isolated invocation and unittest.mock for
+blocking I/O (uvicorn, threading, time.sleep, make_outbound_call).
+
+NOTE: shuo.server imports 'dashboard' (a repo-root package not on the test
+sys.path).  All tests that exercise serve/call must pre-inject fake modules for
+'shuo.server', 'uvicorn', and related heavy deps before importing cli so that
+the deferred imports inside the Click commands resolve to mocks.
+"""
+
+import sys
+import types
+import os
+from unittest.mock import patch, MagicMock, call
+from click.testing import CliRunner
+
+
+# ---------------------------------------------------------------------------
+# Lightweight fake modules injected into sys.modules before any test that
+# exercises serve/call (both commands import shuo.server and uvicorn inside
+# their function body).
+# ---------------------------------------------------------------------------
+
+def _make_fake_server_module():
+    mod = types.ModuleType("shuo.server")
+    mod.app = MagicMock(name="app")
+    mod._draining = False
+    mod._active_calls = 0
+    return mod
+
+
+def _make_fake_uvicorn():
+    mod = types.ModuleType("uvicorn")
+    mod.Config = MagicMock(name="uvicorn.Config")
+    mod.Server = MagicMock(name="uvicorn.Server")
+    return mod
+
+
+class _ServerModuleContext:
+    """Context manager that injects fake shuo.server + uvicorn into sys.modules."""
+
+    def __init__(self):
+        self._fake_server = None
+        self._fake_uvicorn = None
+        self._orig_server = None
+        self._orig_uvicorn = None
+
+    def __enter__(self):
+        self._fake_server = _make_fake_server_module()
+        self._fake_uvicorn = _make_fake_uvicorn()
+        self._orig_server = sys.modules.get("shuo.server")
+        self._orig_uvicorn = sys.modules.get("uvicorn")
+        sys.modules["shuo.server"] = self._fake_server
+        sys.modules["uvicorn"] = self._fake_uvicorn
+        return self._fake_server, self._fake_uvicorn
+
+    def __exit__(self, *args):
+        if self._orig_server is None:
+            sys.modules.pop("shuo.server", None)
+        else:
+            sys.modules["shuo.server"] = self._orig_server
+        if self._orig_uvicorn is None:
+            sys.modules.pop("uvicorn", None)
+        else:
+            sys.modules["uvicorn"] = self._orig_uvicorn
+
+
+from shuo.cli import cli
+
+
+# =============================================================================
+# bench (no env / server needed)
+# =============================================================================
+
+def test_bench_stub():
+    """bench prints stub message and dataset path."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["bench", "--dataset", "test.yaml"])
+    assert result.exit_code == 0, result.output
+    assert "not yet implemented" in result.output.lower()
+    assert "test.yaml" in result.output
+
+
+def test_bench_no_dataset():
+    """bench with no dataset prints None for dataset."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["bench"])
+    assert result.exit_code == 0, result.output
+    assert "not yet implemented" in result.output.lower()
+
+
+# =============================================================================
+# YAML config loading
+# =============================================================================
+
+def test_config_file_loaded():
+    """bench uses dataset from YAML config when no --dataset flag given."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("voice-agent.yaml", "w") as f:
+            f.write("bench:\n  dataset: from_config.yaml\n")
+        result = runner.invoke(cli, ["bench"])
+    assert result.exit_code == 0, result.output
+    assert "from_config.yaml" in result.output
+
+
+def test_flag_overrides_config():
+    """--dataset flag overrides the value from YAML config."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("voice-agent.yaml", "w") as f:
+            f.write("bench:\n  dataset: from_config.yaml\n")
+        result = runner.invoke(cli, ["bench", "--dataset", "from_flag.yaml"])
+    assert result.exit_code == 0, result.output
+    assert "from_flag.yaml" in result.output
+    assert "from_config.yaml" not in result.output
+
+
+def test_config_auto_detect():
+    """voice-agent.yaml in cwd is auto-loaded when --config is not specified."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("voice-agent.yaml", "w") as f:
+            f.write("bench:\n  dataset: auto_detected.yaml\n")
+        result = runner.invoke(cli, ["bench"])
+    assert result.exit_code == 0, result.output
+    assert "auto_detected.yaml" in result.output
+
+
+def test_explicit_config_flag():
+    """--config path loads the specified file instead of auto-detect."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("custom.yaml", "w") as f:
+            f.write("bench:\n  dataset: custom_dataset.yaml\n")
+        result = runner.invoke(cli, ["--config", "custom.yaml", "bench"])
+    assert result.exit_code == 0, result.output
+    assert "custom_dataset.yaml" in result.output
+
+
+# =============================================================================
+# serve
+# =============================================================================
+
+_FULL_ENV = {
+    "TWILIO_ACCOUNT_SID": "x",
+    "TWILIO_AUTH_TOKEN": "x",
+    "TWILIO_PHONE_NUMBER": "x",
+    "TWILIO_PUBLIC_URL": "http://example.com",
+    "DEEPGRAM_API_KEY": "x",
+    "GROQ_API_KEY": "x",
+    "ELEVENLABS_API_KEY": "x",
+}
+
+
+def test_serve_starts_server():
+    """serve starts a daemon server thread on the given port."""
+    with _ServerModuleContext():
+        with patch.dict(os.environ, _FULL_ENV), \
+             patch("shuo.cli.threading.Thread") as mock_thread, \
+             patch("shuo.cli.time.sleep", side_effect=[None, KeyboardInterrupt]):
+            runner = CliRunner()
+            runner.invoke(cli, ["serve", "--port", "9999"])
+            # Thread should have been constructed
+            mock_thread.assert_called_once()
+            # daemon=True expected
+            _, kwargs = mock_thread.call_args
+            assert kwargs.get("daemon") is True
+
+
+def test_serve_thread_started():
+    """serve calls thread.start() to launch the server."""
+    with _ServerModuleContext():
+        with patch.dict(os.environ, _FULL_ENV), \
+             patch("shuo.cli.threading.Thread") as mock_thread, \
+             patch("shuo.cli.time.sleep", side_effect=[None, KeyboardInterrupt]):
+            runner = CliRunner()
+            runner.invoke(cli, ["serve", "--port", "9999"])
+            mock_thread.return_value.start.assert_called_once()
+
+
+def test_serve_env_check_fails():
+    """serve exits with error when required env vars are missing.
+
+    Patches load_dotenv so the .env file cannot repopulate env vars.
+    """
+    with _ServerModuleContext():
+        runner = CliRunner()
+        empty_env = {k: "" for k in [
+            "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
+            "TWILIO_PUBLIC_URL", "DEEPGRAM_API_KEY", "GROQ_API_KEY", "ELEVENLABS_API_KEY",
+        ]}
+        # Remove them so os.getenv returns None
+        with patch("shuo.cli.load_dotenv"), \
+             patch.dict(os.environ, {}, clear=True):
+            result = runner.invoke(cli, ["serve"])
+        assert result.exit_code != 0 or "Missing" in (result.output + (result.stderr or ""))
+
+
+# =============================================================================
+# call
+# =============================================================================
+
+def test_call_invokes_outbound():
+    """call subcommand invokes make_outbound_call with the phone number."""
+    fake_make_call = MagicMock(return_value="CA_FAKE_SID_123")
+    fake_twilio_client = types.ModuleType("shuo.services.twilio_client")
+    fake_twilio_client.make_outbound_call = fake_make_call
+
+    with _ServerModuleContext(), \
+         patch.dict(sys.modules, {"shuo.services.twilio_client": fake_twilio_client}), \
+         patch.dict(os.environ, _FULL_ENV), \
+         patch("shuo.cli.threading.Thread") as mock_thread, \
+         patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
+        runner = CliRunner()
+        runner.invoke(cli, ["call", "+15551234567", "--goal", "test goal"])
+        fake_make_call.assert_called_once_with("+15551234567")
+
+
+def test_call_identity_prepended_to_goal():
+    """call with --identity prepends 'You are {identity}.' to goal in CALL_GOAL."""
+    fake_make_call = MagicMock(return_value="SID")
+    fake_twilio_client = types.ModuleType("shuo.services.twilio_client")
+    fake_twilio_client.make_outbound_call = fake_make_call
+
+    with _ServerModuleContext(), \
+         patch.dict(sys.modules, {"shuo.services.twilio_client": fake_twilio_client}), \
+         patch.dict(os.environ, _FULL_ENV), \
+         patch("shuo.cli.threading.Thread"), \
+         patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
+        runner = CliRunner()
+        runner.invoke(cli, ["call", "+15551234567", "--goal", "check balance",
+                             "--identity", "John Smith"])
+        call_goal = os.environ.get("CALL_GOAL", "")
+        assert "You are John Smith" in call_goal
+        assert "check balance" in call_goal
