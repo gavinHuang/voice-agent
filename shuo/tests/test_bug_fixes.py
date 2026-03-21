@@ -216,19 +216,12 @@ async def test_token_observer_nonblocking():
     agent._active = True
     agent._tts = mock_tts
     agent._tts_had_text = False
-    agent._pending_hold_start = False
-    agent._pending_hold_end = False
     agent._pending_hangup = False
     agent._got_first_token = True   # skip first-token tracer path
     agent._dtmf_queue = []
     agent._tracer = MagicMock()
     agent._turn = 0
     agent._t0 = time.monotonic()
-
-    # Patch the scanner to return clean text
-    mock_scanner = MagicMock()
-    mock_scanner.feed.return_value = ("Hello", [])
-    agent._scanner = mock_scanner
 
     # Patch _emit to no-op
     agent._emit = MagicMock()
