@@ -112,7 +112,7 @@ def _make_trace_file(directory, name, age_seconds=0):
 
 def test_cleanup_traces_deletes_old_files(tmp_path, monkeypatch):
     """cleanup_traces deletes files older than max_age_hours."""
-    import shuo.shuo.tracer as tracer_module
+    import shuo.tracer as tracer_module
     monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
 
     from shuo.tracer import cleanup_traces
@@ -129,7 +129,7 @@ def test_cleanup_traces_deletes_old_files(tmp_path, monkeypatch):
 
 def test_cleanup_traces_caps_file_count(tmp_path, monkeypatch):
     """cleanup_traces deletes oldest files when count exceeds max_files (keeps newest)."""
-    import shuo.shuo.tracer as tracer_module
+    import shuo.tracer as tracer_module
     monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
 
     from shuo.tracer import cleanup_traces
@@ -151,7 +151,7 @@ def test_cleanup_traces_caps_file_count(tmp_path, monkeypatch):
 
 def test_cleanup_traces_age_then_count(tmp_path, monkeypatch):
     """cleanup_traces applies age deletion first, then count cap."""
-    import shuo.shuo.tracer as tracer_module
+    import shuo.tracer as tracer_module
     monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
 
     from shuo.tracer import cleanup_traces
@@ -173,7 +173,7 @@ def test_cleanup_traces_age_then_count(tmp_path, monkeypatch):
 def test_cleanup_traces_no_directory(monkeypatch):
     """cleanup_traces does nothing when directory does not exist."""
     from pathlib import Path
-    import shuo.shuo.tracer as tracer_module
+    import shuo.tracer as tracer_module
     monkeypatch.setattr(tracer_module, "TRACE_DIR", Path("/tmp/shuo-nonexistent-xyz"))
 
     from shuo.tracer import cleanup_traces
@@ -183,7 +183,7 @@ def test_cleanup_traces_no_directory(monkeypatch):
 
 def test_cleanup_traces_defaults_from_env(tmp_path, monkeypatch):
     """Env vars TRACE_MAX_FILES and TRACE_MAX_AGE_HOURS override defaults."""
-    import shuo.shuo.tracer as tracer_module
+    import shuo.tracer as tracer_module
     monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
     monkeypatch.setenv("TRACE_MAX_FILES", "1")
     monkeypatch.setenv("TRACE_MAX_AGE_HOURS", "999")

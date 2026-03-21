@@ -135,6 +135,12 @@ async def _warmup() -> None:
     await _tts_pool.start()
     logger.info("Global TTS pool started")
 
+    # Trace file cleanup — remove old/excess traces at startup
+    from .tracer import cleanup_traces
+    deleted = cleanup_traces()
+    if deleted:
+        logger.info(f"Startup trace cleanup: removed {deleted} file(s)")
+
     # NOTE: Flux (Deepgram) connections are NOT pooled.
     # Reusing an idle Deepgram connection causes the turn detector to
     # fire prematurely (calibrated to silence, not live speech).

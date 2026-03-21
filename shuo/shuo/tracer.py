@@ -14,6 +14,7 @@ Usage:
 """
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -138,3 +139,55 @@ class Tracer:
         path.write_text(json.dumps(data, indent=2))
         logger.info(f"Trace saved to {path}")
         return path
+
+
+def cleanup_traces(
+    max_files: int | None = None,
+    max_age_hours: float | None = None,
+) -> int:
+    """Remove old trace files from TRACE_DIR. Returns number of files deleted.
+
+    Args:
+        max_files: Maximum number of trace files to keep (default from
+            TRACE_MAX_FILES env var, fallback 100).
+        max_age_hours: Maximum age in hours (default from TRACE_MAX_AGE_HOURS
+            env var, fallback 24).
+
+    Applies age filter first, then caps total count by removing oldest first.
+    """
+    if max_files is None:
+        max_files = int(os.getenv("TRACE_MAX_FILES", "100"))
+    if max_age_hours is None:
+        max_age_hours = float(os.getenv("TRACE_MAX_AGE_HOURS", "24"))
+
+    if not TRACE_DIR.exists():
+        return 0
+
+    deleted = 0
+    now = time.time()
+    cutoff = now - (max_age_hours * 3600)
+
+    # Phase 1: Delete files older than max_age_hours
+    traces = list(TRACE_DIR.glob("*.json"))
+    for p in traces:
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+                deleted += 1
+        except OSError:
+            pass
+
+    # Phase 2: If still over max_files, delete oldest first
+    remaining = sorted(TRACE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    over = len(remaining) - max_files
+    if over > 0:
+        for p in remaining[:over]:
+            try:
+                p.unlink()
+                deleted += 1
+            except OSError:
+                pass
+
+    if deleted:
+        logger.info(f"Trace cleanup: removed {deleted} file(s)")
+    return deleted
