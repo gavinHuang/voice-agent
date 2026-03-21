@@ -45,7 +45,10 @@ Plans:
   2. The TTS pool never dispenses an item that has already been evicted — the eviction path is atomic
   3. A slow token observer callback does not stall the LLM stream — the observer runs in a non-blocking context
   4. A call with no activity for a configurable number of seconds is automatically hung up, freeing its resources
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Test scaffold + BUG-01 (_dtmf_pending lock) + BUG-02 (TTS pool lock)
+- [ ] 02-02-PLAN.md — BUG-03 (non-blocking observer) + BUG-04 (inactivity watchdog)
 
 ### Phase 3: CLI
 **Goal**: A `voice-agent` command provides a single entry point for all platform capabilities, with YAML config files and flag overrides
@@ -100,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. ISP Abstraction | 3/3 | Complete    | 2026-03-21 |
-| 2. Bug Fixes | 0/TBD | Not started | - |
+| 2. Bug Fixes | 0/2 | Not started | - |
 | 3. CLI | 0/TBD | Not started | - |
 | 4. IVR Benchmark | 0/TBD | Not started | - |
 | 5. Security Hardening | 0/TBD | Not started | - |
