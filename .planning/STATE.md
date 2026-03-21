@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-03-21T10:36:38.692Z"
+stopped_at: Completed 03-01-PLAN.md (CLI Foundation)
+last_updated: "2026-03-21T11:31:10.767Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
   percent: 5
 ---
 
@@ -55,6 +55,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 01-isp-abstraction P03 | 4min | 2 tasks | 3 files |
 | Phase 02-bug-fixes P01 | 4min | 3 tasks | 4 files |
 | Phase 02-bug-fixes P02 | 2min | 2 tasks | 3 files |
+| Phase 03-cli P01 | 13min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 02-bug-fixes]: call_soon used instead of run_in_executor: observer is sync; no thread needed; runs in next event-loop turn
 - [Phase 02-bug-fixes]: last_activity optional in _inactivity_watchdog: tests use 2-arg form; production passes shared list as 3rd arg
 - [Phase 02-bug-fixes]: MediaEvent excluded from last_activity update: silent-but-connected calls must still time out
+- [Phase 03-cli]: Deferred imports inside Click commands: shuo.server and uvicorn imported inside function body to avoid dashboard ImportError at CLI startup
+- [Phase 03-cli]: Identity prepended to goal string and written to CALL_GOAL env var: server reads CALL_GOAL when processing the call without server changes
+- [Phase 03-cli]: _ServerModuleContext test pattern: inject fake shuo.server + uvicorn into sys.modules for dashboard-dependent CLI command tests
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T10:36:38.690Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-cli/03-CONTEXT.md
+Last session: 2026-03-21T11:31:10.765Z
+Stopped at: Completed 03-01-PLAN.md (CLI Foundation)
+Resume file: None
