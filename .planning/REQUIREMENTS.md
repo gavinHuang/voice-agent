@@ -27,7 +27,7 @@
 - [x] **BENCH-02**: Benchmark runner spawns agent ↔ IVR pairs using `LocalISP`
 - [x] **BENCH-03**: Success criteria support: `transcript_contains`, `dtmf_sequence`, `max_turns`
 - [x] **BENCH-04**: Runner outputs metrics: success rate, average turns, DTMF accuracy, wall-clock latency
-- [ ] **BENCH-05**: At least 3 sample scenarios provided covering the example IVR flow
+- [x] **BENCH-05**: At least 3 sample scenarios provided covering the example IVR flow
 
 ### Security
 
@@ -100,7 +100,7 @@
 | BENCH-02 | Phase 4 | Complete |
 | BENCH-03 | Phase 4 | Complete |
 | BENCH-04 | Phase 4 | Complete |
-| BENCH-05 | Phase 4 | Pending |
+| BENCH-05 | Phase 4 | Complete |
 | SEC-01 | Phase 5 | Pending |
 | SEC-02 | Phase 5 | Pending |
 | SEC-03 | Phase 5 | Pending |

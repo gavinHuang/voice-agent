@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: ISP Abstraction** - Define ISP protocol, implement LocalISP, inject into VoiceSession (completed 2026-03-21)
 - [x] **Phase 2: Bug Fixes** - Eliminate race conditions and plug hung-call / disk-leak issues (completed 2026-03-21)
 - [x] **Phase 3: CLI** - `voice-agent` command covering serve, call, local-call, bench (completed 2026-03-21)
-- [ ] **Phase 4: IVR Benchmark** - YAML scenario runner with metrics using LocalISP
+- [x] **Phase 4: IVR Benchmark** - YAML scenario runner with metrics using LocalISP (completed 2026-03-21)
 - [ ] **Phase 5: Security Hardening** - Dashboard auth, Twilio signature validation, rate limiting, trace rotation
 - [ ] **Phase 6: Agent Framework Migration** - pydantic-ai replaces custom marker protocol
 
@@ -74,7 +74,7 @@ Plans:
   2. `voice-agent bench --dataset scenarios.yaml` runs all scenarios, each spawning a LocalISP-connected agent + IVR pair
   3. The runner prints a metrics report with success rate, average turns, DTMF accuracy, and wall-clock latency per scenario
   4. At least 3 sample scenarios covering the example IVR flow are included and pass against the existing mock IVR server
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 04-01-PLAN.md — YAML scenario schema, data model, success criteria evaluation + test scaffold
 - [ ] 04-02-PLAN.md — IVR driver, benchmark runner, metrics report, CLI wiring
@@ -112,6 +112,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. ISP Abstraction | 3/3 | Complete    | 2026-03-21 |
 | 2. Bug Fixes | 2/2 | Complete    | 2026-03-21 |
 | 3. CLI | 2/2 | Complete    | 2026-03-21 |
-| 4. IVR Benchmark | 2/3 | In Progress|  |
+| 4. IVR Benchmark | 3/3 | Complete   | 2026-03-21 |
 | 5. Security Hardening | 0/TBD | Not started | - |
 | 6. Agent Framework Migration | 0/TBD | Not started | - |

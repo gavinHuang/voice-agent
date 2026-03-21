@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-21T12:37:54.800Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-03-21T12:45:51.654Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 5
 ---
 
@@ -59,6 +59,7 @@ Progress: [█░░░░░░░░░] 5%
 | Phase 03-cli P02 | 2min | 2 tasks | 2 files |
 | Phase 04-ivr-benchmark P01 | 2min | 2 tasks | 3 files |
 | Phase 04-ivr-benchmark P02 | 3min | 2 tasks | 4 files |
+| Phase 04-ivr-benchmark P03 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ Recent decisions affecting current work:
 - [Phase 04-ivr-benchmark]: BenchISP subclasses LocalISP overriding send_dtmf only: inherits ISP lifecycle cleanly without code duplication
 - [Phase 04-ivr-benchmark]: IVRDriver polls bench_isp._inject is not None up to 0.5s before launching: avoids race between run_conversation startup and first TwiML injection
 - [Phase 04-ivr-benchmark]: _BenchFluxPool and _BenchTTSPool as in-module no-op stubs: benchmark runs without any real API keys
+- [Phase 04-ivr-benchmark]: Patch shuo.conversation.run_conversation (not shuo.bench.run_conversation): deferred import inside run_scenario requires patching the source module
+- [Phase 04-ivr-benchmark]: conftest.py adds project root to sys.path: ivr package importable without modifying pyproject.toml
+- [Phase 04-ivr-benchmark]: Per-scenario fake agents break after confirming goal reached: avoids per-step timeout delays in tests
 
 ### Pending Todos
 
@@ -109,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:37:54.798Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-21T12:45:51.652Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
