@@ -5,6 +5,7 @@ Entry point: `voice-agent` (declared in pyproject.toml).
 Config: loads voice-agent.yaml from cwd automatically; --config overrides.
 """
 
+import asyncio
 import os
 import sys
 import signal
@@ -207,6 +208,113 @@ def bench(ctx: click.Context, dataset: str | None) -> None:
     effective_dataset = dataset if dataset is not None else cfg.get("dataset")
     click.echo(f"bench: dataset={effective_dataset!r}")
     click.echo("Benchmark runner not yet implemented (Phase 4).")
+
+
+def _make_observer(label: str):
+    """Create an observer callback that prints transcript lines with a speaker label."""
+    def observer(event: dict):
+        if event.get("type") == "transcript":
+            click.echo(f"[{label}]: {event['text']}", nl=True)
+        elif event.get("type") == "agent_token":
+            pass  # Skip streaming tokens for terminal output
+    return observer
+
+
+def _build_goal(goal: str, identity: str) -> str:
+    """Combine identity and goal into a single goal string for the LLM."""
+    if identity:
+        return f"You are {identity}. {goal}"
+    return goal
+
+
+async def _run_local_call(caller_cfg: dict, callee_cfg: dict) -> None:
+    """Run two concurrent conversations via LocalISP and wait for the first to complete."""
+    from shuo.services.local_isp import LocalISP
+    from shuo.conversation import run_conversation
+
+    isp_caller = LocalISP()
+    isp_callee = LocalISP()
+    LocalISP.pair(isp_caller, isp_callee)
+
+    caller_goal = _build_goal(caller_cfg.get("goal", ""), caller_cfg.get("identity", ""))
+    callee_goal = _build_goal(callee_cfg.get("goal", ""), callee_cfg.get("identity", ""))
+
+    task_caller = asyncio.create_task(
+        run_conversation(
+            isp_caller,
+            observer=_make_observer("CALLER"),
+            get_goal=lambda _: caller_goal,
+        )
+    )
+    task_callee = asyncio.create_task(
+        run_conversation(
+            isp_callee,
+            observer=_make_observer("CALLEE"),
+            get_goal=lambda _: callee_goal,
+        )
+    )
+
+    done, pending = await asyncio.wait([task_caller, task_callee], return_when=asyncio.FIRST_COMPLETED)
+
+    for t in pending:
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+
+    click.echo("\n[CALL ENDED]")
+
+    for t in done:
+        if t.exception():
+            raise t.exception()
+
+
+_LOCAL_CALL_REQUIRED_ENV_VARS = [
+    "DEEPGRAM_API_KEY",
+    "GROQ_API_KEY",
+    "ELEVENLABS_API_KEY",
+]
+
+
+def _check_local_call_env_vars() -> None:
+    """Check env vars required for local-call (no Twilio needed)."""
+    missing = [v for v in _LOCAL_CALL_REQUIRED_ENV_VARS if not os.getenv(v)]
+    if missing:
+        click.echo(f"Missing required environment variables: {', '.join(missing)}", err=True)
+        sys.exit(1)
+
+
+@cli.command("local-call")
+@click.option("--caller-goal", type=str, default=None, help="Goal/instructions for the caller agent")
+@click.option("--caller-identity", type=str, default=None, help="Identity persona for the caller agent")
+@click.option("--callee-goal", type=str, default=None, help="Goal/instructions for the callee agent")
+@click.option("--callee-identity", type=str, default=None, help="Identity persona for the callee agent")
+@click.pass_context
+def local_call(
+    ctx: click.Context,
+    caller_goal: str | None,
+    caller_identity: str | None,
+    callee_goal: str | None,
+    callee_identity: str | None,
+) -> None:
+    """Run two LLM agents in a local call (no Twilio required)."""
+    cfg = ctx.obj["config"].get("local_call", {})
+    caller_cfg = dict(cfg.get("caller", {}))
+    callee_cfg = dict(cfg.get("callee", {}))
+
+    if caller_goal is not None:
+        caller_cfg["goal"] = caller_goal
+    if caller_identity is not None:
+        caller_cfg["identity"] = caller_identity
+    if callee_goal is not None:
+        callee_cfg["goal"] = callee_goal
+    if callee_identity is not None:
+        callee_cfg["identity"] = callee_identity
+
+    _check_local_call_env_vars()
+
+    asyncio.run(_run_local_call(caller_cfg, callee_cfg))
 
 
 def main() -> None:
