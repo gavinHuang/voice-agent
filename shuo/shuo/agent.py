@@ -329,8 +329,9 @@ class Agent:
         if clean_text:
             self._tts_had_text = True
             await self._tts.send(clean_text)
+            # Schedule observer on next event-loop turn — never block the LLM token stream (BUG-03)
             if self._on_token_observed:
-                self._on_token_observed(clean_text)
+                asyncio.get_event_loop().call_soon(self._on_token_observed, clean_text)
 
     async def _on_llm_done(self) -> None:
         """LLM finished -> flush scanner, fire hold events, flush TTS."""
