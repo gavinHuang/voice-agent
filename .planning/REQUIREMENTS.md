@@ -11,7 +11,7 @@
 - [x] **ISP-02**: Existing Twilio integration is refactored to implement the `ISP` protocol without changing external behavior
 - [x] **ISP-03**: A `LocalISP` implementation routes audio between two in-process agents via asyncio queues (no Twilio required)
 - [x] **ISP-04**: `VoiceSession` accepts any `ISP` implementation (dependency injection, not hard-coded Twilio)
-- [ ] **ISP-05**: All existing unit tests continue to pass after ISP abstraction
+- [x] **ISP-05**: All existing unit tests continue to pass after ISP abstraction
 
 ### CLI
 
@@ -86,7 +86,7 @@
 | ISP-02 | Phase 1 | Complete |
 | ISP-03 | Phase 1 | Complete |
 | ISP-04 | Phase 1 | Complete |
-| ISP-05 | Phase 1 | Pending |
+| ISP-05 | Phase 1 | Complete |
 | BUG-01 | Phase 2 | Pending |
 | BUG-02 | Phase 2 | Pending |
 | BUG-03 | Phase 2 | Pending |

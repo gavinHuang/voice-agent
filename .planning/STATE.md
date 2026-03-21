@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md (TwilioISP implementation and AudioPlayer/Agent refactor)
-last_updated: "2026-03-21T09:21:26.197Z"
+stopped_at: Completed 01-03-PLAN.md (Wire ISP into conversation.py and server.py)
+last_updated: "2026-03-21T09:26:52.876Z"
 last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 5
 ---
 
@@ -52,6 +52,7 @@ Progress: [█░░░░░░░░░] 5%
 *Updated after each plan completion*
 | Phase 01-isp-abstraction P01 | 1 | 2 tasks | 3 files |
 | Phase 01-isp-abstraction P02 | 2min | 2 tasks | 4 files |
+| Phase 01-isp-abstraction P03 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,9 @@ Recent decisions affecting current work:
 - [Phase 01-isp-abstraction]: DTMF injection uses _inject callable set externally: Conversation loop owns event routing, LocalISP does not
 - [Phase 01-isp-abstraction]: TwilioISP captures call_sid from StreamStartEvent during reader — available to REST methods without constructor injection
 - [Phase 01-isp-abstraction]: AudioPlayer stream_sid kept as optional param for call-site compatibility — ISP owns stream_sid for JSON formatting
+- [Phase 01-isp-abstraction]: on_hangup not passed to run_conversation: TwilioISP.hangup() handles REST call entirely; server has no additional hangup bookkeeping
+- [Phase 01-isp-abstraction]: isp.stop() called in both HangupRequestEvent and finally block: idempotent by design
+- [Phase 01-isp-abstraction]: MockISP fires on_start() synchronously during start(): simpler than async task, sufficient for test assertions
 
 ### Pending Todos
 
@@ -82,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:21:26.195Z
-Stopped at: Completed 01-02-PLAN.md (TwilioISP implementation and AudioPlayer/Agent refactor)
+Last session: 2026-03-21T09:26:52.874Z
+Stopped at: Completed 01-03-PLAN.md (Wire ISP into conversation.py and server.py)
 Resume file: None

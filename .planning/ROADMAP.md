@@ -12,7 +12,7 @@ Six phases of targeted work on a production-grade codebase. Phase 1 builds the I
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: ISP Abstraction** - Define ISP protocol, implement LocalISP, inject into VoiceSession
+- [x] **Phase 1: ISP Abstraction** - Define ISP protocol, implement LocalISP, inject into VoiceSession (completed 2026-03-21)
 - [ ] **Phase 2: Bug Fixes** - Eliminate race conditions and plug hung-call / disk-leak issues
 - [ ] **Phase 3: CLI** - `voice-agent` command covering serve, call, local-call, bench
 - [ ] **Phase 4: IVR Benchmark** - YAML scenario runner with metrics using LocalISP
@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The existing Twilio integration continues to handle real calls identically to before the refactor
   3. All 26 existing unit tests pass against the refactored code
   4. `VoiceSession` can be constructed with either `TwilioISP` or `LocalISP` by passing the instance at construction time
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 01-01-PLAN.md — ISP Protocol definition + LocalISP implementation with tests
 - [ ] 01-02-PLAN.md — TwilioISP implementation + refactor AudioPlayer and Agent to use ISP
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ISP Abstraction | 2/3 | In Progress|  |
+| 1. ISP Abstraction | 3/3 | Complete   | 2026-03-21 |
 | 2. Bug Fixes | 0/TBD | Not started | - |
 | 3. CLI | 0/TBD | Not started | - |
 | 4. IVR Benchmark | 0/TBD | Not started | - |
