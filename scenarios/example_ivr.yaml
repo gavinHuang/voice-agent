@@ -1,22 +1,51 @@
 scenarios:
+  # ── Single-level navigation ────────────────────────────────────────────────
+
   - id: navigate-to-sales
-    description: "Agent navigates to sales department via DTMF"
+    description: "Agent navigates to sales department (single DTMF press)"
     agent:
-      goal: "Navigate the IVR to reach the sales department"
+      goal: "Navigate the IVR to reach the sales department. Just press the number for sales."
       identity: "Customer"
-    timeout: 30
+    timeout: 60
     success_criteria:
       transcript_contains:
         - "sales"
       dtmf_sequence: "1"
       max_turns: 5
 
-  - id: navigate-to-tech-support
-    description: "Agent navigates through support menu to tech support"
+  - id: navigate-to-support
+    description: "Agent navigates to support department (single DTMF press)"
     agent:
-      goal: "Navigate the IVR to reach technical support"
+      goal: "Navigate the IVR to reach the support department. Just press the number for support."
       identity: "Customer"
-    timeout: 30
+    timeout: 60
+    success_criteria:
+      transcript_contains:
+        - "support"
+      dtmf_sequence: "2"
+      max_turns: 5
+
+  # ── Two-level navigation ───────────────────────────────────────────────────
+
+  - id: navigate-to-pricing
+    description: "Agent navigates to pricing info: sales (1) then pricing (1)"
+    agent:
+      goal: "Call this IVR to find out the product pricing. Navigate the menus by pressing DTMF keys only — do not speak, just press digits."
+      identity: "Prospective customer"
+    timeout: 90
+    success_criteria:
+      transcript_contains:
+        - "pricing"
+        - "ten dollars"
+      dtmf_sequence: "11"
+      max_turns: 8
+
+  - id: navigate-to-tech-support
+    description: "Agent navigates to technical support: support (2) then tech (1)"
+    agent:
+      goal: "Navigate the IVR to reach technical support. Press 2 for support, then 1 for technical support."
+      identity: "Customer"
+    timeout: 90
     success_criteria:
       transcript_contains:
         - "technical support"
@@ -24,10 +53,46 @@ scenarios:
       dtmf_sequence: "21"
       max_turns: 8
 
-  - id: timeout-no-input
-    description: "Agent times out when given an unachievable goal"
+  - id: navigate-to-billing
+    description: "Agent navigates to billing: support (2) then billing (2)"
     agent:
-      goal: "Wait silently and do not press any buttons"
+      goal: "Navigate the IVR to reach the billing department. Press 2 for support, then 2 for billing."
+      identity: "Customer"
+    timeout: 90
+    success_criteria:
+      transcript_contains:
+        - "billing"
+      dtmf_sequence: "22"
+      max_turns: 8
+
+  - id: navigate-to-place-order
+    description: "Agent navigates to place-order: sales (1) then place order (2)"
+    agent:
+      goal: "Navigate the IVR to find out how to place an order. Press 1 for sales, then 2 to place an order."
+      identity: "Customer"
+    timeout: 90
+    success_criteria:
+      transcript_contains:
+        - "order"
+      dtmf_sequence: "12"
+      max_turns: 8
+
+  # ── Edge cases ─────────────────────────────────────────────────────────────
+
+  - id: repeat-menu
+    description: "Agent correctly handles pressing 9 to repeat the menu, then navigates"
+    agent:
+      goal: "Press 9 to hear the menu again, then press 1 for sales."
+      identity: "Customer"
+    timeout: 90
+    success_criteria:
+      dtmf_sequence: "91"
+      max_turns: 10
+
+  - id: timeout-no-input
+    description: "Agent times out gracefully when instructed not to press anything"
+    agent:
+      goal: "Stay on the line without pressing any buttons."
       identity: "Confused caller"
     timeout: 10
     success_criteria:

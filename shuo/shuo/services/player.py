@@ -66,6 +66,11 @@ class AudioPlayer:
     def mark_tts_done(self) -> None:
         """Signal that TTS is complete - no more chunks coming."""
         self._tts_done = True
+        # If the playback loop never started (no audio chunks were sent, e.g. in
+        # benchmark mode with a no-op TTS pool), fire completion immediately.
+        # In production this can't happen: TTS always sends audio before flush().
+        if self._task is None and self._on_done:
+            self._on_done()
     
     async def play(self, chunks: List[str]) -> None:
         """Start playing a fixed list of audio chunks (legacy mode)."""

@@ -30,17 +30,27 @@ from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendi
 
 log = ServiceLogger("Agent")
 
-# Regex to detect raw function-call syntax leaking into the LLM text stream.
-# Llama 3.3 sometimes outputs function calls as literal text instead of structured
-# tool calls — we suppress these tokens from TTS and parse them as a fallback.
+# Regex to detect action tags in the LLM text stream.
+# Used for two cases:
+#   1. Tool-capable models (e.g. Llama 3.3) that sometimes output raw function-call
+#      syntax as text instead of structured tool calls — we suppress and parse them.
+#   2. No-tool models (e.g. compound-beta) that use the deliberate text-tag protocol:
+#      [DTMF:1], [HOLD], [HOLD_CONTINUE], [HOLD_END], [HANGUP]
 _FC_SUPPRESS_RE = re.compile(
-    r'press_dtmf|signal_hold|signal_hangup|function_calls|<function|function>|invoke>',
+    r'press_dtmf|signal_hold|signal_hangup|function_calls|<function|function>|invoke>'
+    r'|\[DTMF:[0-9*#]\]|\[HOLD(?:_CONTINUE|_END)?\]|\[HANGUP\]',
     re.IGNORECASE,
 )
-_DTMF_TEXT_RE = re.compile(
+# Match press_dtmf("1") / press_dtmf(1) style (tool-call leakage)
+_DTMF_TOOL_RE = re.compile(
     r'press_dtmf\s*\(\s*["\']?([0-9*#])["\']?\s*\)',
     re.IGNORECASE,
 )
+# Match [DTMF:1] style (no-tool text-tag protocol)
+_DTMF_TAG_RE = re.compile(r'\[DTMF:([0-9*#])\]', re.IGNORECASE)
+# Combined: try both patterns
+def _DTMF_TEXT_RE_findall(text: str) -> list:
+    return _DTMF_TOOL_RE.findall(text) or _DTMF_TAG_RE.findall(text)
 
 # Farewell phrases that indicate the agent is ending the call.
 # Used as a fallback when the LLM says goodbye but forgets to call signal_hangup().
@@ -287,28 +297,33 @@ class Agent:
         # Read tool side effects from LLMService
         ctx = self._llm.turn_context
 
-        # Fallback: extract tool effects from raw text when Llama 3.3 outputs
-        # function call syntax as literal text instead of structured tool calls.
+        # Fallback: extract tool effects from raw text.
+        # Handles both tool-call leakage (Llama 3.3) and the deliberate text-tag
+        # protocol used by no-tool models like compound-beta ([DTMF:1], [HANGUP], etc.)
         if _FC_SUPPRESS_RE.search(self._current_turn_text):
             if not ctx.dtmf_queue:
-                text_dtmf = _DTMF_TEXT_RE.findall(self._current_turn_text)
+                text_dtmf = _DTMF_TEXT_RE_findall(self._current_turn_text)
                 if text_dtmf:
                     log.info(f"Fallback DTMF parsed from text: {text_dtmf}")
                     ctx.dtmf_queue.extend(text_dtmf)
-            if not ctx.hold_continue and 'signal_hold_continue' in self._current_turn_text.lower():
-                log.info("Fallback hold_continue detected in text")
-                ctx.hold_continue = True
-            if not ctx.hold_start and 'signal_hold(' in self._current_turn_text.lower():
-                log.info("Fallback hold_start detected in text")
-                ctx.hold_start = True
-            if not ctx.hold_end and 'signal_hold_end' in self._current_turn_text.lower():
-                log.info("Fallback hold_end detected in text")
-                ctx.hold_end = True
-            if not ctx.hangup_pending and 'signal_hangup' in self._current_turn_text.lower():
+            t = self._current_turn_text.lower()
+            # Only apply hold/hangup fallbacks when no DTMF is queued —
+            # DTMF and hold states are mutually exclusive actions.
+            if not ctx.dtmf_queue:
+                if not ctx.hold_continue and ('signal_hold_continue' in t or '[hold_continue]' in t):
+                    log.info("Fallback hold_continue detected in text")
+                    ctx.hold_continue = True
+                if not ctx.hold_start and ('signal_hold(' in t or ('[hold]' in t and '[hold_continue]' not in t and '[hold_end]' not in t)):
+                    log.info("Fallback hold_start detected in text")
+                    ctx.hold_start = True
+                if not ctx.hold_end and ('signal_hold_end' in t or '[hold_end]' in t):
+                    log.info("Fallback hold_end detected in text")
+                    ctx.hold_end = True
+            if not ctx.hangup_pending and ('signal_hangup' in t or '[hangup]' in t):
                 log.info("Fallback hangup detected in text")
                 ctx.hangup_pending = True
 
-        # Copy DTMF queue for _on_tts_done to append after speech
+        # Copy DTMF queue from tool context
         self._dtmf_queue = list(ctx.dtmf_queue)
 
         # hold_continue MUST be checked FIRST — if true, skip TTS entirely
@@ -339,11 +354,12 @@ class Agent:
             self._pending_hangup = True
             self._emit(HangupPendingEvent())
 
-        if self._tts_had_text:
-            # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent
-            await self._tts.flush()
-        elif self._dtmf_queue:
-            # DTMF-only turn (no speech)
+        if self._dtmf_queue:
+            # DTMF takes priority over text — LLM may generate verbal confirmation
+            # alongside the tool call ("I'll press 1 for sales"), but IVR navigation
+            # must be silent. Discard any generated text and send only the digit.
+            if self._tts_had_text:
+                log.debug("DTMF + text: suppressing spoken text, sending digit only")
             digits = "".join(self._dtmf_queue)
             self._dtmf_queue.clear()
             await self._tts.cancel()
@@ -351,6 +367,9 @@ class Agent:
             self._player = None
             self._active = False
             self._emit(DTMFToneEvent(digits=digits))
+        elif self._tts_had_text:
+            # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent
+            await self._tts.flush()
         else:
             # No text, no DTMF, no hold_continue — empty turn, end silently
             await self._tts.cancel()

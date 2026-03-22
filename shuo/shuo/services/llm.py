@@ -1,5 +1,10 @@
 """
 LLM service using pydantic-ai Agent with typed tool calls and iter()-based streaming.
+
+Models that support tool calling (e.g. llama-3.3-70b-versatile) use pydantic-ai tools.
+Models that don't (e.g. compound-beta) fall back to a text-tag protocol where the LLM
+emits [DTMF:1], [HOLD], [HOLD_CONTINUE], [HOLD_END], [HANGUP] tags in its text output.
+The caller (Agent) already has a regex-based fallback parser that handles both.
 """
 
 import os
@@ -46,6 +51,40 @@ When you receive a [HOLD_CHECK] message, you are currently on hold:
 Pure tool-call turns (no text) are valid and expected for DTMF navigation and hold_continue."""
 
 
+# System prompt variant for models that do not support tool calling.
+# Actions are expressed as inline tags that the caller parses from text output.
+SYSTEM_PROMPT_NO_TOOLS = """You are an AI agent making an outbound phone call on behalf of the caller. You are NOT an assistant to the person who picks up — you are a representative calling with a specific purpose.
+
+Keep responses concise and conversational; they will be spoken aloud. No markdown, bullet points, or formatting. Be polite, direct, and professional.
+
+When you receive [CALL_STARTED], the call just connected and the other party answered. Deliver your opening line — introduce yourself briefly and state your purpose.
+
+You control the call using action tags embedded in your response. Emit ONLY the tag (no surrounding text) for silent actions:
+
+- To press a DTMF key:        [DTMF:1]  (replace 1 with the digit, e.g. [DTMF:2] for option 2)
+- To signal hold music:       [HOLD]
+- To continue waiting on hold:[HOLD_CONTINUE]
+- To signal hold has ended:   [HOLD_END]
+- To hang up after goodbye:   [HANGUP]
+
+IVR NAVIGATION RULE: When you hear a recorded menu (e.g. "Press 1 for sales"), respond with ONLY the tag and nothing else. For example: [DTMF:1]
+
+CRITICAL RULE for ending calls — two steps over TWO separate responses:
+Step 1: Confirm details, ask "does that work for you?". STOP and wait.
+Step 2: Say a short goodbye then emit [HANGUP] on its own line.
+
+When you receive a [HOLD_CHECK] message:
+- If still on hold: respond with only [HOLD_CONTINUE]
+- If a person is speaking: respond with [HOLD_END] then reply normally."""
+
+
+def _model_supports_tools(model_string: str) -> bool:
+    """Return False for models known not to support tool/function calling."""
+    no_tool_models = ("compound",)
+    m = model_string.lower()
+    return not any(name in m for name in no_tool_models)
+
+
 # =============================================================================
 # TURN CONTEXT (shared state for tool side effects)
 # =============================================================================
@@ -76,6 +115,10 @@ class LLMService:
     Manages conversation history and streams tokens via callback.
     Tools (press_dtmf, signal_hold, signal_hold_continue, signal_hold_end,
     signal_hangup) are registered on the agent and mutate LLMTurnContext.
+
+    For models that don't support tool calling (e.g. compound-beta), tools are
+    omitted and the model uses text tags ([DTMF:X], [HANGUP], etc.) instead.
+    The Agent layer parses these via its existing text-fallback regexes.
     """
 
     def __init__(
@@ -87,6 +130,11 @@ class LLMService:
         self._on_token = on_token
         self._on_done = on_done
 
+        _model_string = os.getenv("LLM_MODEL", "groq:llama-3.3-70b-versatile")
+        self._tools_enabled = _model_supports_tools(_model_string)
+
+        base_prompt = SYSTEM_PROMPT if self._tools_enabled else SYSTEM_PROMPT_NO_TOOLS
+
         self._goal_suffix = (
             f"\n\nYour goal for this call: {goal}\n"
             "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
@@ -94,12 +142,14 @@ class LLMService:
             "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
             "IVR NAVIGATION RULE: When you hear a recorded menu listing options, "
             "call press_dtmf() with ONLY the digit — no words, no explanation."
+        ) if goal and self._tools_enabled else (
+            f"\n\nYour goal for this call: {goal}\n"
+            "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
+            "Once accomplished, confirm details and STOP — wait for their reply. "
+            "Only after they confirm, say goodbye and emit [HANGUP].\n"
+            "IVR NAVIGATION RULE: When you hear a recorded menu, emit ONLY the [DTMF:X] tag."
         ) if goal else ""
 
-        # Build the pydantic-ai Agent for this service instance.
-        # Created per-instance (not module-level) so API key validation
-        # only occurs when a real model is used (tests override via model=).
-        _model_string = os.getenv("LLM_MODEL", "groq:llama-3.3-70b-versatile")
         _model_settings = ModelSettings(
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "500")),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
@@ -114,38 +164,43 @@ class LLMService:
         # Register dynamic system prompt (includes per-instance goal suffix via deps)
         @self._agent.system_prompt
         def _system_prompt(ctx: RunContext[LLMTurnContext]) -> str:
-            return SYSTEM_PROMPT + ctx.deps.goal_suffix
+            return base_prompt + ctx.deps.goal_suffix
 
-        # Register the five tools
-        @self._agent.tool
-        async def press_dtmf(ctx: RunContext[LLMTurnContext], digit: str) -> str:
-            """Press a DTMF digit on the phone keypad. Use for IVR menu navigation. Send ONLY the digit with no text."""
-            ctx.deps.dtmf_queue.append(digit)
-            return f"DTMF digit {digit!r} will be sent"
+        # Register tools only for models that support them
+        if self._tools_enabled:
+            @self._agent.tool
+            async def press_dtmf(ctx: RunContext[LLMTurnContext], digit: str) -> str:
+                """Press a DTMF digit on the phone keypad. Use for IVR menu navigation. Send ONLY the digit with no text."""
+                ctx.deps.dtmf_queue.append(digit)
+                return f"DTMF digit {digit!r} will be sent"
 
-        @self._agent.tool
-        async def signal_hold(ctx: RunContext[LLMTurnContext]) -> str:
-            """Signal that hold music has been detected."""
-            ctx.deps.hold_start = True
-            return "Hold mode activated"
+            @self._agent.tool
+            async def signal_hold(ctx: RunContext[LLMTurnContext]) -> str:
+                """Signal that hold music has been detected."""
+                ctx.deps.hold_start = True
+                return "Hold mode activated"
 
-        @self._agent.tool
-        async def signal_hold_continue(ctx: RunContext[LLMTurnContext]) -> str:
-            """Signal that hold music is still playing. Do NOT produce any text with this tool call."""
-            ctx.deps.hold_continue = True
-            return "Continuing to wait on hold"
+            @self._agent.tool
+            async def signal_hold_continue(ctx: RunContext[LLMTurnContext]) -> str:
+                """Signal that hold music is still playing. Do NOT produce any text with this tool call."""
+                ctx.deps.hold_continue = True
+                return "Continuing to wait on hold"
 
-        @self._agent.tool
-        async def signal_hold_end(ctx: RunContext[LLMTurnContext]) -> str:
-            """Signal that a real person has returned from hold."""
-            ctx.deps.hold_end = True
-            return "Hold ended, person detected"
+            @self._agent.tool
+            async def signal_hold_end(ctx: RunContext[LLMTurnContext]) -> str:
+                """Signal that a real person has returned from hold."""
+                ctx.deps.hold_end = True
+                return "Hold ended, person detected"
 
-        @self._agent.tool
-        async def signal_hangup(ctx: RunContext[LLMTurnContext]) -> str:
-            """Signal that the call should be hung up after this response completes."""
-            ctx.deps.hangup_pending = True
-            return "Call will end after this response"
+            @self._agent.tool
+            async def signal_hangup(ctx: RunContext[LLMTurnContext]) -> str:
+                """Signal that the call should be hung up after this response completes."""
+                ctx.deps.hangup_pending = True
+                return "Call will end after this response"
+
+            log.info("Tool calling enabled")
+        else:
+            log.info(f"Tool calling disabled for {_model_string} — using text-tag protocol")
 
         self._task: Optional[asyncio.Task] = None
         self._running = False

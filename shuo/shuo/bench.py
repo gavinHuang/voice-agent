@@ -177,10 +177,15 @@ class BenchISP(LocalISP):
         self.dtmf_log: list[str] = []
         self._dtmf_queue: asyncio.Queue = asyncio.Queue()
 
-    async def send_dtmf(self, digit: str) -> None:
-        """Capture DTMF digit into log and enqueue for IVRDriver."""
-        self.dtmf_log.append(digit)
-        await self._dtmf_queue.put(digit)
+    async def send_dtmf(self, digits: str) -> None:
+        """Capture DTMF digits into log and enqueue for IVRDriver.
+
+        Splits multi-digit strings so each digit is presented separately to
+        the IVR gather step (which only accepts one digit at a time).
+        """
+        for d in digits:
+            self.dtmf_log.append(d)
+            await self._dtmf_queue.put(d)
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +243,7 @@ class IVRDriver:
         self._base = base_url.rstrip("/")
         self._agent_isp = agent_isp
         self._turn_count = 0
+        self.all_transcripts: list[str] = []  # All IVR messages injected (incl. post-hangup)
 
     async def drive(self, client: httpx.AsyncClient, timeout: float) -> None:
         """Walk the TwiML state machine until a <Hangup/> or timeout."""
@@ -261,8 +267,10 @@ class IVRDriver:
                 # Pure hangup node — done
                 break
 
-            if say_text and self._agent_isp._inject is not None:
-                self._agent_isp._inject(FluxEndOfTurnEvent(transcript=say_text))
+            if say_text:
+                self.all_transcripts.append(say_text)
+                if self._agent_isp._inject is not None:
+                    self._agent_isp._inject(FluxEndOfTurnEvent(transcript=say_text))
                 self._turn_count += 1
 
             if gather_node is not None:
@@ -325,6 +333,13 @@ class _BenchTTSPool:
         from unittest.mock import AsyncMock, MagicMock
         tts = AsyncMock()
         tts.bind = MagicMock()
+        # Call on_done when flush() is invoked so AudioPlayer.mark_tts_done() fires
+        # and the agent turn completes. Without this the player loop never starts
+        # (no audio chunks), mark_tts_done is never called, and the agent hangs
+        # in RESPONDING state blocking all subsequent IVR turns.
+        async def _flush():
+            asyncio.create_task(on_done())
+        tts.flush = _flush
         return tts
 
     @property
@@ -383,30 +398,33 @@ async def run_scenario(scenario: ScenarioConfig, ivr_base_url: str) -> ScenarioR
             ivr_driver.drive(client, scenario.timeout)
         )
 
-        done, pending = await asyncio.wait(
-            [agent_task, ivr_task],
-            return_when=asyncio.FIRST_COMPLETED,
-            timeout=scenario.timeout,
-        )
+        # Wait for IVR to complete (reaches hangup node or times out).
+        # The agent may hang up before the IVR is done — that's fine, since
+        # BenchISP._dtmf_queue holds pre-queued digits the IVR can drain.
+        error: Optional[str] = None
+        try:
+            await asyncio.wait_for(ivr_task, timeout=scenario.timeout)
+        except asyncio.TimeoutError:
+            error = f"IVR timed out after {scenario.timeout}s"
+        except Exception as e:
+            error = str(e)
+
+        # Cancel agent if still running (e.g. if IVR completed before agent hangs up)
+        if not agent_task.done():
+            agent_task.cancel()
+            try:
+                await agent_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     elapsed = time.monotonic() - start_time
 
-    for t in pending:
-        t.cancel()
-        try:
-            await t
-        except (asyncio.CancelledError, Exception):
-            pass
-
-    error: Optional[str] = None
-    for t in done:
-        exc = t.exception()
-        if exc is not None:
-            error = str(exc)
+    # Use IVRDriver's full transcript (includes messages injected after agent hangup)
+    full_transcript = ivr_driver.all_transcripts
 
     criteria = evaluate_criteria(
         scenario.success_criteria,
-        transcript,
+        full_transcript,
         bench_isp.dtmf_log,
         ivr_driver._turn_count,
     )
@@ -417,7 +435,7 @@ async def run_scenario(scenario: ScenarioConfig, ivr_base_url: str) -> ScenarioR
         criteria=criteria,
         turns=ivr_driver._turn_count,
         dtmf_log=bench_isp.dtmf_log,
-        transcript=transcript,
+        transcript=full_transcript,
         wall_clock_s=elapsed,
         error=error,
     )
@@ -542,7 +560,7 @@ def print_metrics_report(results: list[ScenarioResult]) -> None:
         click.echo("No results to report.")
         return
 
-    header = f"{'ID':<30} {'Result':<8} {'Turns':>6} {'DTMF%':>7} {'Latency(s)':>11}"
+    header = f"{'ID':<30} {'Result':<8} {'Turns':>6} {'DTMF':>8} {'Latency(s)':>11}"
     click.echo(header)
     click.echo("-" * len(header))
 
@@ -553,17 +571,13 @@ def print_metrics_report(results: list[ScenarioResult]) -> None:
     for r in results:
         result_str = "PASS" if r.passed else "FAIL"
 
-        # DTMF accuracy: fraction of expected digits that were pressed
-        expected_seq = r.criteria.dtmf_pass  # bool — can't recover original; use log
-        # Recalculate from ScenarioResult (dtmf_log vs nothing — accuracy from criteria)
-        if not r.criteria.dtmf_pass and r.dtmf_log:
-            dtmf_pct = 0.0  # at least partial: failed means wrong
-        else:
-            dtmf_pct = 100.0
+        # DTMF: show actual digits pressed vs expected
+        dtmf_actual = "".join(r.dtmf_log) if r.dtmf_log else "-"
+        dtmf_ok = "✓" if r.criteria.dtmf_pass else "✗"
 
         click.echo(
             f"{r.scenario_id:<30} {result_str:<8} {r.turns:>6} "
-            f"{dtmf_pct:>6.0f}% {r.wall_clock_s:>10.2f}s"
+            f"{dtmf_actual:>6}{dtmf_ok:>2} {r.wall_clock_s:>10.2f}s"
         )
 
         total_turns += r.turns
