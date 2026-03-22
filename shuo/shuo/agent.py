@@ -29,6 +29,19 @@ from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendi
 
 log = ServiceLogger("Agent")
 
+# Farewell phrases that indicate the agent is ending the call.
+# Used as a fallback when the LLM says goodbye but forgets to call signal_hangup().
+_FAREWELL_PHRASES = (
+    "goodbye", "good bye", "bye bye", "bye-bye", "farewell",
+    "have a good", "have a great", "have a nice", "take care",
+    "talk soon", "speak soon", "all the best", "best of luck",
+)
+
+
+def _looks_like_farewell(text: str) -> bool:
+    t = text.lower()
+    return any(phrase in t for phrase in _FAREWELL_PHRASES)
+
 
 def _ms_since(t0: float) -> int:
     """Milliseconds elapsed since t0."""
@@ -92,6 +105,7 @@ class Agent:
         self._dtmf_queue: List[str] = []
         self._tts_had_text: bool = False
         self._pending_hangup: bool = False
+        self._current_turn_text: str = ""
 
     @property
     def is_turn_active(self) -> bool:
@@ -141,6 +155,7 @@ class Agent:
         self._dtmf_queue = []
         self._tts_had_text = False
         self._pending_hangup = False
+        self._current_turn_text = ""
 
         # Begin tracing this turn
         self._turn = self._tracer.begin_turn(transcript)
@@ -234,6 +249,7 @@ class Agent:
 
         if token:
             self._tts_had_text = True
+            self._current_turn_text += token
             await self._tts.send(token)
             # Schedule observer on next event-loop turn — never block the LLM token stream (BUG-03)
             if self._on_token_observed:
@@ -273,6 +289,12 @@ class Agent:
         if ctx.hangup_pending:
             self._pending_hangup = True
             self._emit(HangupPendingEvent())  # Block new turns immediately
+        elif _looks_like_farewell(self._current_turn_text):
+            # Fallback: LLM said goodbye but forgot to call signal_hangup().
+            # Trigger hangup after the audio plays so the goodbye is heard first.
+            log.info("Farewell detected without signal_hangup() — auto-hanging up after audio")
+            self._pending_hangup = True
+            self._emit(HangupPendingEvent())
 
         if self._tts_had_text:
             # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent

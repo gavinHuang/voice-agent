@@ -34,14 +34,15 @@ def make_outbound_call(to_number: str) -> str:
         raise ValueError("Missing required Twilio environment variables")
     
     client = Client(account_sid, auth_token)
-    
+
     twiml_url = f"{public_url}/twiml"
-    
+
     call = client.calls.create(
         to=to_number,
         from_=from_number,
         url=twiml_url,
         record=True,
+        machine_detection="Enable",
     )
     
     return call.sid

@@ -12,6 +12,13 @@ import signal
 import threading
 import time
 
+# Add the project root (parent of the shuo/ package dir) to sys.path so that
+# the sibling packages dashboard/ and ivr/ are importable when running via pipx
+# or any other environment that only installed the shuo package.
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import click
 import yaml
 from dotenv import load_dotenv
@@ -95,6 +102,9 @@ def _start_ngrok(port: int, env_var: str = "TWILIO_PUBLIC_URL") -> str:
             err=True,
         )
         sys.exit(1)
+    auth_token = os.getenv("NGROK_AUTHTOKEN") or os.getenv("NGROK_AUTH_TOKEN")
+    if auth_token:
+        ngrok.set_auth_token(auth_token)
     tunnel = ngrok.connect(port, "http")
     public_url = tunnel.public_url
     # Prefer https (ngrok always supports it)

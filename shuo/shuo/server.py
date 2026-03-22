@@ -11,6 +11,7 @@ Endpoints:
 
 import json
 import os
+import sys
 import time
 import asyncio
 import random
@@ -18,6 +19,17 @@ import uuid
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
+
+# Ensure project root is on sys.path so dashboard/ and ivr/ are importable
+# when running via pipx or any venv that only installed the shuo package.
+# PYTHONPATH (set by run.sh) is the reliable path; __file__-based calculation
+# only works when running from source, not from a pipx-installed binary.
+_project_root = os.environ.get(
+    "VOICE_AGENT_ROOT",
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, Response, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
@@ -105,6 +117,7 @@ _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
 # ── DTMF reconnect state (keyed by Twilio call_sid) ──────────────────
 _dtmf_pending: dict = {}   # call_sid -> {history, goal, phone, ivr_mode}
 _dtmf_lock: asyncio.Lock = asyncio.Lock()  # Protects concurrent access to _dtmf_pending
+
 
 # ── Global pre-warmed service pools ──────────────────────────────────
 _tts_pool: Optional[TTSPool] = None
@@ -244,15 +257,15 @@ async def dial_action(call_id: str):
 
 
 @app.api_route("/twiml", methods=["GET", "POST"], dependencies=[Depends(verify_twilio_signature)])
-async def twiml():
+async def twiml(request: Request):
     """
     Return TwiML instructing Twilio to connect a WebSocket stream.
-    
-    Twilio calls this URL when the call is answered.
+
+    Twilio calls this URL when the call is answered (or AMD detection completes).
     During graceful shutdown, rejects new calls so they don't get cut off.
+    When AMD is enabled, Twilio passes AnsweredBy so we can hang up on voicemail.
     """
     if _draining:
-        # Reject new calls during shutdown — Twilio will play a message and hang up
         logger.info("Draining — rejecting new inbound call")
         reject_twiml = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -261,10 +274,26 @@ async def twiml():
 </Response>"""
         return Response(content=reject_twiml, media_type="application/xml")
 
+    # AMD result: Twilio passes AnsweredBy when machine_detection='Enable'
+    params = dict(request.query_params)
+    if request.method == "POST":
+        form = await request.form()
+        params.update(dict(form))
+    answered_by = params.get("AnsweredBy", "")
+    logger.info(f"AMD AnsweredBy={answered_by!r} (all params: {list(params.keys())})")
+    # Hang up on voicemail/machine. "unknown" also treated as machine — if AMD can't
+    # confirm human, don't risk leaving a greeting on voicemail.
+    if answered_by and answered_by != "human":
+        logger.info(f"AMD: {answered_by} — hanging up without greeting")
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
+            media_type="application/xml",
+        )
+
     public_url = os.getenv("TWILIO_PUBLIC_URL", "")
     ws_url = public_url.replace("https://", "wss://").replace("http://", "ws://")
     ws_url = f"{ws_url}/ws"
-    
+
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect record="record-from-answer-dual">
@@ -273,7 +302,7 @@ async def twiml():
         </Stream>
     </Connect>
 </Response>"""
-    
+
     return Response(content=twiml_response, media_type="application/xml")
 
 
@@ -322,6 +351,7 @@ async def trigger_call(phone_number: str):
         return {"status": "calling", "to": phone_number, "call_sid": call_sid}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 
 
 ## ── TTFT Benchmark ──────────────────────────────────────────────

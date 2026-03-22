@@ -18,6 +18,10 @@ IVR_NGROK_URL="${IVR_BASE_URL:-https://jessi-foxlike-brielle.ngrok-free.dev}"
 # Required for Kokoro TTS on Apple Silicon
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 
+# Ensure project root (dashboard/, ivr/, etc.) is importable even when running
+# via the pipx-installed voice-agent binary, whose __file__ is inside the venv.
+export PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _kill_port() {
