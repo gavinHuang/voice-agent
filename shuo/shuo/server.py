@@ -287,9 +287,10 @@ async def twiml(request: Request):
         params.update(dict(form))
     answered_by = params.get("AnsweredBy", "")
     logger.info(f"AMD AnsweredBy={answered_by!r} (all params: {list(params.keys())})")
-    # Hang up on voicemail/machine. "unknown" also treated as machine — if AMD can't
-    # confirm human, don't risk leaving a greeting on voicemail.
-    if answered_by and answered_by != "human":
+    # Hang up only on confirmed machine/voicemail. "unknown" means AMD couldn't
+    # determine — treat as human to avoid hanging up on real people.
+    _machine_values = {"machine_start", "machine_end_beep", "machine_end_silence", "machine_end_other", "fax"}
+    if answered_by and answered_by in _machine_values:
         logger.info(f"AMD: {answered_by} — hanging up without greeting")
         return Response(
             content='<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
