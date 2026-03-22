@@ -70,6 +70,41 @@ def _check_env_vars() -> None:
         sys.exit(1)
 
 
+_SOFTPHONE_REQUIRED_ENV_VARS = [
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_API_KEY",
+    "TWILIO_API_SECRET",
+]
+
+
+def _check_softphone_env_vars() -> None:
+    """Check env vars required for the browser softphone (no agent needed)."""
+    missing = [v for v in _SOFTPHONE_REQUIRED_ENV_VARS if not os.getenv(v)]
+    if missing:
+        click.echo(f"Missing required environment variables: {', '.join(missing)}", err=True)
+        sys.exit(1)
+
+
+def _start_ngrok(port: int, env_var: str = "TWILIO_PUBLIC_URL") -> str:
+    """Start an ngrok HTTP tunnel, write the public URL into env_var. Returns the URL."""
+    try:
+        from pyngrok import ngrok
+    except ImportError:
+        click.echo(
+            "Error: pyngrok not installed. Run: pip install pyngrok",
+            err=True,
+        )
+        sys.exit(1)
+    tunnel = ngrok.connect(port, "http")
+    public_url = tunnel.public_url
+    # Prefer https (ngrok always supports it)
+    if public_url.startswith("http://"):
+        public_url = "https://" + public_url[7:]
+    os.environ[env_var] = public_url
+    click.echo(f"ngrok tunnel ({env_var}): {public_url}")
+    return public_url
+
+
 @click.group()
 @click.option("--config", "-c", type=click.Path(exists=False), default=None,
               help="Path to YAML config file")
@@ -86,17 +121,26 @@ def cli(ctx: click.Context, config: str | None) -> None:
 @click.option("--port", type=int, default=None, help="Port to listen on")
 @click.option("--drain-timeout", type=int, default=None,
               help="Seconds to wait for active calls before forced shutdown")
+@click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
+              help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically")
 @click.pass_context
-def serve(ctx: click.Context, port: int | None, drain_timeout: int | None) -> None:
+def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_ngrok: bool) -> None:
     """Start the FastAPI server and wait for inbound calls."""
     import uvicorn
     from shuo.server import app
     import shuo.server as server_module
 
-    _check_env_vars()
-
     cfg = ctx.obj["config"].get("serve", {})
     effective_port = port if port is not None else cfg.get("port", int(os.getenv("PORT", "3040")))
+
+    if use_ngrok:
+        ngrok_url = _start_ngrok(effective_port)  # sets TWILIO_PUBLIC_URL
+        # IVR mock is mounted at /ivr-mock on the same server; auto-derive its base URL
+        if not os.getenv("IVR_BASE_URL"):
+            os.environ["IVR_BASE_URL"] = f"{ngrok_url}/ivr-mock"
+            click.echo(f"IVR_BASE_URL (auto): {os.environ['IVR_BASE_URL']}")
+
+    _check_env_vars()
     effective_drain = (
         drain_timeout if drain_timeout is not None
         else cfg.get("drain_timeout", int(os.getenv("DRAIN_TIMEOUT", "300")))
@@ -157,12 +201,27 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None) -> No
 @click.argument("phone")
 @click.option("--goal", type=str, default=None, help="Goal/instructions for the agent")
 @click.option("--identity", type=str, default=None, help="Agent identity persona")
+@click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
+              help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically")
 @click.pass_context
-def call_cmd(ctx: click.Context, phone: str, goal: str | None, identity: str | None) -> None:
+def call_cmd(
+    ctx: click.Context,
+    phone: str,
+    goal: str | None,
+    identity: str | None,
+    use_ngrok: bool,
+) -> None:
     """Initiate an outbound call to PHONE."""
     import uvicorn
     from shuo.server import app
     from shuo.services.twilio_client import make_outbound_call
+
+    if use_ngrok:
+        agent_port = int(os.getenv("PORT", "3040"))
+        ngrok_url = _start_ngrok(agent_port)  # sets TWILIO_PUBLIC_URL
+        if not os.getenv("IVR_BASE_URL"):
+            os.environ["IVR_BASE_URL"] = f"{ngrok_url}/ivr-mock"
+            click.echo(f"IVR_BASE_URL (auto): {os.environ['IVR_BASE_URL']}")
 
     _check_env_vars()
 
@@ -319,6 +378,228 @@ def local_call(
     _check_local_call_env_vars()
 
     asyncio.run(_run_local_call(caller_cfg, callee_cfg))
+
+
+_IVR_REQUIRED_ENV_VARS = [
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+]
+
+
+def _check_ivr_env_vars() -> None:
+    missing = [v for v in _IVR_REQUIRED_ENV_VARS if not os.getenv(v)]
+    if missing:
+        click.echo(f"Missing required environment variables: {', '.join(missing)}", err=True)
+        sys.exit(1)
+
+
+@cli.command("ivr-serve")
+@click.option("--port", type=int, default=None, help="Port for the IVR server (default: 8001)")
+@click.option("--ivr-config", type=click.Path(), default=None,
+              help="Path to IVR flow YAML (overrides IVR_CONFIG env var)")
+@click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
+              help="Start a dedicated ngrok tunnel and set IVR_BASE_URL automatically")
+@click.pass_context
+def ivr_serve(
+    ctx: click.Context,
+    port: int | None,
+    ivr_config: str | None,
+    use_ngrok: bool,
+) -> None:
+    """Start the IVR mock server as a standalone service on its own port.
+
+    For two-server deployments where the IVR mock and the agent server each
+    need a separate public URL (and thus separate ngrok tunnels).
+
+    Twilio phone number for IVR → <IVR_BASE_URL>/twiml
+    Twilio phone number for agent → <TWILIO_PUBLIC_URL>/twiml
+    """
+    import uvicorn
+
+    cfg = ctx.obj["config"].get("ivr", {})
+    effective_port = port if port is not None else cfg.get("port", int(os.getenv("IVR_PORT", "8001")))
+
+    # Config file: CLI flag > config key > env var
+    effective_config = ivr_config or cfg.get("config") or os.getenv("IVR_CONFIG", "")
+    if effective_config:
+        os.environ["IVR_CONFIG"] = effective_config
+
+    if use_ngrok:
+        ivr_url = _start_ngrok(effective_port, env_var="IVR_BASE_URL")
+        click.echo(f"IVR entry point: {ivr_url}/twiml")
+    elif not os.getenv("IVR_BASE_URL"):
+        click.echo(
+            "Warning: IVR_BASE_URL not set — TwiML callback URLs will be relative. "
+            "Use --ngrok or set IVR_BASE_URL.",
+            err=True,
+        )
+
+    _check_ivr_env_vars()
+
+    # Import after env vars are set so IVR engine picks them up
+    import sys as _sys, os as _os
+    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
+    from ivr.server import app as ivr_app
+
+    click.echo(f"IVR mock server starting on port {effective_port}")
+
+    def _start_server() -> None:
+        config = uvicorn.Config(ivr_app, host="0.0.0.0", port=effective_port, log_level="warning")
+        server = uvicorn.Server(config)
+        server.run()
+
+    server_thread = threading.Thread(target=_start_server, daemon=True)
+    server_thread.start()
+    time.sleep(2)
+    click.echo(f"IVR mock ready  (IVR_BASE_URL={os.getenv('IVR_BASE_URL', 'unset')})")
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        Logger.shutdown()
+
+
+@cli.command()
+@click.option("--port", type=int, default=None, help="Port to listen on")
+@click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
+              help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically")
+@click.option("--no-browser", is_flag=True, default=False,
+              help="Skip opening the browser automatically")
+@click.pass_context
+def softphone(
+    ctx: click.Context,
+    port: int | None,
+    use_ngrok: bool,
+    no_browser: bool,
+) -> None:
+    """Start the server and open the browser softphone at /phone."""
+    import uvicorn
+    import webbrowser
+    from shuo.server import app
+
+    cfg = ctx.obj["config"].get("serve", {})
+    effective_port = port if port is not None else cfg.get("port", int(os.getenv("PORT", "3040")))
+
+    if use_ngrok:
+        _start_ngrok(effective_port)
+
+    _check_softphone_env_vars()
+
+    def _start_server() -> None:
+        config = uvicorn.Config(app, host="0.0.0.0", port=effective_port, log_level="warning")
+        server = uvicorn.Server(config)
+        server.run()
+
+    server_thread = threading.Thread(target=_start_server, daemon=True)
+    server_thread.start()
+    time.sleep(2)
+
+    url = f"http://localhost:{effective_port}/phone"
+    click.echo(f"Softphone: {url}")
+    if not no_browser:
+        webbrowser.open(url)
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        Logger.shutdown()
+
+
+def _fmt_config_entry(name: str, value: str | None, default: str | None = None) -> str:
+    """Format a single config entry for display.
+
+    Sensitive vars (KEY / TOKEN / SECRET / PASSWORD in name) are masked.
+    Non-sensitive vars show their value, or '(not set)' if missing.
+    """
+    _SENSITIVE = ("KEY", "TOKEN", "SECRET", "PASSWORD", "ACCOUNT_SID")
+    is_sensitive = any(s in name for s in _SENSITIVE)
+
+    if value is None:
+        shown = click.style("(not set)", fg="yellow") if not is_sensitive else click.style("(not set)", fg="yellow")
+    elif is_sensitive:
+        shown = click.style("[set]", fg="green")
+    else:
+        shown = value
+        if default is not None and value == default:
+            shown += click.style(f"  (default)", fg=8)  # dim
+
+    return f"  {name:<32} {shown}"
+
+
+def _section(title: str) -> str:
+    bar = "─" * (50 - len(title) - 2)
+    return click.style(f"── {title} {bar}", bold=True)
+
+
+@cli.command("config")
+@click.pass_context
+def show_config(ctx: click.Context) -> None:
+    """Show all configuration: URLs, phone numbers, ports, and whether secrets are set."""
+    # Load .env so the values reflect what the server would actually use
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    e = os.environ.get  # shorthand
+
+    sections = [
+        (_section("Twilio — agent server"), [
+            ("TWILIO_ACCOUNT_SID",   e("TWILIO_ACCOUNT_SID"),  None),
+            ("TWILIO_AUTH_TOKEN",    e("TWILIO_AUTH_TOKEN"),    None),
+            ("TWILIO_API_KEY",       e("TWILIO_API_KEY"),       None),
+            ("TWILIO_API_SECRET",    e("TWILIO_API_SECRET"),    None),
+            ("TWILIO_PHONE_NUMBER",  e("TWILIO_PHONE_NUMBER"),  None),
+            ("TWILIO_PUBLIC_URL",    e("TWILIO_PUBLIC_URL"),    None),
+            ("TWILIO_TWIML_APP_SID", e("TWILIO_TWIML_APP_SID"),None),
+        ]),
+        (_section("IVR mock server"), [
+            ("IVR_BASE_URL",  e("IVR_BASE_URL"),   None),
+            ("IVR_PORT",      e("IVR_PORT"),        "8001"),
+            ("IVR_CONFIG",    e("IVR_CONFIG"),      None),
+        ]),
+        (_section("Agent server"), [
+            ("PORT",                     e("PORT"),                     "3040"),
+            ("DRAIN_TIMEOUT",            e("DRAIN_TIMEOUT"),            "300"),
+            ("CALL_INACTIVITY_TIMEOUT",  e("CALL_INACTIVITY_TIMEOUT"),  "300"),
+            ("CALL_GOAL",                e("CALL_GOAL"),                None),
+            ("DASHBOARD_API_KEY",        e("DASHBOARD_API_KEY"),        None),
+            ("CALL_RATE_LIMIT",          e("CALL_RATE_LIMIT"),          "10"),
+        ]),
+        (_section("LLM"), [
+            ("GROQ_API_KEY",    e("GROQ_API_KEY"),    None),
+            ("OPENAI_API_KEY",  e("OPENAI_API_KEY"),  None),
+            ("LLM_MODEL",       e("LLM_MODEL"),       "groq:llama-3.3-70b-versatile"),
+            ("LLM_MAX_TOKENS",  e("LLM_MAX_TOKENS"),  "500"),
+            ("LLM_TEMPERATURE", e("LLM_TEMPERATURE"), "0.7"),
+        ]),
+        (_section("TTS"), [
+            ("TTS_PROVIDER",            e("TTS_PROVIDER"),            "kokoro"),
+            ("ELEVENLABS_API_KEY",      e("ELEVENLABS_API_KEY"),      None),
+            ("ELEVENLABS_VOICE_ID",     e("ELEVENLABS_VOICE_ID"),     "21m00Tcm4TlvDq8ikWAM"),
+            ("ELEVENLABS_MODEL",        e("ELEVENLABS_MODEL"),        "eleven_flash_v2_5"),
+            ("FISH_AUDIO_URL",          e("FISH_AUDIO_URL"),          "http://localhost:8080"),
+            ("FISH_AUDIO_REFERENCE_ID", e("FISH_AUDIO_REFERENCE_ID"), None),
+            ("KOKORO_REPO_ID",          e("KOKORO_REPO_ID"),          "hexgrad/Kokoro-82M"),
+            ("KOKORO_VOICE",            e("KOKORO_VOICE"),            "af_heart"),
+        ]),
+        (_section("STT"), [
+            ("DEEPGRAM_API_KEY", e("DEEPGRAM_API_KEY"), None),
+        ]),
+        (_section("ngrok"), [
+            ("NGROK_AUTH_TOKEN", e("NGROK_AUTH_TOKEN"), None),
+        ]),
+        (_section("Tracing"), [
+            ("TRACE_MAX_FILES",     e("TRACE_MAX_FILES"),     "100"),
+            ("TRACE_MAX_AGE_HOURS", e("TRACE_MAX_AGE_HOURS"), "24"),
+        ]),
+    ]
+
+    for header, entries in sections:
+        click.echo(header)
+        for name, value, default in entries:
+            click.echo(_fmt_config_entry(name, value, default))
+        click.echo()
 
 
 def main() -> None:

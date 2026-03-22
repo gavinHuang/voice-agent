@@ -1,72 +1,392 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>shuo | test phone</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>shuo | softphone</title>
   <style>
-    body { font-family: monospace; display: flex; flex-direction: column; align-items: center;
-           justify-content: center; height: 100vh; margin: 0; background: #111; color: #eee; }
-    #status { font-size: 1.2em; margin-bottom: 24px; color: #aaa; }
-    button { padding: 16px 40px; font-size: 1.1em; border: none; border-radius: 8px;
-             cursor: pointer; margin: 8px; }
-    #answer  { background: #22c55e; color: white; display: none; }
-    #hangup  { background: #ef4444; color: white; display: none; }
-    #register { background: #3b82f6; color: white; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --agent:   #4ade80;
+      --user:    #38bdf8;
+      --warn:    #f59e0b;
+      --danger:  #ef4444;
+      --ok:      #22c55e;
+      --blue:    #3b82f6;
+    }
+
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 { font-size: 1rem; font-weight: bold; }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: #1c2128;
+      color: var(--muted);
+    }
+    .badge.ok     { color: var(--ok);     border-color: var(--ok); }
+    .badge.warn   { color: var(--warn);   border-color: var(--warn); }
+    .badge.danger { color: var(--danger); border-color: var(--danger); }
+
+    main { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* ── Phone controls ── */
+    #phone-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #phone-status-text { color: var(--muted); font-size: 0.9rem; flex: 1; }
+
+    btn, button {
+      padding: 8px 20px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #btn-register { background: var(--blue);   color: #fff; }
+    #btn-answer   { background: var(--ok);     color: #fff; display: none; }
+    #btn-hangup   { background: var(--danger); color: #fff; display: none; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Active calls ── */
+    #calls-section h2 {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    #calls-container { display: flex; flex-direction: column; gap: 12px; }
+
+    .call-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .call-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #1c2128;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .call-phone { font-weight: bold; }
+    .call-goal  { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .call-mode  {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid currentColor;
+    }
+    .call-mode.agent    { color: var(--agent); }
+    .call-mode.takeover { color: var(--warn); }
+
+    .call-controls {
+      display: flex;
+      gap: 8px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .call-controls button {
+      padding: 5px 14px;
+      font-size: 0.78rem;
+      border-radius: 5px;
+    }
+    .btn-takeover { background: var(--warn);   color: #000; }
+    .btn-handback { background: var(--agent);  color: #000; }
+    .btn-call-hangup { background: var(--danger); color: #fff; }
+
+    .transcript {
+      padding: 10px 14px;
+      max-height: 220px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.82rem;
+    }
+    .tx-line { display: flex; gap: 8px; }
+    .tx-speaker { min-width: 56px; font-weight: bold; }
+    .tx-speaker.agent   { color: var(--agent); }
+    .tx-speaker.user    { color: var(--user); }
+    .tx-speaker.callee  { color: var(--warn); }
+    .tx-speaker.human   { color: var(--blue); }
+    .tx-text { color: var(--text); flex: 1; word-break: break-word; }
+
+    #no-calls { color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
   </style>
 </head>
 <body>
-  <h2>shuo test phone</h2>
-  <div id="status">Click Register to start</div>
-  <button id="register" onclick="register()">Register</button>
-  <button id="answer"   onclick="answer()">Answer</button>
-  <button id="hangup"   onclick="hangup()">Hang Up</button>
 
-  <script src="https://unpkg.com/@twilio/voice-sdk@2.18.0/dist/twilio.min.js"></script>
-  <script>
-    let device, activeCall;
-    const serverUrl = window.location.origin;
+<header>
+  <h1>shuo softphone</h1>
+  <span id="ws-badge" class="badge warn">ws: connecting</span>
+  <span id="phone-badge" class="badge">unregistered</span>
+</header>
 
-    async function register() {
-      document.getElementById('status').textContent = 'Fetching token...';
-      const res  = await fetch(serverUrl + '/token');
-      const data = await res.json();
-      device = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
+<main>
+  <!-- Phone controls -->
+  <div id="phone-panel">
+    <span id="phone-status-text">Click Register to connect your microphone</span>
+    <button id="btn-register" onclick="doRegister()">Register</button>
+    <button id="btn-answer"   onclick="doAnswer()">Answer</button>
+    <button id="btn-hangup"   onclick="doHangup()">Hang Up</button>
+  </div>
 
-      device.on('registered', () => {
-        document.getElementById('status').textContent = 'Ready — waiting for call';
-        document.getElementById('register').style.display = 'none';
-      });
-      device.on('error', (e) => {
-        document.getElementById('status').textContent = 'Error: ' + e.message;
-      });
-      device.on('incoming', (call) => {
-        activeCall = call;
-        document.getElementById('status').textContent = 'Incoming call...';
-        document.getElementById('answer').style.display = 'inline-block';
-        call.on('disconnect', reset);
-        call.on('cancel',     reset);
-      });
+  <!-- Active calls (from dashboard WS) -->
+  <div id="calls-section">
+    <h2>Active Calls</h2>
+    <div id="calls-container">
+      <div id="no-calls">No active calls</div>
+    </div>
+  </div>
+</main>
 
-      device.register();
+<script src="https://unpkg.com/@twilio/voice-sdk@2.18.0/dist/twilio.min.js"></script>
+<script>
+// ── Config ────────────────────────────────────────────────
+const params   = new URLSearchParams(location.search);
+const apiToken = params.get('token') || '';
+const origin   = location.origin;
+const wsProto  = location.protocol === 'https:' ? 'wss' : 'ws';
+const wsBase   = `${wsProto}://${location.host}`;
+
+// ── State ─────────────────────────────────────────────────
+const calls = {};         // call_id → {phone, goal, mode, el}
+let device, activeCall;
+
+// ── Dashboard WebSocket ────────────────────────────────────
+function connectDashboardWS() {
+  const url = apiToken
+    ? `${wsBase}/dashboard/ws?token=${encodeURIComponent(apiToken)}`
+    : `${wsBase}/dashboard/ws`;
+  const ws = new WebSocket(url);
+
+  const badge = document.getElementById('ws-badge');
+
+  ws.onopen = () => {
+    badge.textContent = 'ws: connected';
+    badge.className = 'badge ok';
+  };
+  ws.onclose = () => {
+    badge.textContent = 'ws: disconnected';
+    badge.className = 'badge danger';
+    setTimeout(connectDashboardWS, 3000); // reconnect
+  };
+  ws.onerror = () => {
+    badge.textContent = 'ws: error';
+    badge.className = 'badge danger';
+  };
+  ws.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    switch (ev.type) {
+      case 'active_calls':
+        ev.calls.forEach(c => addCall(c.call_id, c.phone, c.goal, c.mode));
+        break;
+      case 'stream_start':
+        addCall(ev.call_id, ev.phone || '', ev.goal || '', 'agent');
+        break;
+      case 'transcript':
+        appendLine(ev.call_id, ev.speaker, ev.text);
+        break;
+      case 'takeover':
+        setMode(ev.call_id, 'takeover');
+        break;
+      case 'handback':
+        setMode(ev.call_id, 'agent');
+        break;
+      case 'call_ended':
+        removeCall(ev.call_id);
+        break;
     }
+  };
+}
 
-    function answer() {
-      if (activeCall) {
-        activeCall.accept();
-        document.getElementById('status').textContent = 'In call';
-        document.getElementById('answer').style.display = 'none';
-        document.getElementById('hangup').style.display = 'inline-block';
-      }
-    }
+// ── Call card management ───────────────────────────────────
+function addCall(id, phone, goal, mode) {
+  if (calls[id]) { setMode(id, mode); return; }
 
-    function hangup() {
-      if (activeCall) activeCall.disconnect();
-    }
+  const card = document.createElement('div');
+  card.className = 'call-card';
+  card.id = `call-${id}`;
+  card.innerHTML = `
+    <div class="call-header">
+      <span class="call-phone">${escHtml(phone || 'unknown')}</span>
+      <span class="call-goal">${escHtml(goal || '')}</span>
+      <span class="call-mode ${mode}" id="mode-${id}">${mode}</span>
+    </div>
+    <div class="call-controls">
+      <button class="btn-takeover" onclick="takeover('${id}')">Take Over</button>
+      <button class="btn-handback" onclick="handback('${id}')">Hand Back</button>
+      <button class="btn-call-hangup" onclick="hangupCall('${id}')">Hang Up</button>
+    </div>
+    <div class="transcript" id="tx-${id}"></div>
+  `;
 
-    function reset() {
-      document.getElementById('status').textContent = 'Call ended — ready';
-      document.getElementById('answer').style.display = 'none';
-      document.getElementById('hangup').style.display = 'none';
-    }
-  </script>
+  calls[id] = { phone, goal, mode, el: card };
+  document.getElementById('no-calls').style.display = 'none';
+  document.getElementById('calls-container').appendChild(card);
+}
+
+function removeCall(id) {
+  const c = calls[id];
+  if (!c) return;
+  c.el.remove();
+  delete calls[id];
+  if (Object.keys(calls).length === 0) {
+    document.getElementById('no-calls').style.display = '';
+  }
+}
+
+function setMode(id, mode) {
+  const c = calls[id];
+  if (!c) return;
+  c.mode = mode;
+  const el = document.getElementById(`mode-${id}`);
+  if (el) { el.textContent = mode; el.className = `call-mode ${mode}`; }
+}
+
+function appendLine(id, speaker, text) {
+  const tx = document.getElementById(`tx-${id}`);
+  if (!tx) return;
+  const line = document.createElement('div');
+  line.className = 'tx-line';
+  const cls = speaker === 'agent' ? 'agent'
+            : speaker === 'human' ? 'human'
+            : speaker === 'callee' ? 'callee'
+            : 'user';
+  line.innerHTML = `<span class="tx-speaker ${cls}">[${escHtml(speaker)}]</span>
+                    <span class="tx-text">${escHtml(text)}</span>`;
+  tx.appendChild(line);
+  tx.scrollTop = tx.scrollHeight;
+}
+
+// ── Call control API ───────────────────────────────────────
+async function api(path, method = 'POST', body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiToken) headers['X-API-Key'] = apiToken;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(path, opts);
+    return await res.json();
+  } catch (err) {
+    console.error('API error:', err);
+  }
+}
+
+async function takeover(id)    { await api(`/dashboard/calls/${id}/takeover`); }
+async function handback(id)    { await api(`/dashboard/calls/${id}/handback`); }
+async function hangupCall(id)  { await api(`/dashboard/calls/${id}/hangup`); }
+
+// ── Twilio softphone ───────────────────────────────────────
+async function doRegister() {
+  setPhoneStatus('Fetching token...');
+  const res  = await fetch(origin + '/token');
+  const data = await res.json();
+  device = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
+
+  device.on('registered', () => {
+    setPhoneStatus('Ready — waiting for call');
+    setPhoneBadge('ready');
+    document.getElementById('btn-register').style.display = 'none';
+  });
+  device.on('error', (e) => {
+    setPhoneStatus('Error: ' + e.message);
+    setPhoneBadge('error');
+  });
+  device.on('incoming', (call) => {
+    activeCall = call;
+    setPhoneStatus('Incoming call...');
+    document.getElementById('btn-answer').style.display = 'inline-block';
+    call.on('disconnect', resetPhone);
+    call.on('cancel',     resetPhone);
+  });
+
+  device.register();
+}
+
+function doAnswer() {
+  if (!activeCall) return;
+  activeCall.accept();
+  setPhoneStatus('In call');
+  document.getElementById('btn-answer').style.display = 'none';
+  document.getElementById('btn-hangup').style.display = 'inline-block';
+}
+
+function doHangup() {
+  if (activeCall) activeCall.disconnect();
+}
+
+function resetPhone() {
+  activeCall = null;
+  setPhoneStatus('Ready — waiting for call');
+  document.getElementById('btn-answer').style.display = 'none';
+  document.getElementById('btn-hangup').style.display = 'none';
+}
+
+function setPhoneStatus(msg) {
+  document.getElementById('phone-status-text').textContent = msg;
+}
+
+function setPhoneBadge(state) {
+  const el = document.getElementById('phone-badge');
+  if (state === 'ready') { el.textContent = 'registered'; el.className = 'badge ok'; }
+  else if (state === 'error') { el.textContent = 'error'; el.className = 'badge danger'; }
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── Init ───────────────────────────────────────────────────
+connectDashboardWS();
+</script>
 </body>
 </html>
