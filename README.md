@@ -15,10 +15,68 @@ voice-agent/
   ivr/                # IVR mock server (config-driven, YAML call flows)
   softphone/          # Browser softphone (static, no server required)
   client/             # Alternate browser softphone for testing
+  run.sh              # Dev shortcuts — see Quick Reference below
   make_call.py        # One-shot outbound call script
   hangup_all.py       # Utility to terminate all active Twilio calls
-  restart.sh          # Dev restart script (kills port 3040, restarts server)
 ```
+
+---
+
+## Quick Reference
+
+### Install
+
+```bash
+pipx install -e ./shuo   # installs voice-agent globally (editable)
+```
+
+### `run.sh` — common workflows
+
+```bash
+./run.sh serve                       # agent server + auto ngrok tunnel
+./run.sh ivr                         # IVR mock server + bind cloud ngrok endpoint
+./run.sh all                         # agent + IVR together (Ctrl+C stops all)
+./run.sh softphone                   # start server + open browser softphone
+./run.sh call +61400000000           # outbound call (uses CALL_GOAL from .env)
+./run.sh call +61400000000 "Book an appointment for Monday"
+./run.sh local-call                  # two LLM agents talk locally — no Twilio
+./run.sh bench                       # run IVR benchmark (scenarios/example_ivr.yaml)
+./run.sh config                      # show all config (API keys masked)
+./run.sh stop                        # kill agent + IVR servers by port
+./run.sh logs                        # tail agent log
+./run.sh logs ivr                    # tail IVR log
+```
+
+### `voice-agent` CLI
+
+```bash
+voice-agent serve [--ngrok] [--port N]
+voice-agent call <phone> [--goal "..."] [--identity "..."] [--ngrok]
+voice-agent ivr-serve [--port N] [--ngrok] [--ivr-config flows/my.yaml]
+voice-agent softphone [--ngrok] [--no-browser]
+voice-agent local-call [--caller-goal "..."] [--callee-goal "..."]
+voice-agent bench --dataset scenarios/example_ivr.yaml
+voice-agent config
+```
+
+### Key URLs (once server is running)
+
+| URL | Description |
+|---|---|
+| `/dashboard` | Supervisor dashboard — place calls, monitor, take over |
+| `/phone` | Browser softphone — answer / speak as human |
+| `/ivr-mock/twiml` | IVR entry point (when IVR is mounted on agent server) |
+| `/trace/latest` | Latest call latency trace (JSON) |
+| `/health` | Health check |
+
+### ngrok endpoints
+
+| Service | URL |
+|---|---|
+| Agent server | set by `--ngrok` → `TWILIO_PUBLIC_URL` |
+| IVR mock server | `https://jessi-foxlike-brielle.ngrok-free.dev` (static cloud endpoint) |
+
+Twilio webhook for IVR phone number → `https://jessi-foxlike-brielle.ngrok-free.dev/twiml`
 
 ---
 
@@ -33,18 +91,17 @@ voice-agent/
 ## Setup
 
 ```bash
-cd shuo
-pip install -r requirements.txt
-cp .env.example .env   # fill in your keys (see Configuration below)
+# Install the CLI globally
+pipx install -e ./shuo
+
+# Copy and fill in your keys
+cp shuo/.env.example shuo/.env
+
+# Verify config
+./run.sh config
 ```
 
-Start ngrok in a separate terminal:
-
-```bash
-ngrok http 3040
-```
-
-Copy the `https://` URL ngrok gives you and set it as `TWILIO_PUBLIC_URL` in `shuo/.env`.
+The `--ngrok` flag (or `run.sh serve/ivr/all`) starts ngrok automatically and sets `TWILIO_PUBLIC_URL` — no manual tunnel management needed.
 
 ---
 
@@ -79,15 +136,11 @@ Twilio Console → Account → API Keys → Create new key → copy SID and Secr
 ## Running
 
 ```bash
-cd shuo
-python main.py
+./run.sh serve        # agent only
+./run.sh all          # agent + IVR mock
 ```
 
-Then open the dashboard:
-
-```
-https://your-ngrok-url/dashboard
-```
+Then open the dashboard at `https://your-ngrok-url/dashboard`.
 
 ---
 
@@ -193,47 +246,27 @@ The `ivr/` module is a standalone FastAPI server that simulates a configurable I
 
 #### End-to-end setup
 
-You need two servers (shuo + IVR) and two public URLs (one per server). Free options:
+Two servers are needed (agent + IVR), each with its own public URL.
 
-- **shuo** — ngrok on port 3040: `ngrok http 3040`
-- **IVR** — localhost.run on port 8001: `ssh -R 80:localhost:8001 nokey@localhost.run`
-
-> ngrok free tier only allows one tunnel at a time. `localhost.run` gives a second free tunnel via SSH — no account needed.
-
-**Step 1 — Start the shuo server**
+**Step 1 — Start both servers**
 
 ```bash
-# from project root
-python3 -m uvicorn shuo.shuo.server:app --port 3040 --env-file shuo/.env
+./run.sh all
+# agent server → TWILIO_PUBLIC_URL (auto ngrok, changes on restart)
+# IVR server   → https://jessi-foxlike-brielle.ngrok-free.dev (static)
 ```
 
-Start ngrok: `ngrok http 3040`, then set `TWILIO_PUBLIC_URL` in `shuo/.env` to the ngrok `https://` URL.
+**Step 2 — Configure Twilio number for IVR**
 
-**Step 2 — Start the IVR server**
-
-```bash
-# from project root — IVR_BASE_URL must point to IVR's own public URL
-IVR_BASE_URL=https://xxxx.lhr.life python3 -m uvicorn ivr.server:app --port 8001
-```
-
-Start the localhost.run tunnel:
-
-```bash
-ssh -R 80:localhost:8001 nokey@localhost.run
-# prints: xxxx.lhr.life tunneled with tls termination, https://xxxx.lhr.life
-```
-
-**Step 3 — Buy or configure a Twilio number for the IVR**
-
-In [Twilio Console](https://console.twilio.com) → Phone Numbers → Manage → set the number's **Voice URL** to:
+In [Twilio Console](https://console.twilio.com) → Phone Numbers → Manage → set the IVR number's **Voice URL** to:
 
 ```
-https://xxxx.lhr.life/twiml   (POST)
+https://jessi-foxlike-brielle.ngrok-free.dev/twiml   (POST)
 ```
 
-Update this URL each time the localhost.run tunnel restarts (the subdomain changes).
+This URL is static — no need to update it after restarts.
 
-**Step 4 — Place a call**
+**Step 3 — Place a call**
 
 Open `https://your-ngrok-url/dashboard` and fill in:
 
@@ -468,9 +501,9 @@ bash restart.sh
 
 - **Mainland China (+86)**: Twilio does not support calls to China.
 - **Twilio trial accounts**: Can only call verified numbers.
-- **ngrok free tier**: URL changes on every restart — update `TWILIO_PUBLIC_URL` in `.env` and re-configure any Twilio number webhooks.
+- **ngrok free tier (agent)**: URL changes on every restart — `TWILIO_PUBLIC_URL` is set automatically by `--ngrok` but you must update any Twilio number webhooks that point to it.
+- **IVR ngrok endpoint**: Uses a static cloud endpoint (`https://jessi-foxlike-brielle.ngrok-free.dev`) — URL never changes; connect with `./run.sh ivr` or `ngrok http --url=... 8001`.
 - **Browser softphone**: Requires HTTPS (ngrok provides this).
-- **Two tunnels for IVR testing**: The IVR server needs its own public URL. Use `localhost.run` (`ssh -R 80:localhost:8001 nokey@localhost.run`) for a free second tunnel.
 
 ---
 
