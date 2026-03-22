@@ -127,6 +127,12 @@ _flux_pool: Optional[FluxPool] = None
 @app.on_event("startup")
 async def startup_warmup() -> None:
     """Pre-load models and warm service connections before the first call."""
+    # When the IVR mock is mounted on this server, point IVR_BASE_URL at the
+    # main server URL + /ivr-mock so redirect URLs resolve correctly.
+    public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+    if public_url and not os.getenv("IVR_BASE_URL", "").startswith(public_url):
+        os.environ["IVR_BASE_URL"] = f"{public_url}/ivr-mock"
+        logger.info(f"IVR base URL set to {public_url}/ivr-mock")
     asyncio.create_task(_warmup())
 
 

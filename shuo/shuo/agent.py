@@ -15,6 +15,7 @@ in LLMService. Agent reads them from LLMService.turn_context after each turn.
 """
 
 import asyncio
+import re
 import time
 from typing import Optional, Callable, List, Any
 
@@ -28,6 +29,18 @@ from .log import ServiceLogger
 from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent, DTMFToneEvent
 
 log = ServiceLogger("Agent")
+
+# Regex to detect raw function-call syntax leaking into the LLM text stream.
+# Llama 3.3 sometimes outputs function calls as literal text instead of structured
+# tool calls — we suppress these tokens from TTS and parse them as a fallback.
+_FC_SUPPRESS_RE = re.compile(
+    r'press_dtmf|signal_hold|signal_hangup|function_calls|<function|function>|invoke>',
+    re.IGNORECASE,
+)
+_DTMF_TEXT_RE = re.compile(
+    r'press_dtmf\s*\(\s*["\']?([0-9*#])["\']?\s*\)',
+    re.IGNORECASE,
+)
 
 # Farewell phrases that indicate the agent is ending the call.
 # Used as a fallback when the LLM says goodbye but forgets to call signal_hangup().
@@ -236,8 +249,18 @@ class Agent:
     # ── Internal Callbacks ──────────────────────────────────────────
 
     async def _on_llm_token(self, token: str) -> None:
-        """LLM produced a text token -> forward to TTS."""
+        """LLM produced a text token -> forward to TTS (unless raw function-call syntax)."""
         if not self._active or not self._tts:
+            return
+
+        if token:
+            self._current_turn_text += token
+
+        # Suppress raw function-call syntax from TTS — Llama 3.3 sometimes outputs
+        # tool calls as literal text instead of structured calls. We detect them here
+        # so the caller never hears garbled "<function>press_dtmf...</function>" audio.
+        if token and _FC_SUPPRESS_RE.search(token):
+            log.debug(f"Suppressed function-call token from TTS: {token!r}")
             return
 
         if not self._got_first_token:
@@ -249,7 +272,6 @@ class Agent:
 
         if token:
             self._tts_had_text = True
-            self._current_turn_text += token
             await self._tts.send(token)
             # Schedule observer on next event-loop turn — never block the LLM token stream (BUG-03)
             if self._on_token_observed:
@@ -264,6 +286,27 @@ class Agent:
 
         # Read tool side effects from LLMService
         ctx = self._llm.turn_context
+
+        # Fallback: extract tool effects from raw text when Llama 3.3 outputs
+        # function call syntax as literal text instead of structured tool calls.
+        if _FC_SUPPRESS_RE.search(self._current_turn_text):
+            if not ctx.dtmf_queue:
+                text_dtmf = _DTMF_TEXT_RE.findall(self._current_turn_text)
+                if text_dtmf:
+                    log.info(f"Fallback DTMF parsed from text: {text_dtmf}")
+                    ctx.dtmf_queue.extend(text_dtmf)
+            if not ctx.hold_continue and 'signal_hold_continue' in self._current_turn_text.lower():
+                log.info("Fallback hold_continue detected in text")
+                ctx.hold_continue = True
+            if not ctx.hold_start and 'signal_hold(' in self._current_turn_text.lower():
+                log.info("Fallback hold_start detected in text")
+                ctx.hold_start = True
+            if not ctx.hold_end and 'signal_hold_end' in self._current_turn_text.lower():
+                log.info("Fallback hold_end detected in text")
+                ctx.hold_end = True
+            if not ctx.hangup_pending and 'signal_hangup' in self._current_turn_text.lower():
+                log.info("Fallback hangup detected in text")
+                ctx.hangup_pending = True
 
         # Copy DTMF queue for _on_tts_done to append after speech
         self._dtmf_queue = list(ctx.dtmf_queue)

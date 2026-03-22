@@ -15,13 +15,15 @@ from ..types import (
 from ..log import Logger
 
 
-def make_outbound_call(to_number: str) -> str:
+def make_outbound_call(to_number: str, ivr_mode: bool = False) -> str:
     """
     Initiate an outbound call using Twilio.
-    
+
     Args:
         to_number: Phone number to call in E.164 format (+1234567890)
-        
+        ivr_mode: When True, skips AMD — IVR systems are machines and would be
+                  incorrectly blocked by answering-machine detection.
+
     Returns:
         Call SID
     """
@@ -29,22 +31,18 @@ def make_outbound_call(to_number: str) -> str:
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
     from_number = os.getenv("TWILIO_PHONE_NUMBER")
     public_url = os.getenv("TWILIO_PUBLIC_URL")
-    
+
     if not all([account_sid, auth_token, from_number, public_url]):
         raise ValueError("Missing required Twilio environment variables")
-    
-    client = Client(account_sid, auth_token)
 
+    client = Client(account_sid, auth_token)
     twiml_url = f"{public_url}/twiml"
 
-    call = client.calls.create(
-        to=to_number,
-        from_=from_number,
-        url=twiml_url,
-        record=True,
-        machine_detection="Enable",
-    )
-    
+    kwargs = dict(to=to_number, from_=from_number, url=twiml_url, record=True)
+    if not ivr_mode:
+        kwargs["machine_detection"] = "Enable"
+
+    call = client.calls.create(**kwargs)
     return call.sid
 
 
