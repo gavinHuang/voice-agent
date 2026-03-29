@@ -222,6 +222,7 @@ async def test_token_observer_nonblocking():
     agent._tracer = MagicMock()
     agent._turn = 0
     agent._t0 = time.monotonic()
+    agent._current_turn_text = ""
 
     # Patch _emit to no-op
     agent._emit = MagicMock()

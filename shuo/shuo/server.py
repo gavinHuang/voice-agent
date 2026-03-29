@@ -344,18 +344,21 @@ async def latest_trace():
 
 
 @app.get("/call/{phone_number:path}")
-async def trigger_call(phone_number: str):
+async def trigger_call(phone_number: str, goal: Optional[str] = Query(None)):
     """
     Initiate an outbound call.
 
     Usage:
         curl https://your-server/call/+1234567890
+        curl https://your-server/call/+1234567890?goal=ask+about+pricing
     """
     if not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
     try:
         call_sid = make_outbound_call(phone_number)
-        return {"status": "calling", "to": phone_number, "call_sid": call_sid}
+        effective_goal = goal or os.getenv("CALL_GOAL", "")
+        dashboard_registry.set_pending(call_sid, phone_number, effective_goal)
+        return {"status": "calling", "to": phone_number, "call_sid": call_sid, "goal": effective_goal}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

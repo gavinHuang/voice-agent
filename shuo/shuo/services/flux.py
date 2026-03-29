@@ -82,7 +82,8 @@ class FluxService:
             self._connection = await self._cm.__aenter__()
 
             self._connection.on("message", self._on_message)
-            self._connection.on("Error", self._on_error)
+            self._connection.on("error", self._on_error)
+            self._connection.on("close", self._on_close)
 
             self._listener_task = asyncio.create_task(
                 self._connection.start_listening()
@@ -102,9 +103,12 @@ class FluxService:
             return
 
         try:
-            await self._connection.send_media(audio_bytes)
+            await asyncio.wait_for(self._connection.send_media(audio_bytes), timeout=0.1)
         except Exception as e:
             log.error("Send failed", e)
+            # Stop future sends — connection is dead, don't block the event loop
+            self._running = False
+            self._connection = None
 
     async def stop(self) -> None:
         """Disconnect from Deepgram Flux."""
@@ -166,6 +170,15 @@ class FluxService:
         except Exception as e:
             log.error("Message handling failed", e)
 
+    async def _on_close(self, *args, **kwargs) -> None:
+        """Handle Deepgram connection close."""
+        if self._running:
+            log.warning("Deepgram connection closed unexpectedly")
+            self._running = False
+            self._connection = None
+
     async def _on_error(self, error, *args, **kwargs) -> None:
         """Handle Deepgram errors."""
-        log.error("Deepgram: " + str(error))
+        log.error("Deepgram error: " + str(error))
+        self._running = False
+        self._connection = None

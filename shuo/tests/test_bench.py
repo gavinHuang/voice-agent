@@ -289,6 +289,7 @@ async def test_run_scenario_wires_localISP(tmp_path):
         driver_instance = MagicMock()
         driver_instance._turn_count = 2
         driver_instance.drive = AsyncMock(return_value=None)
+        driver_instance.all_transcripts = ["welcome to the system"]
         MockDriver.return_value = driver_instance
 
         result = await run_scenario(scenario, "http://127.0.0.1:9999")
@@ -400,11 +401,11 @@ def test_metrics_report_fields():
 
 
 def test_sample_scenarios_valid():
-    """load_scenarios returns 3 valid ScenarioConfig objects from example_ivr.yaml."""
+    """load_scenarios returns valid ScenarioConfig objects from example_ivr.yaml."""
     scenarios = load_scenarios(_SCENARIOS_PATH)
 
     assert isinstance(scenarios, list)
-    assert len(scenarios) == 3
+    assert len(scenarios) == 8
 
     ids = [s.id for s in scenarios]
     assert "navigate-to-sales" in ids
