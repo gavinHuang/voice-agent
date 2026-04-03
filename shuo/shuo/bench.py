@@ -693,35 +693,59 @@ class TwoAgentBridge:
         return self._bilateral_transcript
 
     def make_caller_observer(self):
-        """Return an observer callback for the caller agent."""
+        """Return an observer callback for the caller agent.
+
+        Accumulates agent_token events; on agent_done injects the full
+        LLM-generated text into the answerer's _inject queue.
+        """
+        tokens: list[str] = []
+
         def observer(event: dict) -> None:
-            if event.get("type") != "transcript":
-                return
-            text = event["text"]
-            self._bilateral_transcript.append({"role": "caller", "text": text})
-            self._total_turns += 1
-            if self._total_turns >= self._max_turns:
-                self._max_turns_event.set()
-                return
-            if self._answerer_isp._inject is not None:
-                from shuo.types import FluxEndOfTurnEvent
-                self._answerer_isp._inject(FluxEndOfTurnEvent(transcript=text))
+            t = event.get("type")
+            if t == "agent_token":
+                tokens.append(event.get("token", ""))
+            elif t == "agent_done":
+                text = "".join(tokens).strip()
+                tokens.clear()
+                if not text:
+                    return
+                self._bilateral_transcript.append({"role": "caller", "text": text})
+                self._total_turns += 1
+                if self._total_turns >= self._max_turns:
+                    self._max_turns_event.set()
+                    return
+                if self._answerer_isp._inject is not None:
+                    from shuo.types import FluxEndOfTurnEvent
+                    self._answerer_isp._inject(FluxEndOfTurnEvent(transcript=text))
+
         return observer
 
     def make_answerer_observer(self):
-        """Return an observer callback for the answerer agent."""
+        """Return an observer callback for the answerer agent.
+
+        Accumulates agent_token events; on agent_done injects the full
+        LLM-generated text into the caller's _inject queue.
+        """
+        tokens: list[str] = []
+
         def observer(event: dict) -> None:
-            if event.get("type") != "transcript":
-                return
-            text = event["text"]
-            self._bilateral_transcript.append({"role": "answerer", "text": text})
-            self._total_turns += 1
-            if self._total_turns >= self._max_turns:
-                self._max_turns_event.set()
-                return
-            if self._caller_isp._inject is not None:
-                from shuo.types import FluxEndOfTurnEvent
-                self._caller_isp._inject(FluxEndOfTurnEvent(transcript=text))
+            t = event.get("type")
+            if t == "agent_token":
+                tokens.append(event.get("token", ""))
+            elif t == "agent_done":
+                text = "".join(tokens).strip()
+                tokens.clear()
+                if not text:
+                    return
+                self._bilateral_transcript.append({"role": "answerer", "text": text})
+                self._total_turns += 1
+                if self._total_turns >= self._max_turns:
+                    self._max_turns_event.set()
+                    return
+                if self._caller_isp._inject is not None:
+                    from shuo.types import FluxEndOfTurnEvent
+                    self._caller_isp._inject(FluxEndOfTurnEvent(transcript=text))
+
         return observer
 
     async def wait_ready(self) -> bool:
