@@ -1,0 +1,162 @@
+[
+  {
+    "scenario_id": "store-hours-query",
+    "difficulty": "easy",
+    "passed": false,
+    "turns": 6,
+    "wall_clock_s": 0.06868195801507682,
+    "error": "max_turns_exceeded",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      },
+      {
+        "role": "answerer",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      },
+      {
+        "role": "answerer",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "wifi-password-request",
+    "difficulty": "easy",
+    "passed": false,
+    "turns": 6,
+    "wall_clock_s": 0.015362042002379894,
+    "error": "max_turns_exceeded",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      },
+      {
+        "role": "caller",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      },
+      {
+        "role": "answerer",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      },
+      {
+        "role": "caller",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      },
+      {
+        "role": "answerer",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      },
+      {
+        "role": "caller",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "return-policy-inquiry",
+    "difficulty": "easy",
+    "passed": false,
+    "turns": 6,
+    "wall_clock_s": 0.014432957977987826,
+    "error": "max_turns_exceeded",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      },
+      {
+        "role": "answerer",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      },
+      {
+        "role": "answerer",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "appointment-availability",
+    "difficulty": "easy",
+    "passed": false,
+    "turns": 6,
+    "wall_clock_s": 0.015094334026798606,
+    "error": "max_turns_exceeded",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Bright Smile Dental, how can I help you?"
+      },
+      {
+        "role": "caller",
+        "text": "Bright Smile Dental, how can I help you?"
+      },
+      {
+        "role": "answerer",
+        "text": "Bright Smile Dental, how can I help you?"
+      },
+      {
+        "role": "caller",
+        "text": "Bright Smile Dental, how can I help you?"
+      },
+      {
+        "role": "answerer",
+        "text": "Bright Smile Dental, how can I help you?"
+      },
+      {
+        "role": "caller",
+        "text": "Bright Smile Dental, how can I help you?"
+      }
+    ]
+  }
+]
