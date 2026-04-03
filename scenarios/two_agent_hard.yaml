@@ -1,0 +1,146 @@
+scenarios:
+  - id: bank-transfer-full-verify
+    description: Caller initiates wire transfer requiring 3-factor verification
+    difficulty: hard
+    timeout: 150
+    caller:
+      goal: >
+        You need to initiate a wire transfer of $5,000 to account 9988-7766 at Chase Bank.
+        Your bank account number is 44201, your full name is Robert Alvarez,
+        and your date of birth is July 22, 1975.
+        The agent will ask you to verify all three fields before processing.
+        Provide each piece of information when asked. Confirm the transfer was initiated.
+      context: |
+        Your account number: 44201
+        Your full name: Robert Alvarez
+        Your date of birth: July 22, 1975
+    answerer:
+      goal: >
+        You are a senior banking agent at First National Bank handling wire transfers.
+        You MUST verify the caller's account number, full legal name, AND date of birth
+        before initiating any wire transfer. Ask for each field separately if not provided.
+        Account 44201: owner Robert Alvarez, DOB July 22 1975, balance $12,000.
+        Wire transfer limit: $10,000/day. Process transfers only after full 3-factor verification.
+        Once verified, confirm the transfer of $5,000 to 9988-7766 at Chase Bank and provide
+        a reference number: TXN-2026-0404-001.
+        End the call when the customer says goodbye.
+      opening_line: "First National Bank wire transfer desk. How may I assist you?"
+    success_criteria:
+      goal_phrases:
+        - "TXN-2026-0404-001"
+      require_verification_confirmed: true
+      verification_phrases:
+        - "verified"
+        - "confirmed"
+        - "verified your identity"
+      max_turns: 20
+
+  - id: healthcare-records-partial-info
+    description: Caller requests medical records with initially incomplete information
+    difficulty: hard
+    timeout: 150
+    caller:
+      goal: >
+        Request a copy of your medical records for the past year.
+        Your name is Emily Watson and your patient ID is P-10293.
+        However, initially only provide your name. When asked for more verification,
+        provide your date of birth (November 3, 1988) and then your patient ID.
+        Successfully request that records be emailed to emily.watson@email.com.
+      context: |
+        Your name: Emily Watson
+        Patient ID: P-10293
+        Date of birth: November 3, 1988
+        Email: emily.watson@email.com
+    answerer:
+      goal: >
+        You are a medical records coordinator at City General Hospital.
+        HIPAA requires multi-factor verification before releasing any records.
+        You MUST verify: (1) patient full name, (2) date of birth, AND (3) patient ID.
+        Ask for each missing piece. Do not accept just a name — you need all three.
+        Patient Emily Watson, DOB November 3 1988, ID P-10293.
+        Once all three are verified, confirm the records request and state they will be
+        emailed within 5 business days to the email on file.
+        End the call when the patient says goodbye.
+      opening_line: "City General Hospital medical records. This is Chris speaking."
+    success_criteria:
+      goal_phrases:
+        - "5 business days"
+      require_verification_confirmed: true
+      verification_phrases:
+        - "verified"
+        - "all verified"
+        - "identity confirmed"
+      max_turns: 20
+
+  - id: telecom-dispute-escalation
+    description: Caller disputes a charge and must verify identity then escalate
+    difficulty: hard
+    timeout: 150
+    caller:
+      goal: >
+        You received an unexpected $45 charge on your ConnectMobile bill labeled "Premium Add-on".
+        You did not authorize this charge and want it removed.
+        Your phone number is 555-0273 and your account PIN is 8842.
+        Provide verification when asked. If the agent cannot remove the charge directly,
+        ask to be escalated to a supervisor. Confirm the dispute has been filed.
+      context: |
+        Your phone number: 555-0273
+        Your account PIN: 8842
+    answerer:
+      goal: >
+        You are a customer service agent at ConnectMobile.
+        You MUST verify the caller's phone number AND account PIN before discussing account details.
+        Account 555-0273, PIN 8842: customer Lisa Park, on Unlimited Plus plan.
+        Billing issue: $45 "Premium Add-on" charge added automatically (system error).
+        You can file a dispute but cannot immediately credit the account — a supervisor must approve credits.
+        After verifying identity: acknowledge the charge, file dispute reference DIS-2026-0404-77,
+        and tell the customer a supervisor will call back within 24 hours.
+        End the call when the customer says goodbye.
+      opening_line: "ConnectMobile customer service. How can I help you today?"
+    success_criteria:
+      goal_phrases:
+        - "DIS-2026-0404-77"
+      require_verification_confirmed: true
+      verification_phrases:
+        - "verified"
+        - "account verified"
+        - "PIN verified"
+      max_turns: 20
+
+  - id: insurance-claim-with-correction
+    description: Caller provides wrong DOB initially, must correct to pass verification
+    difficulty: hard
+    timeout: 150
+    caller:
+      goal: >
+        File a new home insurance claim for water damage in your kitchen.
+        Your policy number is POL-HOME-5521 and your date of birth is April 9, 1979.
+        When first asked for your date of birth, accidentally say April 19 (wrong day).
+        When the agent says verification failed, correct yourself and provide April 9.
+        Once verified, file the claim for kitchen water damage and get a claim number.
+      context: |
+        Policy number: POL-HOME-5521
+        Correct date of birth: April 9, 1979
+        Initial mistake: say April 19 first, then correct to April 9 when prompted
+    answerer:
+      goal: >
+        You are a claims agent at SafeGuard Insurance for home insurance.
+        You MUST verify the caller's policy number AND date of birth before opening a claim.
+        If date of birth doesn't match, politely say verification failed and ask them to confirm.
+        Policy POL-HOME-5521: owner Thomas Lee, DOB April 9 1979, 42 Oak Street.
+        DOB April 19 does NOT match — tell the caller verification failed for the date of birth
+        and ask them to try again.
+        DOB April 9 1979 MATCHES — proceed to file the claim.
+        New claim number for kitchen water damage: CLM-HOME-2026-0142.
+        Estimated timeline: adjuster visit within 3 business days.
+        End the call when the customer says goodbye.
+      opening_line: "SafeGuard Insurance home claims. How can I assist you today?"
+    success_criteria:
+      goal_phrases:
+        - "CLM-HOME-2026-0142"
+      require_verification_confirmed: true
+      verification_phrases:
+        - "verified"
+        - "confirmed"
+        - "matches"
+      max_turns: 20

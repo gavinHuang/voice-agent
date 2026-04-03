@@ -90,6 +90,19 @@ The bridge monitors total turn count. On termination, both tasks are cancelled a
 4. Add `reports/` directory (`.gitkeep` + `.gitignore` for report files).
 5. No migration needed — additive change, existing `bench` usage unchanged.
 
+## Future: Test Fidelity Levels (not in scope)
+
+The current design is fixed at **agent level** — real LLM, no audio services. Future work could introduce a `--level` flag to trade off fidelity against cost/speed:
+
+| Level | LLM | TTS / STT | ISP | Use case |
+|-------|-----|-----------|-----|----------|
+| `unit` | Stubbed | No-op | No-op | Fast logic checks, CI |
+| `agent` *(current)* | Real | No-op | Loopback | Conversational capability |
+| `integration` | Real | Real | Loopback | Codec/latency fidelity |
+| `e2e` | Real | Real | Twilio | Full production path |
+
+Do not implement this now. Document it here so the `--level` flag can be added later without redesigning the runner.
+
 ## Open Questions
 
 - Should the answerer agent emit an opening greeting by default, or wait silently for the caller to speak first? (Current design: configurable via `answerer.opening_line`; empty = wait.)

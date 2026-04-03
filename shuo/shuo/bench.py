@@ -554,6 +554,577 @@ async def run_benchmark(
 # print_metrics_report — terminal table of results
 # ---------------------------------------------------------------------------
 
+# ===========================================================================
+# Two-Agent Benchmark — Data Model (Task 1.1)
+# ===========================================================================
+
+@dataclass
+class TwoAgentSuccessCriteria:
+    """Criteria for a two-agent scenario."""
+    goal_phrases: list[str] = field(default_factory=list)
+    verification_phrases: list[str] = field(default_factory=list)
+    require_verification_confirmed: bool = False
+    max_turns: Optional[int] = None
+
+
+@dataclass
+class TwoAgentScenarioConfig:
+    """Configuration for a single two-agent benchmark scenario."""
+    id: str
+    description: str
+    caller: dict                     # {"goal": str, "identity": str, "context": str}
+    answerer: dict                   # {"goal": str, "opening_line": str}
+    success_criteria: TwoAgentSuccessCriteria
+    difficulty: str = "medium"
+    timeout: int = 120
+
+
+@dataclass
+class TwoAgentCriteriaResult:
+    """Outcome of evaluating two-agent success criteria."""
+    goal_phrases_pass: bool
+    verification_pass: bool
+    turns_pass: bool
+    passed: bool
+
+
+@dataclass
+class TwoAgentScenarioResult:
+    """Full result record for a single two-agent scenario run."""
+    scenario_id: str
+    difficulty: str
+    passed: bool
+    criteria: TwoAgentCriteriaResult
+    turns: int
+    bilateral_transcript: list[dict]  # [{"role": "caller"|"answerer", "text": str}]
+    wall_clock_s: float
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Two-agent scenario loading (Task 1.2)
+# ---------------------------------------------------------------------------
+
+def load_two_agent_scenarios(path: str) -> list[TwoAgentScenarioConfig]:
+    """Load two-agent scenarios from a YAML file.
+
+    Args:
+        path: Path to YAML file with a top-level ``scenarios:`` list.
+
+    Returns:
+        List of :class:`TwoAgentScenarioConfig` objects.
+
+    Raises:
+        ValueError: If a required field is missing from any scenario.
+    """
+    with open(path) as fh:
+        data = yaml.safe_load(fh)
+
+    scenarios: list[TwoAgentScenarioConfig] = []
+    for raw in data["scenarios"]:
+        for required in ("id", "description"):
+            if required not in raw:
+                raise ValueError(
+                    f"Scenario missing required field '{required}'. "
+                    f"Found fields: {list(raw.keys())}"
+                )
+        caller = raw.get("caller") or {}
+        if not caller.get("goal"):
+            raise ValueError(
+                f"Scenario '{raw.get('id', '?')}' missing required field 'caller.goal'"
+            )
+        answerer = raw.get("answerer") or {}
+        if not answerer.get("goal"):
+            raise ValueError(
+                f"Scenario '{raw.get('id', '?')}' missing required field 'answerer.goal'"
+            )
+        criteria_raw = raw.get("success_criteria") or {}
+        criteria = TwoAgentSuccessCriteria(
+            goal_phrases=criteria_raw.get("goal_phrases") or [],
+            verification_phrases=criteria_raw.get("verification_phrases") or [],
+            require_verification_confirmed=criteria_raw.get("require_verification_confirmed", False),
+            max_turns=criteria_raw.get("max_turns"),
+        )
+        scenarios.append(TwoAgentScenarioConfig(
+            id=raw["id"],
+            description=raw["description"],
+            caller=caller,
+            answerer=answerer,
+            success_criteria=criteria,
+            difficulty=raw.get("difficulty", "medium"),
+            timeout=raw.get("timeout", 120),
+        ))
+    return scenarios
+
+
+# ---------------------------------------------------------------------------
+# TwoAgentBridge — cross-injects agent speech (Tasks 2.1, 2.2, 2.3)
+# ---------------------------------------------------------------------------
+
+class TwoAgentBridge:
+    """Routes each agent's finished-turn text into the peer as FluxEndOfTurnEvent.
+
+    Each agent's observer callback captures transcript events and injects them
+    into the peer's ``_inject`` queue entry point. Turn counting and bilateral
+    transcript capture happen here.
+    """
+
+    def __init__(
+        self,
+        caller_isp: BenchISP,
+        answerer_isp: BenchISP,
+        max_turns: int = 50,
+        opening_line: str = "",
+    ) -> None:
+        self._caller_isp = caller_isp
+        self._answerer_isp = answerer_isp
+        self._max_turns = min(max_turns, 50)
+        self._opening_line = opening_line
+        self._total_turns: int = 0
+        self._bilateral_transcript: list[dict] = []
+        self._max_turns_event: asyncio.Event = asyncio.Event()
+
+    @property
+    def total_turns(self) -> int:
+        return self._total_turns
+
+    @property
+    def bilateral_transcript(self) -> list[dict]:
+        return self._bilateral_transcript
+
+    def make_caller_observer(self):
+        """Return an observer callback for the caller agent."""
+        def observer(event: dict) -> None:
+            if event.get("type") != "transcript":
+                return
+            text = event["text"]
+            self._bilateral_transcript.append({"role": "caller", "text": text})
+            self._total_turns += 1
+            if self._total_turns >= self._max_turns:
+                self._max_turns_event.set()
+                return
+            if self._answerer_isp._inject is not None:
+                from shuo.types import FluxEndOfTurnEvent
+                self._answerer_isp._inject(FluxEndOfTurnEvent(transcript=text))
+        return observer
+
+    def make_answerer_observer(self):
+        """Return an observer callback for the answerer agent."""
+        def observer(event: dict) -> None:
+            if event.get("type") != "transcript":
+                return
+            text = event["text"]
+            self._bilateral_transcript.append({"role": "answerer", "text": text})
+            self._total_turns += 1
+            if self._total_turns >= self._max_turns:
+                self._max_turns_event.set()
+                return
+            if self._caller_isp._inject is not None:
+                from shuo.types import FluxEndOfTurnEvent
+                self._caller_isp._inject(FluxEndOfTurnEvent(transcript=text))
+        return observer
+
+    async def wait_ready(self) -> bool:
+        """Poll until both _inject are set (up to 0.5s). Returns True if ready."""
+        for _ in range(50):
+            if (self._caller_isp._inject is not None and
+                    self._answerer_isp._inject is not None):
+                return True
+            await asyncio.sleep(0.01)
+        return False
+
+    async def fire_initial_event(self) -> None:
+        """Inject the first event to start the conversation."""
+        from shuo.types import FluxEndOfTurnEvent
+        if self._opening_line:
+            # Answerer speaks first — inject opening into caller
+            self._bilateral_transcript.append({"role": "answerer", "text": self._opening_line})
+            self._total_turns += 1
+            if self._caller_isp._inject is not None:
+                self._caller_isp._inject(FluxEndOfTurnEvent(transcript=self._opening_line))
+        else:
+            # Caller speaks first via synthetic connection event
+            if self._caller_isp._inject is not None:
+                self._caller_isp._inject(FluxEndOfTurnEvent(transcript="[call connected]"))
+
+    async def wait_for_max_turns(self) -> None:
+        """Await until max_turns is reached."""
+        await self._max_turns_event.wait()
+
+
+# ---------------------------------------------------------------------------
+# Two-agent criteria evaluation (Task 3.2)
+# ---------------------------------------------------------------------------
+
+def evaluate_two_agent_criteria(
+    criteria: TwoAgentSuccessCriteria,
+    bilateral_transcript: list[dict],
+    turns: int,
+) -> TwoAgentCriteriaResult:
+    """Evaluate two-agent success criteria against collected run data.
+
+    Args:
+        criteria: The :class:`TwoAgentSuccessCriteria` from the scenario config.
+        bilateral_transcript: List of ``{"role": ..., "text": ...}`` dicts.
+        turns: Total number of agent turns completed.
+
+    Returns:
+        A :class:`TwoAgentCriteriaResult` with per-criterion pass/fail and overall.
+    """
+    # goal_phrases: all must appear in combined transcript (case-insensitive)
+    if not criteria.goal_phrases:
+        goal_phrases_pass = True
+    else:
+        full_text = " ".join(e["text"] for e in bilateral_transcript).lower()
+        goal_phrases_pass = all(p.lower() in full_text for p in criteria.goal_phrases)
+
+    # verification_pass: any verification_phrase in answerer speech
+    if not criteria.require_verification_confirmed or not criteria.verification_phrases:
+        verification_pass = True
+    else:
+        answerer_text = " ".join(
+            e["text"] for e in bilateral_transcript if e["role"] == "answerer"
+        ).lower()
+        verification_pass = any(p.lower() in answerer_text for p in criteria.verification_phrases)
+
+    # turns_pass
+    if criteria.max_turns is None:
+        turns_pass = True
+    else:
+        turns_pass = turns <= criteria.max_turns
+
+    return TwoAgentCriteriaResult(
+        goal_phrases_pass=goal_phrases_pass,
+        verification_pass=verification_pass,
+        turns_pass=turns_pass,
+        passed=goal_phrases_pass and verification_pass and turns_pass,
+    )
+
+
+# ---------------------------------------------------------------------------
+# run_two_agent_scenario — orchestrates one two-agent run (Task 3.1)
+# ---------------------------------------------------------------------------
+
+async def run_two_agent_scenario(scenario: TwoAgentScenarioConfig) -> TwoAgentScenarioResult:
+    """Run a single two-agent scenario and return its result.
+
+    Creates two paired BenchISP instances (caller + answerer), starts both
+    run_conversation tasks, bridges their speech via TwoAgentBridge, and
+    evaluates success criteria on completion.
+    """
+    from shuo.conversation import run_conversation
+
+    caller_isp = BenchISP()
+    answerer_isp = BenchISP()
+    LocalISP.pair(caller_isp, answerer_isp)
+
+    max_turns = scenario.success_criteria.max_turns or 50
+    opening_line = scenario.answerer.get("opening_line") or ""
+
+    bridge = TwoAgentBridge(
+        caller_isp=caller_isp,
+        answerer_isp=answerer_isp,
+        max_turns=max_turns,
+        opening_line=opening_line,
+    )
+
+    # Build goal strings
+    caller_goal = scenario.caller.get("goal", "")
+    if scenario.caller.get("identity"):
+        caller_goal = f"You are {scenario.caller['identity']}. {caller_goal}"
+    if scenario.caller.get("context"):
+        caller_goal = f"{caller_goal}\n\nContext: {scenario.caller['context']}"
+    answerer_goal = scenario.answerer.get("goal", "")
+
+    start_time = time.monotonic()
+    error: Optional[str] = None
+
+    caller_task = asyncio.create_task(
+        run_conversation(
+            caller_isp,
+            observer=bridge.make_caller_observer(),
+            get_goal=lambda _: caller_goal,
+            tts_pool=_BenchTTSPool(),
+            flux_pool=_BenchFluxPool(),
+            ivr_mode=lambda: True,
+        )
+    )
+    answerer_task = asyncio.create_task(
+        run_conversation(
+            answerer_isp,
+            observer=bridge.make_answerer_observer(),
+            get_goal=lambda _: answerer_goal,
+            tts_pool=_BenchTTSPool(),
+            flux_pool=_BenchFluxPool(),
+            ivr_mode=lambda: True,
+        )
+    )
+
+    ready = await bridge.wait_ready()
+    if not ready:
+        error = "Timeout waiting for agents to be ready (>0.5s)"
+        for t in [caller_task, answerer_task]:
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        criteria = evaluate_two_agent_criteria(
+            scenario.success_criteria, bridge.bilateral_transcript, bridge.total_turns
+        )
+        return TwoAgentScenarioResult(
+            scenario_id=scenario.id,
+            difficulty=scenario.difficulty,
+            passed=False,
+            criteria=criteria,
+            turns=bridge.total_turns,
+            bilateral_transcript=bridge.bilateral_transcript,
+            wall_clock_s=time.monotonic() - start_time,
+            error=error,
+        )
+
+    await bridge.fire_initial_event()
+
+    max_turns_task = asyncio.create_task(bridge.wait_for_max_turns())
+
+    try:
+        done, _ = await asyncio.wait(
+            [caller_task, answerer_task, max_turns_task],
+            timeout=scenario.timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if not done:
+            error = f"timeout after {scenario.timeout}s"
+        elif max_turns_task in done and not caller_task.done() and not answerer_task.done():
+            error = "max_turns_exceeded"
+    except Exception as exc:
+        error = str(exc)
+
+    # Cancel all remaining tasks
+    for t in [caller_task, answerer_task, max_turns_task]:
+        if not t.done():
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    elapsed = time.monotonic() - start_time
+    criteria = evaluate_two_agent_criteria(
+        scenario.success_criteria, bridge.bilateral_transcript, bridge.total_turns
+    )
+    return TwoAgentScenarioResult(
+        scenario_id=scenario.id,
+        difficulty=scenario.difficulty,
+        passed=criteria.passed,
+        criteria=criteria,
+        turns=bridge.total_turns,
+        bilateral_transcript=bridge.bilateral_transcript,
+        wall_clock_s=elapsed,
+        error=error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reporting (Tasks 4.1, 4.2, 4.3)
+# ---------------------------------------------------------------------------
+
+def print_two_agent_metrics_report(results: list[TwoAgentScenarioResult]) -> None:
+    """Print a formatted two-agent metrics table to stdout."""
+    if not results:
+        click.echo("No results to report.")
+        return
+
+    header = f"{'ID':<30} {'Difficulty':<10} {'Result':<8} {'Turns':>6} {'Latency(s)':>11}"
+    click.echo(header)
+    click.echo("-" * len(header))
+
+    total_turns = 0
+    total_latency = 0.0
+    pass_count = 0
+
+    for r in results:
+        result_str = "PASS" if r.passed else "FAIL"
+        click.echo(
+            f"{r.scenario_id:<30} {r.difficulty:<10} {result_str:<8} "
+            f"{r.turns:>6} {r.wall_clock_s:>10.2f}s"
+        )
+        total_turns += r.turns
+        total_latency += r.wall_clock_s
+        if r.passed:
+            pass_count += 1
+
+    click.echo("-" * len(header))
+    count = len(results)
+    click.echo(
+        f"Summary: {pass_count}/{count} passed ({pass_count / count * 100:.0f}%), "
+        f"avg turns={total_turns / count:.1f}, avg latency={total_latency / count:.2f}s"
+    )
+
+
+def write_run_reports(
+    results: list[TwoAgentScenarioResult],
+    dataset_path: str,
+) -> tuple[str, str]:
+    """Write per-run JSON and Markdown report files.
+
+    Creates ``reports/`` if needed and writes
+    ``reports/<stem>_<timestamp>.json`` and ``reports/<stem>_<timestamp>.md``.
+
+    Returns:
+        (json_path, md_path) as strings.
+    """
+    import json
+    from datetime import datetime
+    from pathlib import Path
+
+    reports_dir = Path("reports")
+    reports_dir.mkdir(exist_ok=True)
+
+    stem = Path(dataset_path).stem
+    ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+    json_path = reports_dir / f"{stem}_{ts}.json"
+    md_path = reports_dir / f"{stem}_{ts}.md"
+
+    # JSON report
+    serialized = [
+        {
+            "scenario_id": r.scenario_id,
+            "difficulty": r.difficulty,
+            "passed": r.passed,
+            "turns": r.turns,
+            "wall_clock_s": r.wall_clock_s,
+            "error": r.error,
+            "criteria": {
+                "goal_phrases_pass": r.criteria.goal_phrases_pass,
+                "verification_pass": r.criteria.verification_pass,
+                "turns_pass": r.criteria.turns_pass,
+                "passed": r.criteria.passed,
+            },
+            "bilateral_transcript": r.bilateral_transcript,
+        }
+        for r in results
+    ]
+    with open(json_path, "w") as fh:
+        json.dump(serialized, fh, indent=2)
+
+    # Markdown report
+    count = len(results)
+    pass_count = sum(1 for r in results if r.passed)
+    avg_turns = sum(r.turns for r in results) / count if count else 0
+    avg_latency = sum(r.wall_clock_s for r in results) / count if count else 0
+
+    rows = "\n".join(
+        f"| {r.scenario_id} | {r.difficulty} | {'PASS' if r.passed else 'FAIL'} "
+        f"| {r.turns} | {r.wall_clock_s:.2f}s |"
+        for r in results
+    )
+
+    diff_lines = []
+    for diff in ("easy", "medium", "hard"):
+        diff_rs = [r for r in results if r.difficulty == diff]
+        if diff_rs:
+            dp = sum(1 for r in diff_rs if r.passed)
+            diff_lines.append(f"- **{diff.capitalize()} pass rate:** {dp}/{len(diff_rs)}")
+
+    md_content = (
+        f"# Benchmark Report: {stem}\n\n"
+        f"**Run:** {ts}  \n"
+        f"**Dataset:** {dataset_path}  \n"
+        f"**Pass rate:** {pass_count}/{count} ({pass_count / count * 100:.0f}%)\n\n"
+        "## Results\n\n"
+        "| Scenario ID | Difficulty | Result | Turns | Latency |\n"
+        "|-------------|-----------|--------|-------|--------|\n"
+        f"{rows}\n\n"
+        "## Summary\n\n"
+        f"- **Total scenarios:** {count}\n"
+        f"- **Passed:** {pass_count}\n"
+        f"- **Pass rate:** {pass_count / count * 100:.0f}%\n"
+        f"- **Avg turns:** {avg_turns:.1f}\n"
+        f"- **Avg latency:** {avg_latency:.2f}s\n"
+        + ("\n".join(diff_lines) + "\n" if diff_lines else "")
+    )
+    with open(md_path, "w") as fh:
+        fh.write(md_content)
+
+    return str(json_path), str(md_path)
+
+
+def append_summary(
+    results: list[TwoAgentScenarioResult],
+    dataset_path: str,
+    summary_path: str,
+) -> None:
+    """Append a run summary block to the shared cumulative Markdown summary file.
+
+    Creates the file (with a header) if it does not yet exist.
+    """
+    from datetime import datetime
+    from pathlib import Path
+
+    Path(summary_path).parent.mkdir(parents=True, exist_ok=True)
+
+    count = len(results)
+    pass_count = sum(1 for r in results if r.passed)
+    ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    stem = Path(dataset_path).stem
+
+    lines = [
+        f"\n## Run: {ts} — {stem}\n",
+        f"- **Dataset:** {dataset_path}",
+        f"- **Pass rate:** {pass_count}/{count} ({pass_count / count * 100:.0f}%)",
+    ]
+    for diff in ("easy", "medium", "hard"):
+        diff_rs = [r for r in results if r.difficulty == diff]
+        if diff_rs:
+            dp = sum(1 for r in diff_rs if r.passed)
+            lines.append(f"- **{diff.capitalize()}:** {dp}/{len(diff_rs)}")
+
+    exists = Path(summary_path).exists()
+    with open(summary_path, "a") as fh:
+        if not exists:
+            fh.write("# Benchmark Summary\n")
+        fh.write("\n".join(lines) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# run_two_agent_benchmark — sequences all two-agent scenarios (Task 3.3)
+# ---------------------------------------------------------------------------
+
+async def run_two_agent_benchmark(
+    dataset_path: str,
+    summary_path: str = "reports/bench_summary.md",
+) -> list[TwoAgentScenarioResult]:
+    """Load two-agent scenarios, run each, print results, and write reports.
+
+    Args:
+        dataset_path: Path to two-agent YAML scenario file.
+        summary_path: Path for the shared cumulative summary Markdown file.
+
+    Returns:
+        List of TwoAgentScenarioResult objects.
+    """
+    scenarios = load_two_agent_scenarios(dataset_path)
+    results: list[TwoAgentScenarioResult] = []
+
+    for scenario in scenarios:
+        click.echo(f"Running: {scenario.id} [{scenario.difficulty}]...")
+        result = await run_two_agent_scenario(scenario)
+        status = "PASS" if result.passed else "FAIL"
+        click.echo(f"  {status} ({result.turns} turns, {result.wall_clock_s:.1f}s)")
+        results.append(result)
+
+    click.echo()
+    print_two_agent_metrics_report(results)
+
+    json_path, md_path = write_run_reports(results, dataset_path)
+    click.echo(f"\nReports: {json_path}, {md_path}")
+    append_summary(results, dataset_path, summary_path)
+    click.echo(f"Summary: {summary_path}")
+
+    return results
+
+
 def print_metrics_report(results: list[ScenarioResult]) -> None:
     """Print a formatted metrics table to stdout via click.echo."""
     if not results:

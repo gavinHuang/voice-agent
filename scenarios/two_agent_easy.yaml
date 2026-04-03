@@ -1,0 +1,78 @@
+scenarios:
+  - id: store-hours-query
+    description: Caller asks what time the grocery store closes today
+    difficulty: easy
+    timeout: 60
+    caller:
+      goal: >
+        Find out what time Green Valley Grocery closes today (Friday).
+        Be polite and direct. Once you have the answer, say thank you and goodbye.
+    answerer:
+      goal: >
+        You are a customer service agent for Green Valley Grocery.
+        Store hours: Monday–Friday 8am–9pm, Saturday–Sunday 9am–8pm.
+        Answer questions helpfully and concisely. If the caller says goodbye, end the call.
+      opening_line: "Thank you for calling Green Valley Grocery. How can I help you today?"
+    success_criteria:
+      goal_phrases:
+        - "9"
+      max_turns: 6
+
+  - id: wifi-password-request
+    description: Caller asks for the guest WiFi password at a hotel
+    difficulty: easy
+    timeout: 60
+    caller:
+      goal: >
+        You are a hotel guest. Find out the guest WiFi network name and password.
+        Once you have both, thank the agent and end the call.
+    answerer:
+      goal: >
+        You are a front desk agent at Sunrise Hotel.
+        Guest WiFi: network "SunriseGuest", password "Welcome2024".
+        Answer all questions helpfully. End the call when the caller says goodbye.
+      opening_line: "Good morning, Sunrise Hotel front desk. How may I assist you?"
+    success_criteria:
+      goal_phrases:
+        - "SunriseGuest"
+        - "Welcome2024"
+      max_turns: 6
+
+  - id: return-policy-inquiry
+    description: Caller asks about the return policy for an online retailer
+    difficulty: easy
+    timeout: 60
+    caller:
+      goal: >
+        Find out how many days you have to return an item purchased from QuickShop online store,
+        and whether you need the original receipt. Once you have this information, say thank you and hang up.
+    answerer:
+      goal: >
+        You are a customer support agent for QuickShop Online.
+        Return policy: customers have 30 days from purchase date to return items.
+        Original receipt or order confirmation email is required.
+        Answer concisely and end the call when the customer says goodbye.
+      opening_line: "QuickShop support, this is Alex. How can I help you today?"
+    success_criteria:
+      goal_phrases:
+        - "30"
+      max_turns: 6
+
+  - id: appointment-availability
+    description: Caller asks if a dentist office has openings this week
+    difficulty: easy
+    timeout: 60
+    caller:
+      goal: >
+        Check if Bright Smile Dental has any appointment slots available this week (the week of April 7).
+        You want to know any available day and time. Once you get the information, say you'll call back to book and say goodbye.
+    answerer:
+      goal: >
+        You are a receptionist at Bright Smile Dental.
+        Available appointments this week: Tuesday April 8 at 2pm, Thursday April 10 at 10am.
+        Provide this information and end the call when the caller says goodbye.
+      opening_line: "Bright Smile Dental, how can I help you?"
+    success_criteria:
+      goal_phrases:
+        - "Tuesday"
+      max_turns: 6
