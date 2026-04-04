@@ -1,0 +1,190 @@
+[
+  {
+    "scenario_id": "bank-transfer-full-verify",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 11,
+    "wall_clock_s": 3.2335127080441453,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "First National Bank wire transfer desk. How may I assist you?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'd like to initiate a wire transfer, please. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "get started with the wire transfer, could you please tell me your account number?"
+      },
+      {
+        "role": "caller",
+        "text": "account number is 44201."
+      },
+      {
+        "role": "answerer",
+        "text": "security purposes, I need to verify your identity. Can you please tell me your full legal name associated with account 44201?"
+      },
+      {
+        "role": "caller",
+        "text": "full name is Robert Alvarez."
+      },
+      {
+        "role": "answerer",
+        "text": ", to complete the verification process, could you please tell me your date of birth, Mr. Alvarez?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is July 22, 1975."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. You'd like to initiate a wire transfer. Can you please tell me the recipient's account number and the bank they're with, as well as the amount you'd like to transfer?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to transfer $5,000 to account number 9988-7766 at Chase Bank."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve processed the wire transfer of $5,000 to account 9988-7766 at Chase Bank. The reference number for this transaction is TXN-2026-0404-001. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "healthcare-records-partial-info",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 3.032959791016765,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "City General Hospital medical records. This is Chris speaking."
+      },
+      {
+        "role": "caller",
+        "text": "Chris, my name is Emily Watson and I'm calling to request some information from my medical records. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your medical records, Ms. Watson. Before I can assist you, I just need to verify a few pieces of information to ensure I'm speaking with the correct person. Can you please confirm your date of birth and patient ID number for me?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is November 3, 1988, and my patient ID is P-10293."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. I'm going to go ahead and process your request for medical records. We will email them to the email address we have on file within 5 business days. Is that okay with you?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'd like to request that the records be emailed to a specific email address, emily.watson@email.com. Could you please update that for me? And just to confirm, you'll be sending my medical records for the past year to that email address within 5 business days, correct?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve updated the email address in our system to emily.watson@email.com. And yes, that's correct, we'll be sending your medical records for the past year to that email address within 5 business days. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "telecom-dispute-escalation",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 6,
+    "wall_clock_s": 2.8256021669949405,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "ConnectMobile customer service. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm calling about my account, the phone number is 555-0273. I noticed an unexpected charge on my last bill and I'd like to speak with someone about it. Can I please have you verify my account to ensure we can discuss the details? My PIN is 8842."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. I'm going to look into the charge on your account. Can you please tell me more about the unexpected charge you're seeing?"
+      },
+      {
+        "role": "caller",
+        "text": "you for verifying my account. The charge is for $45 and it's listed as a \"Premium Add-on\". I don't recall authorizing this charge, and I'd like to know more about what it's for and how I can have it removed from my bill. Can you tell me more about this charge and if it's possible to remove it?"
+      },
+      {
+        "role": "answerer",
+        "text": "Premium Add-on charge was added to your account in error. I'm happy to help you with this. I'm going to go ahead and file a dispute for this charge, reference number DIS-2026-0404-77. A supervisor will review the dispute and will call you back within 24 hours to discuss further. Is that okay with you?"
+      },
+      {
+        "role": "caller",
+        "text": "sounds good. Just to confirm, the $45 Premium Add-on charge is being disputed and a supervisor will review it and call me back within 24 hours to discuss further, correct? The reference number for the dispute is DIS-2026-0404-77. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "insurance-claim-with-correction",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 3.6511929580010474,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "SafeGuard Insurance home claims. How can I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to file a new home insurance claim. My policy number is POL-HOME-5521. I'd appreciate it if you could help me with the process. Could you please verify my identity first?"
+      },
+      {
+        "role": "answerer",
+        "text": "verify your identity, I'll need to confirm a few details. You've already provided your policy number, POL-HOME-5521. Can you please tell me your date of birth?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is April 19, 1979."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked the information, and I apologize, but the date of birth I have on file for policy number POL-HOME-5521 is April 9, 1979, not April 19. Verification has failed for the date of birth. Could you please confirm your date of birth again?"
+      },
+      {
+        "role": "caller",
+        "text": "'ve verified your identity. My correct date of birth is indeed April 9, 1979. I apologize for the initial mistake. Now that my identity is verified, I'd like to proceed with filing a new home insurance claim for water damage in my kitchen. Could you please assist me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. Now, let's proceed with filing the claim for water damage in your kitchen. I've created a new claim for you, and the claim number is CLM-HOME-2026-0142. An adjuster will visit your home to assess the damage within the next 3 business days. Is that okay with you?"
+      }
+    ]
+  }
+]

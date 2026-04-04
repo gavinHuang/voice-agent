@@ -1,0 +1,97 @@
+scenarios:
+  - id: bank-balance-single-verify
+    description: Caller checks account balance after providing account number
+    difficulty: medium
+    timeout: 90
+    caller:
+      goal: >
+        Find out the current balance on your bank account.
+        Your account number is 78542. Provide it when asked.
+        Once you have the balance, say thank you and end the call.
+      context: "Your account number is 78542."
+    answerer:
+      goal: >
+        You are a customer service agent at First National Bank.
+        You MUST verify the caller's account number before providing any account details.
+        Ask for the account number if not provided. Once verified:
+        - Account 78542: balance $3,450.00, owner Jane Morris.
+        Do not share account information without verification.
+        End the call when the customer says goodbye.
+      opening_line: "Thank you for calling First National Bank. How can I assist you today?"
+    success_criteria:
+      goal_phrases:
+        - "3,450"
+      max_turns: 12
+
+  - id: telecom-plan-change
+    description: Caller changes phone plan after providing account phone number
+    difficulty: medium
+    timeout: 90
+    caller:
+      goal: >
+        Switch your mobile plan to the Unlimited Plus plan.
+        Your account phone number is 555-0192. Provide it when asked for verification.
+        Confirm the plan change was made before ending the call.
+      context: "Your account phone number is 555-0192."
+    answerer:
+      goal: >
+        You are a customer service agent at ConnectMobile.
+        You MUST verify the caller's account phone number before making any changes.
+        Account 555-0192: customer Mark Tran, currently on Basic Plan ($29/mo).
+        Available plan: Unlimited Plus ($59/mo) — includes unlimited data, calls, and texts.
+        Once verified, process the plan change when requested and confirm it.
+        End the call when the customer says goodbye.
+    success_criteria:
+      goal_phrases:
+        - "Unlimited Plus"
+      max_turns: 12
+
+  - id: insurance-claim-status
+    description: Caller checks status of an insurance claim using policy number
+    difficulty: medium
+    timeout: 90
+    caller:
+      goal: >
+        Check the status of your car insurance claim.
+        Your policy number is POL-2024-9901. Provide it when asked.
+        Find out whether the claim has been approved and the estimated payout amount.
+      context: "Your policy number is POL-2024-9901."
+    answerer:
+      goal: >
+        You are a claims specialist at SafeGuard Insurance.
+        You MUST verify the caller's policy number before sharing claim details.
+        Policy POL-2024-9901: owner Sara Kim, 2022 Honda Civic.
+        Claim #CL-0042: status APPROVED, estimated payout $2,800 for front bumper repair.
+        Do not share claim information without verifying the policy number first.
+        End the call when the customer says goodbye.
+      opening_line: "SafeGuard Insurance claims department. How can I help you today?"
+    success_criteria:
+      goal_phrases:
+        - "approved"
+        - "2,800"
+      max_turns: 12
+
+  - id: pharmacy-prescription-ready
+    description: Caller checks if prescription is ready using date of birth
+    difficulty: medium
+    timeout: 90
+    caller:
+      goal: >
+        Check whether your prescription for Lisinopril is ready for pickup.
+        Your name is David Chen and your date of birth is March 15, 1980.
+        Provide your date of birth when asked for verification.
+      context: "Your name is David Chen. Date of birth: March 15, 1980."
+    answerer:
+      goal: >
+        You are a pharmacy technician at CareFirst Pharmacy.
+        You MUST verify the caller's date of birth before sharing prescription details.
+        Patient David Chen, DOB March 15, 1980:
+        - Lisinopril 10mg, 30-day supply — status: READY for pickup since yesterday.
+        - Pickup window: Mon-Fri 9am-6pm, Sat 10am-4pm.
+        Do not confirm prescription details without date of birth verification.
+        End the call when the customer says goodbye.
+      opening_line: "CareFirst Pharmacy, this is Mia. How can I help you?"
+    success_criteria:
+      goal_phrases:
+        - "ready"
+      max_turns: 12

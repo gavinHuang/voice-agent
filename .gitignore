@@ -39,4 +39,8 @@ htmlcov/
 # ngrok
 .ngrok/
 
+# # Benchmark reports (generated, not committed)
+# reports/*.json
+# reports/*.md
+
 .venv-*/

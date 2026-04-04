@@ -1,0 +1,138 @@
+[
+  {
+    "scenario_id": "store-hours-query",
+    "difficulty": "easy",
+    "passed": true,
+    "turns": 3,
+    "wall_clock_s": 1.0899159159744158,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling Green Valley Grocery. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'m calling to inquire about your store hours for today. Could you please tell me what time you close this Friday?"
+      },
+      {
+        "role": "answerer",
+        "text": "'re open until 9pm on Fridays, so we'll be closing at 9pm today. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "wifi-password-request",
+    "difficulty": "easy",
+    "passed": true,
+    "turns": 5,
+    "wall_clock_s": 2.0906227919622324,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Good morning, Sunrise Hotel front desk. How may I assist you?"
+      },
+      {
+        "role": "caller",
+        "text": "morning. I'm a guest here at the hotel and I'm having some trouble getting online. Can you please help me with the WiFi network name and password?"
+      },
+      {
+        "role": "answerer",
+        "text": "morning. I'd be happy to help you with that. The WiFi network name is SunriseGuest and the password is Welcome2024. Would that help you get connected?"
+      },
+      {
+        "role": "caller",
+        "text": ", that should do it. So just to confirm, the network name is SunriseGuest and the password is Welcome2024. Does that work for you?"
+      },
+      {
+        "role": "answerer",
+        "text": ", that's correct. The network name is indeed SunriseGuest and the password is Welcome2024. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "return-policy-inquiry",
+    "difficulty": "easy",
+    "passed": true,
+    "turns": 5,
+    "wall_clock_s": 1.4693342910031788,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "QuickShop support, this is Alex. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "Alex, I'm calling about an item I recently purchased from QuickShop's online store. I'd like to know more about the return policy, specifically how many days I have to return the item and what documentation is required. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "have 30 days from the purchase date to return an item. To process the return, we'll need either the original receipt or your order confirmation email. Can you please confirm if you have either of those?"
+      },
+      {
+        "role": "caller",
+        "text": "do have the order confirmation email, so that should be okay. Just to confirm, if I want to return the item, I have 30 days from when I bought it, and I can use the order confirmation email as proof of purchase, is that correct? Does that work for you?"
+      },
+      {
+        "role": "answerer",
+        "text": ", that's correct. You have 30 days from the purchase date to return the item, and your order confirmation email will serve as proof of purchase. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "appointment-availability",
+    "difficulty": "easy",
+    "passed": true,
+    "turns": 5,
+    "wall_clock_s": 1.5110020409920253,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Bright Smile Dental, how can I help you?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm calling to inquire about availability for an appointment at Bright Smile Dental this week. Could you please let me know if you have any openings?"
+      },
+      {
+        "role": "answerer",
+        "text": "have two available appointments this week. One is on Tuesday, April 8 at 2pm, and the other is on Thursday, April 10 at 10am. Would either of those times work for you?"
+      },
+      {
+        "role": "caller",
+        "text": "are both possibilities. I'll need to check a few things on my end, so I'll call back to book the appointment. Can you please confirm that the two available times are Tuesday at 2pm and Thursday at 10am?"
+      },
+      {
+        "role": "answerer",
+        "text": ", that's correct. The two available appointments are Tuesday, April 8 at 2pm and Thursday, April 10 at 10am. I'll make sure to hold those spots for you until you call back to confirm. Does that work for you?"
+      }
+    ]
+  }
+]

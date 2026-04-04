@@ -270,17 +270,41 @@ def call_cmd(
 
 @cli.command()
 @click.option("--dataset", type=str, default=None, help="YAML scenario file")
-@click.option("--output", type=str, default=None, help="JSON output file for results")
+@click.option("--output", type=str, default=None, help="JSON output file for results (IVR mode only)")
+@click.option(
+    "--mode",
+    type=click.Choice(["ivr", "two-agent"]),
+    default="ivr",
+    show_default=True,
+    help="Benchmark mode: ivr (default) or two-agent",
+)
+@click.option(
+    "--summary",
+    type=str,
+    default="reports/bench_summary.md",
+    show_default=True,
+    help="Path for shared cumulative summary Markdown file (two-agent mode)",
+)
 @click.pass_context
-def bench(ctx: click.Context, dataset: str | None, output: str | None) -> None:
-    """Run IVR benchmark scenarios."""
+def bench(
+    ctx: click.Context,
+    dataset: str | None,
+    output: str | None,
+    mode: str,
+    summary: str,
+) -> None:
+    """Run benchmark scenarios (IVR or two-agent mode)."""
     cfg = ctx.obj["config"].get("bench", {})
     effective_dataset = dataset if dataset is not None else cfg.get("dataset")
     if not effective_dataset:
         click.echo("Error: --dataset required (or set bench.dataset in config)", err=True)
         sys.exit(1)
-    from shuo.bench import run_benchmark
-    asyncio.run(run_benchmark(effective_dataset, output_path=output))
+    if mode == "two-agent":
+        from shuo.bench import run_two_agent_benchmark
+        asyncio.run(run_two_agent_benchmark(effective_dataset, summary_path=summary))
+    else:
+        from shuo.bench import run_benchmark
+        asyncio.run(run_benchmark(effective_dataset, output_path=output))
 
 
 def _make_observer(label: str):
