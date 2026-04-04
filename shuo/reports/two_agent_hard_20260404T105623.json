@@ -1,0 +1,210 @@
+[
+  {
+    "scenario_id": "bank-transfer-full-verify",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 11,
+    "wall_clock_s": 2.660629333986435,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "First National Bank wire transfer desk. How may I assist you?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'd like to initiate a wire transfer, please. I need to send $5,000 to an account at Chase Bank. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with that wire transfer. Before we get started, I just need to verify some information to ensure the security of your account. Can you please tell me your account number?"
+      },
+      {
+        "role": "caller",
+        "text": "account number is 44201."
+      },
+      {
+        "role": "answerer",
+        "text": "you for providing your account number. Next, I need to confirm your identity. Can you please tell me your full legal name as it appears on your account?"
+      },
+      {
+        "role": "caller",
+        "text": "full name is Robert Alvarez."
+      },
+      {
+        "role": "answerer",
+        "text": "you, Mr. Alvarez. To further verify your identity, can you please tell me your date of birth?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is July 22, 1975."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your account information, Mr. Alvarez. Now, regarding the wire transfer, you'd like to send $5,000 to an account at Chase Bank. Can you please confirm the recipient's account number, which I believe is 9988-7766?"
+      },
+      {
+        "role": "caller",
+        "text": ", that's correct. The recipient's account number is indeed 9988-7766 at Chase Bank. Is the transfer initiated now? Does that work for you?"
+      },
+      {
+        "role": "answerer",
+        "text": "wire transfer of $5,000 to account number 9988-7766 at Chase Bank has been initiated. Your reference number for this transaction is TXN-2026-0404-001. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "healthcare-records-partial-info",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 10,
+    "wall_clock_s": 3.603907457960304,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "City General Hospital medical records. This is Chris speaking."
+      },
+      {
+        "role": "caller",
+        "text": "Chris, my name is Emily Watson and I'm calling to request some information from my medical records. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your medical records, Ms. Watson. Before I can assist you, I just need to verify a few pieces of information to ensure I'm speaking with the correct person. Can you please confirm your date of birth for me?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is November 3, 1988."
+      },
+      {
+        "role": "answerer",
+        "text": "you for confirming your date of birth, Ms. Watson. One more thing to verify - do you have your patient ID number available? It usually starts with a 'P' followed by some numbers."
+      },
+      {
+        "role": "caller",
+        "text": "patient ID is P-10293."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your information, Ms. Watson. I just want to confirm that I have everything correct: your name is Emily Watson, your date of birth is November 3, 1988, and your patient ID is P-10293. Is that all correct? We'll get your medical records request processed and they will be emailed to the email address we have on file within 5 business days. Does that work for you?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'd like to request that the records be emailed to a specific address, emily.watson@email.com. Could you please update that for me? And just to confirm, you'll be sending me my records for the past year, correct?"
+      },
+      {
+        "role": "answerer",
+        "text": "can update the email address on file to emily.watson@email.com for you, Ms. Watson. However, I do need to clarify that our standard procedure is to send the entire medical record, not just the past year. But I can confirm that we'll be sending you your complete medical record to the updated email address within 5 business days. Is that acceptable to you?"
+      },
+      {
+        "role": "caller",
+        "text": "'s acceptable to me. You've confirmed my name is Emily Watson, date of birth is November 3, 1988, patient ID is P-10293, and you'll be emailing my complete medical record to emily.watson@email.com within 5 business days. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "telecom-dispute-escalation",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 5,
+    "wall_clock_s": 2.120369291980751,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "ConnectMobile customer service. How can I help you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'m calling about an unexpected charge on my recent bill. The charge is for $45 and it's labeled as a \"Premium Add-on\". I didn't authorize this charge, and I'd like to have it removed from my account. My phone number is 555-0273. Can I please speak with someone who can assist me with this issue?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with that issue. However, for security purposes, I need to verify your account information. Can you please confirm your phone number, which you've already provided as 555-0273, and also provide your account PIN so I can access your account details?"
+      },
+      {
+        "role": "caller",
+        "text": "phone number is indeed 555-0273, and my account PIN is 8842. Can you please check on the status of this charge and let me know what I need to do to have it removed?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your account. I see that there was an error on our part that resulted in the $45 \"Premium Add-on\" charge being added to your bill. I'm going to go ahead and file a dispute for this charge, reference number DIS-2026-0404-77. A supervisor will review this dispute and contact you within 24 hours to discuss further. Is this acceptable to you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "insurance-claim-with-correction",
+    "difficulty": "hard",
+    "passed": true,
+    "turns": 10,
+    "wall_clock_s": 3.331790833035484,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "SafeGuard Insurance home claims. How can I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to file a new home insurance claim. My policy number is POL-HOME-5521. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your claim. To get started, I just need to verify some information. Can you please confirm your date of birth for me?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is April 19, 1979."
+      },
+      {
+        "role": "answerer",
+        "text": "apologize, but the date of birth we have on file doesn't match what you've provided. Could you please try again to confirm your date of birth?"
+      },
+      {
+        "role": "caller",
+        "text": "made a mistake. My date of birth is actually April 9, 1979."
+      },
+      {
+        "role": "answerer",
+        "text": "you for correcting that. I've verified the information, and everything looks good. I'm going to go ahead and open a new claim for you. Can you please tell me a little bit about what's happened and why you're filing this claim?"
+      },
+      {
+        "role": "caller",
+        "text": "had a water damage incident in my kitchen. A pipe burst, causing water to leak all over the countertops and floor. I'd like to file a claim to cover the damages and any necessary repairs. Can you guide me through the process and let me know what information you need from me?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve gone ahead and filed the claim for the kitchen water damage. Your new claim number is CLM-HOME-2026-0142. We'll be sending an adjuster to assess the damage within the next 3 business days. They'll be in touch with you to schedule a time that works for you. Is that okay with you?"
+      },
+      {
+        "role": "caller",
+        "text": "sounds great, thank you. So, just to confirm, the claim number is CLM-HOME-2026-0142, and I can expect a call from the adjuster within the next 3 business days to schedule a visit. Does that work for me? \n\n sounds great, thank you. The claim number is CLM-HOME-2026-0142 and I'll be expecting a call from the adjuster within the next 3 business days. Does that work for you?"
+      }
+    ]
+  }
+]
