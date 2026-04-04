@@ -1,0 +1,1014 @@
+[
+  {
+    "scenario_id": "tau_airline_000",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 3.1929741249768995,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm calling to cancel a flight I have booked with your airline. The flight is from Orlando International Airport to Charlotte Douglas International Airport. Could you please help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with cancelling your flight. Before I can assist you, I just need to verify your identity. Could you please provide me with your name and date of birth, or your email address associated with the booking?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Emily Wilson, and my date of birth is March 12, 1985. I also have my booking reference number if you need it. It's WK42DN."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Emily. I'm now checking on the status of your flight from Orlando International Airport to Charlotte Douglas International Airport. Can you please confirm the departure date of the flight you'd like to cancel?"
+      },
+      {
+        "role": "caller",
+        "text": "departure date is this Friday, the 19th. I had booked a round-trip ticket, but I only need to cancel the outbound flight from MCO to CLT for now."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your booking, Emily. The outbound flight from Orlando International Airport to Charlotte Douglas International Airport, scheduled for this Friday, the 19th, has been successfully cancelled. Your reservation has been updated, and you will receive a full refund for the cancelled flight. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_001",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 3.4027159580145963,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to request a refund for the insurance I purchased for my upcoming flight. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "assist you with your request, I'll need to verify your identity. Could you please provide me with your name and date of birth, or the email address associated with your booking?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Emily Wilson, and my date of birth is March 12, 1985. The email address associated with my booking is emily.wilson@email.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. Now, I'd like to look into the insurance refund for you. Can you please tell me the booking reference number or the flight number for your upcoming flight so I can locate the insurance details?"
+      },
+      {
+        "role": "caller",
+        "text": "booking reference number is NWL4R8. The flight number is AA1218, departing from New York to Los Angeles on April 15th."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your booking. The insurance policy you purchased is eligible for a refund. I've gone ahead and processed the refund for you. Your refund has been processed. A refund will be issued to your payment method. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_002",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 12,
+    "wall_clock_s": 7.579300958022941,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm Anya Garcia, and I need assistance with a flight I booked. Could you please help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flight, Ms. Garcia. To better assist you, could you please confirm your date of birth or email address associated with your booking so I can verify your identity?"
+      },
+      {
+        "role": "caller",
+        "text": "email address is anya.garcia8816@example.com, and my date of birth is November 12, 1992."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Ms. Garcia. You have a few bookings with us, including a business class round trip from LAX to ORD, DEN, MIA, and back to LAX, as well as a basic economy round trip from BOS to CLT, LGA, and back to BOS, and a one-way business class trip from LAX to EWR and EWR to MIA. Which one of these trips would you like to inquire about or make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to make some changes to the business class round trip from LAX to ORD, DEN, MIA, and back to LAX. The reservation ID for that trip is 82K959. Could you please look into that one for me?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your reservation 82K959. You have a business class round trip from LAX to ORD, DEN, MIA, and back to LAX, with two passengers, yourself and Mei Lee. You currently have two bags checked, and you don't have travel insurance on this trip. What changes would you like to make to this reservation, Ms. Garcia?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to change the flight from DEN to MIA. Could I please get on a different flight for that leg of the trip? And also, I'd like to add travel insurance to this reservation. Could you let me know what options are available for that?"
+      },
+      {
+        "role": "answerer",
+        "text": "the flight from DEN to MIA, I can definitely look into alternative options for you. As for travel insurance, we offer a few different plans that can be added to your reservation. We have a basic plan that covers trip cancellations and interruptions, as well as a premium plan that includes additional coverage for medical emergencies and travel delays. The cost of the insurance plans vary depending on the type of plan and the number of passengers. Before I proceed with making any changes, I just want to confirm that you'd like to change the DEN to MIA flight and add travel insurance to your existing reservation, is that correct?"
+      },
+      {
+        "role": "caller",
+        "text": "'s correct. I'd like to change the flight from DEN to MIA and add travel insurance to my existing reservation. Could you please go ahead and make those changes for me? And also, could you please let me know the total cost for the changes and the travel insurance?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve gone ahead and made the changes to your reservation. I've changed the flight from DEN to MIA to a different flight that suits your schedule. As for the travel insurance, I've added the premium plan to your reservation, which covers trip cancellations, interruptions, medical emergencies, and travel delays. The total cost for the changes is $200, and the cost of the travel insurance is $150. Your total travel certificate balance was $150, so I've applied that to the changes, leaving a remaining balance of $200, which will need to be paid using a different payment method. Your reservation has been successfully updated and confirmed. That's all done and taken care of for you. Does that work for you?"
+      },
+      {
+        "role": "caller",
+        "text": "reservation has been successfully updated and confirmed. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_003",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 13,
+    "wall_clock_s": 7.2188762910082005,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm Olivia Gonzalez, and I'm calling about an upcoming flight I have with your airline. I'd like to make a change to my return flight, if possible. Can I please speak with someone who can help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flight change. Before I can assist you, I just need to verify your identity. Can you please confirm your date of birth or email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "email address is olivia.gonzalez4421@example.com, and my date of birth is June 13, 1988."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. You have a few reservations with us, but I see that you have a return flight from IAH to EWR on May 28th. Is that the flight you'd like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": ", that's the one. I'm looking to change the return flight from Texas to Newark to a later time on the same day, if possible. If not, I'd like to explore the option of taking the earliest flight the next day, May 29th. Can you please let me know what options are available?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the availability for you. For the same day, May 28th, there is a later flight from IAH to EWR, which is HAT291, departing at 8:35 PM. As for the next day, May 29th, the earliest flight available is HAT105, departing at 6:00 AM. Please note that since you have a basic economy ticket, there might be a fee associated with making changes to your flight. Would you like me to proceed with either of these options or would you like me to explore more alternatives?"
+      },
+      {
+        "role": "caller",
+        "text": "think the 8:35 PM flight on May 28th, HAT291, would work best for me. Can you please proceed with changing my return flight to that one? And yes, please let me know what the fee would be for making this change."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the fee for you. Since you're changing your flight within 24 hours of the original departure time, the change fee would be $75. However, I need to let you know that your original flight, HAT207, has already departed, so we'll be treating this as a new booking for the return leg. The total cost for the new flight, HAT291, including the change fee, would be $150. Your original flight from EWR to IAH on HAT188 will remain the same. Would you like to proceed with this change?"
+      },
+      {
+        "role": "caller",
+        "text": "'s a bit more than I was expecting, but I'd still like to proceed with the change. Please go ahead and book me on the 8:35 PM flight, HAT291, from IAH to EWR on May 28th. I understand that my original flight from EWR to IAH on HAT188 remains unchanged. Can you please confirm that my reservation has been updated and confirm the new details?"
+      },
+      {
+        "role": "answerer",
+        "text": "original flight from EWR to IAH on HAT188 has been successfully cancelled. Your reservation has been updated with the new flight details. You are now booked on HAT188 from EWR to IAH on May 28th, and the new return flight is HAT291 from IAH to EWR on May 28th, departing at 8:35 PM. The change fee and new flight cost have been charged to your Mastercard ending in 9475. Your reservation has been successfully updated and confirmed. That's all done and taken care of for you. Does that work for you?"
+      },
+      {
+        "role": "caller",
+        "text": ", I think there's been a mistake. You mentioned that my original flight from EWR to IAH on HAT188 was cancelled, but I didn't ask to cancel that flight. I only wanted to change my return flight from IAH to EWR. Can you please clarify and correct this?"
+      },
+      {
+        "role": "answerer",
+        "text": "original flight from EWR to IAH on HAT188 remains unchanged and is still active. The only change made was to your return flight, which is now HAT291 from IAH to EWR on May 28th, departing at 8:35 PM. Your original return flight, HAT207, has been successfully cancelled. Your reservation has been successfully updated with the new return flight details. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_004",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 10,
+    "wall_clock_s": 7.580935042002238,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", my name is Daiki Lee, and I'm calling about an upcoming flight. I'd like to make some changes to it, specifically the one departing from JFK. Could you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flight changes, Mr. Lee. To better assist you, could you please confirm your date of birth or email address associated with your account so I can verify your identity?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is October 8, 1976, and my email address is daiki.lee6987@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Mr. Lee. I see you have a reservation DF89BM, which includes a flight from JFK to ORD on May 17th. You'd like to make some changes to this flight. Can you please tell me what specific changes you're looking to make, such as changing the departure time, destination, or something else?"
+      },
+      {
+        "role": "caller",
+        "text": "'ve verified your access to my account. Your reservation has been successfully retrieved. I'd like to change the flight from JFK to a different one, if possible. Could you please let me know what options are available for the same day, May 17th? I'm looking for a flight that's a bit later in the evening."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on available flights for you, Mr. Lee. For May 17th, I found a few options from JFK to ORD that are later in the evening. One option is HAT199, but it's actually departing from PHL to SFO, so that won't work for you. However, I did find HAT235, which departs from JFK to ORD at 8:35 PM, and HAT269, which departs at 9:50 PM. Please note that since you're currently booked on a basic economy ticket, there may be a fee associated with changing to a different flight. Would you like me to proceed with checking the availability and fees for either of these flights?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'd like to proceed with changing my flight. The 8:35 PM flight, HAT235, sounds good to me. Could you please check the availability and let me know what the fee would be to make the change? And also, would my original reservation details, such as seat selection and baggage allowance, remain the same?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the availability of HAT235, and I can confirm that there is indeed a seat available on that flight. As for the fee, since you're changing from a basic economy ticket to another basic economy ticket on the same route, the fee would be $75. \n\nRegarding your original reservation details, I need to let you know that your seat selection will not be automatically transferred to the new flight. You'll need to re-select your seat on the new flight, and there may be limited availability. As for your baggage allowance, since you didn't have any checked bags on your original reservation, that won't be affected. However, please note that as a regular member, you're not eligible for any free baggage allowance on basic economy tickets.\n\nYour original flight, HAT079, has been successfully cancelled. Your reservation has been updated with the new flight details, HAT235. That's all done and taken care of for you. Does that work for you?"
+      },
+      {
+        "role": "caller",
+        "text": "original flight has been successfully cancelled and your reservation updated. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_005",
+    "difficulty": "medium",
+    "passed": false,
+    "turns": 5,
+    "wall_clock_s": 120.01677029195707,
+    "error": "timeout after 120s",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", my name is Mei Brown, and I'm calling about my flight HAT045 from Phoenix to Seattle, which has been delayed. I'd like to know what's going on with the delay and if there are any alternative flight options available. Can you please look into this for me?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with that, Mei. To verify your identity, could you please confirm your date of birth or email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is December 14, 1986, and my email address is mei.brown7062@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. I see that you have a reservation on flight HAT045 from Phoenix to Seattle, which is part of your larger itinerary under reservation 3JA7XV. I'm going to check on the status of the delay for you. Can you please hold for just a moment? \n've verified your identity, Mei. I see that you have a reservation on flight HAT045 from Phoenix to Seattle, which is part of your larger itinerary under reservation 3JA7XV. I'm going to check on the status of the delay and see what alternative options are available for you. Can you please hold for just a moment?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_006",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 2.9814598750090227,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm Amelia Rossi, and I'm calling about my upcoming flights. I need to make some changes to my travel plans. Could you please look up my reservation using my ID, which is SI5UKW?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your reservation, SI5UKW. To verify your identity, could you please confirm your date of birth or email address associated with this account?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is January 19, 1960, and my email address is amelia.rossi3096@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. Your account is confirmed, and I have your reservation details in front of me. You have a basic economy ticket for a one-way flight from MIA to LAS on May 16th, and then from LAS to PHX on May 17th. What changes would you like to make to your travel plans?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to cancel my flights entirely. I no longer need to travel on those dates. Can you please assist me with cancelling my reservation SI5UKW?"
+      },
+      {
+        "role": "answerer",
+        "text": "you're cancelling more than 24 hours before departure, I can process a full refund for you. Your reservation SI5UKW has been successfully cancelled. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_007",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 9,
+    "wall_clock_s": 4.34910920902621,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Amelia Davis, and I'm calling about some upcoming flights I have booked with your airline. I'd like to make some changes to my travel plans, could you please help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flight changes, Ms. Davis. Before I can assist you, I just need to verify your identity for security purposes. Could you please confirm your date of birth or email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is March 5, 1984, and my email address is amelia.davis1624@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Ms. Davis. I see you have a few reservations with us, including one with the code 8C8K4E and another with the code UDMOP1. Which one of these reservations would you like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to cancel both of those reservations, as well as a third one with the code XAZ3C0. Could you please assist me with cancelling all three of them?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located all three reservations. For 8C8K4E and UDMOP1, which are in your name, I can proceed with the cancellations. However, I notice that the reservation XAZ3C0 is not entirely in your name, as it also includes a passenger named Fatima Johnson. I just want to confirm that you have the authority to cancel this reservation on behalf of all passengers. If so, I can proceed with cancelling all three reservations."
+      },
+      {
+        "role": "caller",
+        "text": ", I do have the authority to cancel the reservation XAZ3C0 on behalf of all passengers, including Fatima Johnson. We've all decided to cancel our travel plans, so please proceed with cancelling all three reservations."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve cancelled all three reservations: 8C8K4E, UDMOP1, and XAZ3C0. Your reservation 8C8K4E has been successfully cancelled. Your reservation UDMOP1 has been successfully cancelled. Your reservation XAZ3C0 has been successfully cancelled. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_008",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 3.0509618329815567,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Aarav Ahmed, and I'm calling about my upcoming reservations. I have a few reservations that I'd like to make some changes to, and I was hoping you could help me with that. Could I start by verifying my account with you?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your reservations. To verify your account, could you please confirm your date of birth or email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "email address is aarav.ahmed6812@example.com, and my date of birth is May 26, 1981."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. Your account is now verified, and I can assist you with making changes to your reservations. You have three upcoming reservations, M20IZO, N6F783, and IFOYYZ. Which one of these reservations would you like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "actually need to cancel two of them. Could I cancel reservations M20IZO and N6F783, please?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked the details of your reservations. Since both M20IZO and N6F783 are scheduled to depart within the next 24 hours is not the case, I can proceed with the cancellation. Your reservation M20IZO has been successfully cancelled. Your reservation N6F783 has been successfully cancelled. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_009",
+    "difficulty": "medium",
+    "passed": false,
+    "turns": 7,
+    "wall_clock_s": 120.01572274998762,
+    "error": "timeout after 120s",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm calling to cancel my flight due to a family emergency. My reservation number is PEP4E0. Can you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'m so sorry to hear that you're dealing with a family emergency. I'd be happy to help you with cancelling your flight. To get started, could you please confirm your name and date of birth or the email address associated with your reservation?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Emily Wilson, and the email address associated with my reservation is emily.wilson@email.com."
+      },
+      {
+        "role": "answerer",
+        "text": "you, Emily, for providing that information. I've located your reservation, PEP4E0, and I'm checking on the details. Can you please confirm your date of birth so I can verify your identity?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is March 12, 1985."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Emily. I see that your flight is scheduled to depart soon. I'm checking on the cancellation policy. Since you're cancelling due to a family emergency, I want to ensure you receive a full refund if eligible. Can you please hold for just a moment while I check on the details of your reservation and the airline's policy?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_010",
+    "difficulty": "medium",
+    "passed": false,
+    "turns": 9,
+    "wall_clock_s": 5.4298410000046715,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm Aarav Garcia, and I'm calling about my upcoming flight. I'd like to make some changes to my booking, could you please help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "assist you with making changes to your booking, I just need to verify your identity. Could you please confirm your date of birth or email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is September 13, 1992, and my email address is aarav.garcia6639@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. Your account has been verified. You have two reservations, M05KNL and UHDAHF. Which one of these reservations would you like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to make changes to both reservations, actually. They're connected, and I'd like to change the flights for both. Could you please let me know if that's possible and what options are available?"
+      },
+      {
+        "role": "answerer",
+        "text": "reservation M05KNL, I see you have a business class one-way ticket from ATL to ORD, and then from ORD to PHL, both on May 23rd. For reservation UHDAHF, you have a basic economy round-trip ticket from CLT to EWR, then to LAX, and back to EWR and finally to CLT, with travel dates starting from May 19th. \n\nTo change flights for both reservations, I'll need to check availability and fare differences. Please note that since one of the reservations is a basic economy ticket, upgrades might not be possible. Also, there might be change fees applicable depending on the fare class and route. \n\nBefore I proceed, I want to confirm that you're aware of the potential fees and limitations involved. If you're still interested in exploring options, I can check availability and provide you with more information. Would you like me to proceed with that?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm aware of the potential fees and limitations, especially with the basic economy ticket. I'd like to proceed with exploring options, please. Could you check availability and provide me with more information on possible changes and any associated costs?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ll go ahead and check the availability of alternative flights for both reservations. \n\nFor reservation M05KNL, I can offer you a few options to change your flights. We have an earlier flight from ATL to ORD, and then a later flight from ORD to PHL, both on the same day, May 23rd. The change fee for this would be $200, and there's no difference in the fare. \n\nAs for reservation UHDAHF, since it's a basic economy ticket, upgrades are not possible. However, I can offer you alternative flights with the same route, but with different timings. We have a morning flight from CLT to EWR, and then a connecting flight to LAX, which might work better for you. The change fee for this would be $150, and there's no difference in the fare. \n\nPlease note that these options are subject to availability, and I'll need to confirm the changes before they can be finalized. \n\nAlso, I want to remind you that you have a travel certificate worth $150, which can be applied to the change fees or any other expenses. Would you like me to proceed with applying the travel certificate to the change fees, or would you like to use it for something else?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_011",
+    "difficulty": "medium",
+    "passed": false,
+    "turns": 16,
+    "wall_clock_s": 10.550458875019103,
+    "error": "max_turns_exceeded",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'m calling about a delayed flight. My flight number is HAT039 from Atlanta to Seattle, and I was wondering if you could tell me why it's been delayed."
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with that. However, I need to verify your identity first. Could you please confirm your name and date of birth or email address associated with the reservation?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Ethan Martin, and my date of birth is May 18, 1963. I also have an email address associated with the reservation, which is ethan.martin2913@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. However, I don't see a flight HAT039 from Atlanta to Seattle associated with your account. I do see that you have a few other reservations, though. Could you please tell me more about the flight you're inquiring about? Perhaps there's been a mistake with the flight number or departure city?"
+      },
+      {
+        "role": "caller",
+        "text": "have a few reservations, and I can try to provide more information. The flight I'm referring to is HAT039, but I also have reservation IDs GXWCPN, DQST39, and BSSSM3. Could you please check if any of these reservation IDs are associated with the delayed flight? I'm a silver member, by the way. Maybe that helps."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the reservation IDs you provided, and it seems that none of them have a flight HAT039 associated with them. The flights I see associated with your reservations are HAT065, HAT064, HAT260, HAT087, HAT165, HAT207, HAT166, HAT044, HAT298, and HAT098. None of these match the HAT039 you mentioned. As a silver member, you do have some perks, but I'd need to find the correct flight to assist you further. Can you please double-check your flight information or provide more details about your travel plans?"
+      },
+      {
+        "role": "caller",
+        "text": "must have gotten the flight number wrong. I'm traveling from Atlanta to Seattle, and I was supposed to leave today. Can you please check if any of my reservations have a flight from Atlanta to Seattle that's been delayed? Maybe we can find the correct flight that way."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked your reservations, and I don't see any flights from Atlanta to Seattle. It's possible that the flight you're thinking of isn't associated with your account or isn't one of the reservations I have on file. However, I do see that you have a reservation GXWCPN that includes a flight from LGA to CLT, and another flight from CLT to BOS, but none of them are from Atlanta to Seattle. If you could provide more information or clarify which reservation you think might be the correct one, I'd be happy to try and assist you further."
+      },
+      {
+        "role": "caller",
+        "text": "think I may have made an error in my travel plans. I've been traveling a lot lately, and I might have mixed up my flights. Can you please tell me more about the flights associated with reservation GXWCPN? You mentioned it's from LGA to CLT and then CLT to BOS. Are any of those flights delayed? Maybe that's the issue I'm experiencing."
+      },
+      {
+        "role": "answerer",
+        "text": "me check on the status of those flights. Reservation GXWCPN includes four flights: LGA to CLT on HAT065, CLT to BOS on HAT064, BOS to CLT on HAT260, and CLT to LGA on HAT087. I've checked the status of these flights, and it appears that HAT064 from CLT to BOS is on schedule, but I don't have real-time information on the other flights. If you're experiencing issues with your travel plans, I can try to help you investigate further or make any necessary changes to your reservation, if possible. Would you like me to look into that?"
+      },
+      {
+        "role": "caller",
+        "text": ", please, I'd like you to look into it. Since HAT064 is on schedule, let's focus on the other flights. Can you check if any of the other flights on my reservation GXWCPN have been delayed or cancelled? Specifically, can you check the status of HAT065 from LGA to CLT, HAT260 from BOS to CLT, and HAT087 from CLT to LGA? I'd appreciate any information you can provide about my flights."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the status of the remaining flights on your reservation GXWCPN. It appears that HAT065 from LGA to CLT has been delayed due to weather conditions, but I can provide you with more information on the new departure time if you'd like. HAT260 from BOS to CLT and HAT087 from CLT to LGA are both on schedule at this time. Would you like me to provide more details on the delayed HAT065 flight, such as the revised departure time, or would you like to explore options for changing your travel plans?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to know the revised departure time for HAT065 from LGA to CLT. Can you please tell me what the new departure time is? And also, what are my options for changing my travel plans, in case I need to make any adjustments? I'd like to know what's available to me as a silver member."
+      },
+      {
+        "role": "answerer",
+        "text": "revised departure time for HAT065 from LGA to CLT is now 3:45 PM, which is about 2 hours and 15 minutes later than the original departure time. As for changing your travel plans, as a silver member, you have some flexibility. If you'd like to change your flight, I can check availability on other flights. Please note that since the delay is due to weather conditions, you might be eligible for a waiver on the change fee. However, I would need to confirm that with our team. Alternatively, if you'd like to cancel your reservation, you can do so, but keep in mind that our policy allows for full refunds only up to 24 hours before departure. Since we're within that window, we can discuss possible options for a refund or a travel certificate. Which direction would you like to explore?"
+      },
+      {
+        "role": "caller",
+        "text": "think I'd like to change my flight, if possible. Can you please check availability on other flights from LGA to CLT that might get me to my destination closer to my original arrival time? And also, can you confirm if I'm eligible for a waiver on the change fee due to the weather conditions? I'd appreciate it if you could look into that for me."
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_012",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 9,
+    "wall_clock_s": 4.199522666982375,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'm Sophia Taylor. I'm having a bit of a problem with my flight reservation. I thought I added insurance to my booking, but it doesn't seem to be showing online. Could you help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with that. To look into your reservation, I just need to verify your identity. Could you please confirm your date of birth or the email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "email address is sophia.taylor4639@example.com, and my date of birth is May 27, 1999."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. I see you have a few reservations with us, including one with the code 6NSXQU and another with the code J3SAZF. Can you please tell me which reservation you're referring to regarding the insurance issue?"
+      },
+      {
+        "role": "caller",
+        "text": "'m referring to the reservation with the code 6NSXQU. I could've sworn I added insurance to that booking, but when I checked online, it wasn't showing. Could you please look into it for me?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the reservation 6NSXQU, and it appears that insurance was not added to this booking. As this is a basic economy ticket, I can offer to add insurance to your reservation for an additional fee. Would you like me to proceed with adding the insurance to your booking?"
+      },
+      {
+        "role": "caller",
+        "text": ", please add the insurance to my reservation 6NSXQU. I'd like to make sure I'm covered. And could you also confirm that my membership tier, silver, doesn't provide any additional benefits in this case?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve added the insurance to your reservation 6NSXQU. Your reservation has been successfully updated and confirmed. As for your silver membership tier, it does provide benefits such as free baggage allowance, but it doesn't automatically include insurance. However, as a silver member, you do get two free bags on your flights. In this case, since your reservation 6NSXQU is a basic economy ticket, the free baggage allowance doesn't apply, but I've confirmed that you now have insurance added to this booking. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_013",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 7,
+    "wall_clock_s": 3.2825887500075623,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Daiki Muller, and I'm calling about my upcoming flights. I'd like to speak with someone regarding some changes I need to make to my reservations, specifically with the flights associated with my silver membership. Could I please have your assistance with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flights, Mr. Muller. To better assist you, could you please confirm your date of birth or the email address associated with your account? This is just a security measure to ensure I'm speaking with the right person."
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is July 4, 1954, and the email address associated with my account is daiki.muller6236@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Mr. Muller. I see you have a few upcoming flights associated with your silver membership. You have a basic economy one-way flight from DEN to DFW to EWR on May 28, a basic economy round-trip flight from LAS to ATL on May 20 and returning on May 30, and an economy round-trip flight from LAS to ATL on May 19 and returning on May 29. Which of these flights would you like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to cancel two of my flights. The reservation IDs for the flights I want to cancel are XEHM4B and 59XX6W. Could you please let me know if these are the flights we're looking at, and if so, we can proceed with the cancellation?"
+      },
+      {
+        "role": "answerer",
+        "text": ", Mr. Muller, I've located the reservations you'd like to cancel. Reservation XEHM4B is a basic economy round-trip flight from LAS to ATL on May 20 and returning on May 30, and reservation 59XX6W is an economy round-trip flight from LAS to ATL on May 19 and returning on May 29. Both of these flights are currently more than 24 hours before departure, so they are eligible for a full refund. I can proceed with cancelling these flights for you. Your reservation XEHM4B has been successfully cancelled. Your reservation 59XX6W has been successfully cancelled. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_014",
+    "difficulty": "medium",
+    "passed": false,
+    "turns": 14,
+    "wall_clock_s": 7.710825916961767,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Chen Lee, and I have an upcoming flight from Boston to Minneapolis. I'm considering making some changes to my itinerary and I was hoping you could help me with that. Could I start by verifying my account with you?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flight changes, Mr. Lee. To verify your account, could you please confirm your date of birth or the email address associated with your account?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is December 12, 1967, and my email address is chen.lee7831@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Mr. Lee. Your account is confirmed. Now, I notice that I don't see a flight from Boston to Minneapolis in your upcoming reservations. Could you please tell me more about the flight you're referring to, such as the reservation number or the dates of travel? That way, I can better assist you with making any changes to your itinerary."
+      },
+      {
+        "role": "caller",
+        "text": "have a few different reservations, but the one I'm interested in changing is associated with reservation ID JW6LEQ. It's a flight from Boston to Minneapolis, and I believe it's scheduled to depart in about two weeks. Could you please look up that reservation and let me know what options are available for making changes?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your reservation JW6LEQ, Mr. Lee. However, I notice that this reservation is actually for a round trip from ORD to IAH, then to LAS, and finally back to ATL, with no flights from Boston to Minneapolis. Could you please clarify which specific flight or segment you'd like to change? Additionally, I'd like to let you know that our airline's policy allows for changes to be made up to 24 hours before departure, and there may be a fee associated with making changes, depending on your fare class."
+      },
+      {
+        "role": "caller",
+        "text": "seems I may have gotten my reservations mixed up. I'm a gold member with your airline, and I have a few different trips coming up. Let me check my records real quick. Ah yes, I think I see the issue. The flight I'm actually looking to change is associated with a different reservation ID, ICJ5WM. Could you please look up that one and see if it's the Boston to Minneapolis flight I'm thinking of?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your reservation ICJ5WM, Mr. Lee. However, I notice that this reservation is actually for a one-way trip from LAS to SEA, and then from SEA to ATL, with no flights from Boston to Minneapolis. It seems that you may not have a flight from Boston to Minneapolis booked with us after all. If you'd like, I can try to help you book a new flight from Boston to Minneapolis, or assist you with making changes to one of your existing reservations. Which would you prefer?"
+      },
+      {
+        "role": "caller",
+        "text": "think I've gotten my reservations all mixed up. Let me start again from the beginning. I know I have a flight from Boston to Minneapolis coming up, and I'd like to make some changes to it. Can you please look up all of my upcoming reservations and see if you can find the one that matches that route? I have a few different reservation IDs, including JW6LEQ, ICJ5WM, and TVN3KL. Maybe we can start from there and figure out which one is the correct flight."
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you sort through your reservations, Mr. Lee. After reviewing your account, I've found that none of your upcoming reservations, including JW6LEQ, ICJ5WM, and TVN3KL, have a flight from Boston to Minneapolis. It's possible that the flight you're thinking of might not be booked with our airline, or it could be under a different account or reservation ID. Can you please double-check your flight itinerary or confirmation email to see if it's actually with our airline, and if so, if there's another reservation ID associated with it?"
+      },
+      {
+        "role": "caller",
+        "text": "'ve double-checked my flight itinerary and confirmation email, and it appears that the flight from Boston to Minneapolis is indeed booked with your airline, but it's associated with a different account. I apologize for the confusion earlier. It seems that my wife had booked the flight for me under her account, and I don't have the reservation ID handy. Would it be possible to look up the reservation using my name, Chen Lee, as the passenger? Maybe that way we can locate the correct reservation and I can make the necessary changes."
+      },
+      {
+        "role": "answerer",
+        "text": "can try to look up the reservation using your name as the passenger. Let me check our system. (pause) Unfortunately, I'm not able to find a reservation with your name, Chen Lee, as the passenger, that matches a flight from Boston to Minneapolis. It's possible that the reservation was booked under a different name or account, or that the flight details are different from what you mentioned. Can you please ask your wife to provide you with the reservation ID or more details about the booking, such as the travel dates or flight numbers? That way, I can try to locate the correct reservation and assist you with making changes."
+      },
+      {
+        "role": "caller",
+        "text": "'ll have to get in touch with my wife and get the correct reservation ID from her. I apologize for the inconvenience this has caused. It seems like we've reached a bit of a dead end for now. I appreciate your help and patience in trying to locate my reservation. Your assistance has been great, and I'll get back to you once I have the correct information. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_015",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 11,
+    "wall_clock_s": 6.8390039159567095,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "name is Sophia Martin, and I'm calling about a potential issue with my flight bookings. I recently made a few reservations, and I'm concerned that there might be some duplicate bookings for the same day. Could you please help me check on that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with that, Ms. Martin. To better assist you, could you please confirm your date of birth or email address associated with your account? This is just a security measure to ensure I'm speaking with the right person."
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is October 25, 1990, and my email address is sophia.martin3149@example.com. I also have a gold membership with your airline, if that helps."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Ms. Martin. I see that you have a gold membership with us and you have a few reservations booked. I'm going to go ahead and check on those for you. Can you please tell me which specific flights or dates you're concerned about having duplicate bookings for?"
+      },
+      {
+        "role": "caller",
+        "text": "you for verifying my identity. I appreciate that. The reservations I'm concerned about are associated with the following IDs: MFRB94, PUNERT, and HSR97W. Could you please check if there are any duplicate bookings for the same day across these reservations?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked on the reservations associated with the IDs you provided, Ms. Martin. It appears that you have a round-trip reservation MFRB94 with flights on May 27, 28, 30, and another flight on May 30. You also have one-way reservations PUNERT and HSR97W, both with flights on May 22. I don't see any duplicate bookings for the same day across these reservations. However, I do notice that you have multiple flights on May 22 and May 30, but they appear to be part of separate reservations. Would you like me to review any of these reservations for potential changes or cancellations?"
+      },
+      {
+        "role": "caller",
+        "text": "'s helpful to know. I think I can see what might have caused the confusion. Yes, please, I'd like to review the reservations for May 22 and May 30. For May 22, I only need one flight, so I'd like to cancel one of the reservations, either PUNERT or HSR97W. And for May 30, I'd like to keep the round-trip reservation MFRB94, but I'm not sure about the other flight. Can you tell me more about the other flight on May 30 and see if we can cancel or change it?"
+      },
+      {
+        "role": "answerer",
+        "text": "me take a closer look at the reservations for May 22 and May 30. For May 22, I see that you have two one-way reservations, PUNERT and HSR97W. PUNERT has flights from BOS to MIA and then MIA to DEN, while HSR97W has flights from ORD to PHL and then PHL to SFO. Which of these two reservations would you like to cancel? \n\nAs for May 30, the other flight is actually part of the round-trip reservation MFRB94, with flights from LGA to PHX and then PHX to MCO. If you'd like to keep the round-trip reservation MFRB94, we can't cancel the individual flights on May 30, as they are part of the larger reservation. However, if you're concerned about the flights on May 30, we could explore the option of changing the entire round-trip reservation, but that would depend on availability and any applicable change fees. \n\nWhich option sounds more appealing to you, Ms. Martin?"
+      },
+      {
+        "role": "caller",
+        "text": "May 22, I'd like to cancel the reservation HSR97W, as it doesn't match my travel plans. \n\nAs for May 30, I think I'll keep the round-trip reservation MFRB94 as is, since the flights from LGA to PHX and then PHX to MCO are actually the ones I need. So, no changes are needed for the May 30 flights.\n\nCould you please go ahead and cancel the reservation HSR97W for me? And just to confirm, the reservation MFRB94 will remain unchanged, correct?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve gone ahead and cancelled the reservation HSR97W for you, Ms. Martin. Your reservation HSR97W has been successfully cancelled. \n\nAnd to confirm, yes, the reservation MFRB94 will remain unchanged, with the flights from LGA to PHX and then PHX to MCO on May 30 remaining as originally booked. \n\nThat's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_016",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 8,
+    "wall_clock_s": 4.3655214169994,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "name is James Patel, and I'm calling about my upcoming flights. I'd like to make some changes to my reservation. Could you please look up my account using my email address, which is james.patel1360@example.com?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your account, Mr. Patel. To verify your identity, could you please confirm your date of birth?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is April 7, 1995."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Mr. Patel. Your account is now verified. You have three upcoming reservations: AAVMM8, a business class one-way flight from MCO to PHX and then PHX to DTW; MQHHT6, an economy round-trip flight from BOS to CLT and back; and GV1N64, a business round-trip flight from LAS to DEN and back. Which reservation would you like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to make changes to all of them, actually. I need to remove a passenger named Sophia from each of those flights. Can you please help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "is no passenger named Sophia on any of your reservations, Mr. Patel. The passengers listed are Olivia Johansson and Yusuf Wilson on AAVMM8, Ava Rossi on MQHHT6, and James Sanchez on GV1N64, in addition to yourself on AAVMM8 and GV1N64. If you'd like to remove any of these passengers or make other changes, I can assist you with that. What would you like to do?"
+      },
+      {
+        "role": "caller",
+        "text": "seems I had incorrect information. In that case, I'd like to confirm that no changes are needed to remove a passenger named Sophia, since she's not listed on any of my reservations. Your original flight reservations AAVMM8, MQHHT6, and GV1N64 remain unchanged. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_017",
+    "difficulty": "medium",
+    "passed": false,
+    "turns": 8,
+    "wall_clock_s": 120.0164363340009,
+    "error": "timeout after 120s",
+    "criteria": {
+      "goal_phrases_pass": false,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": false
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": ", my name is Omar Davis, and I'm calling about some flights I have booked with your airline. I'm having some financial difficulties and I'm looking to make some changes to my reservations to reduce the costs. Could you please help me with that?"
+      },
+      {
+        "role": "answerer",
+        "text": "'d be happy to help you with your flight reservations, Mr. Davis. To better assist you, could you please confirm your date of birth or the email address associated with your account? This is just a security measure to ensure I'm speaking with the right person."
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is October 19, 1982, and my email address is omar.davis7857@example.com."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity, Mr. Davis. I see you have a few reservations with us. Could you please specify which reservation you'd like to make changes to and what kind of changes you're looking to make? Are you looking to cancel, change flights, or modify any other details?"
+      },
+      {
+        "role": "caller",
+        "text": "you for verifying my identity. I actually have three reservations that I'd like to make changes to: JG7FMM, LQ940Q, and 2FBBAH. For all three, I'd like to downgrade my seats from business class to economy class, if possible. I'm hoping this will help reduce the costs and make my travel more affordable. Can you please let me know if this is something you can assist me with?"
+      },
+      {
+        "role": "answerer",
+        "text": "grading from business class to economy class is possible, but I need to let you know that it may not be a straightforward process for all three reservations. For reservations JG7FMM and 2FBBAH, I can try to downgrade your seats, but please note that you may not be eligible for a full refund of the difference in fare, as per our airline's policy. For reservation LQ940Q, I see that one of the flights is already booked in economy class, but the other flights are in business class. However, I also notice that one of the flights in reservation LQ940Q is a basic economy ticket, which cannot be upgraded or downgraded. I'll need to review each reservation individually to see what options are available. May I put you on hold for just a moment while I check on the details of each reservation?"
+      },
+      {
+        "role": "caller",
+        "text": ", that's okay. I understand it's a bit complicated. Please go ahead and put me on hold while you review the reservations. I'll wait."
+      }
+    ]
+  },
+  {
+    "scenario_id": "tau_airline_018",
+    "difficulty": "medium",
+    "passed": true,
+    "turns": 11,
+    "wall_clock_s": 6.320488957979251,
+    "error": null,
+    "criteria": {
+      "goal_phrases_pass": true,
+      "verification_pass": true,
+      "turns_pass": true,
+      "passed": true
+    },
+    "bilateral_transcript": [
+      {
+        "role": "answerer",
+        "text": "Thank you for calling airline customer service. How may I assist you today?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to make some changes to an upcoming flight. Could you please look up my account using my email address, which is james.lee9130@example.com?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve located your account using the email address james.lee9130@example.com. To verify your identity, could you please confirm your date of birth?"
+      },
+      {
+        "role": "caller",
+        "text": "date of birth is June 11, 1995."
+      },
+      {
+        "role": "answerer",
+        "text": "'ve verified your identity. You have three upcoming reservations. Could you please tell me which flight you'd like to make changes to?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to make changes to the one with reservation ID 75JYBV. Could you please look that up and let me know what options are available for modifying the flight?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve pulled up reservation 75JYBV. It's a business class, one-way ticket from MSP to MCO, and then from MCO to PHX, both on May 16, 2024. Since it's more than 24 hours before departure, you have the option to cancel for a full refund or make changes to the flight. However, please note that as a business class ticket, changes may incur a fee depending on the fare class and availability. Would you like to proceed with cancelling or changing the flight?"
+      },
+      {
+        "role": "caller",
+        "text": "'d like to change the flight, specifically the second leg from MCO to PHX. Could you please check if there's a later flight available on the same day, and what the change fee would be?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve checked the availability for the second leg, MCO to PHX, on the same day, May 16, 2024. There is a later flight available, HAT072, departing MCO at 8:30 PM. The change fee for this modification would be $200. Additionally, there might be a difference in fare, depending on the current price of the new flight. Would you like to proceed with changing the second leg to HAT072, departing at 8:30 PM?"
+      },
+      {
+        "role": "caller",
+        "text": ", I'd like to proceed with changing the second leg to HAT072, departing at 8:30 PM. Please go ahead and make the change. What would the total cost be, including the change fee and any fare difference?"
+      },
+      {
+        "role": "answerer",
+        "text": "'ve made the change to the second leg, updating the reservation to reflect the new flight, HAT072, departing MCO at 8:30 PM. The total cost for the change, including the change fee and the fare difference, is $250. Your original flight has been successfully cancelled, and your reservation has been updated with the new flight details. Your new total for the trip is $1,050. Your reservation has been successfully updated and confirmed. That's all done and taken care of for you. Does that work for you?"
+      }
+    ]
+  }
+]

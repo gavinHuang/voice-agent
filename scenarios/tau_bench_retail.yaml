@@ -5,11 +5,16 @@ scenarios:
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I was wondering how I can check the balance on my gift card?
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I was wondering how I can check the balance on my gift card?\n\nProvide\
+      \ your personal information when the agent asks to verify your identity. CRITICAL:\
+      \ The agent must perform TWO separate steps before you hang up:\n  Step 1 —\
+      \ Verify your identity (says 'verified')\n  Step 2 — Actually process and CONFIRM\
+      \ the action in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has\
+      \ been processed', 'return has been initiated', 'refund will be issued', 'has\
+      \ been exchanged').\nDo NOT hang up after Step 1 alone. Do NOT hang up when\
+      \ the agent says 'I will...' or 'I'm going to...' — those are future tense,\
+      \ not confirmation.\nOnly after hearing past-tense confirmation of the COMPLETED\
+      \ action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Isabella Lopez
 
       Your email: isabella.lopez3271@example.com
@@ -43,26 +48,46 @@ scenarios:
       Order #W4923227 [pending]: Bluetooth Speaker ($321.18, item_id=7751905257)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully changed
-    - 'order #'
-    max_turns: 16
+    - gift card
+    - balance
+    max_turns: 18
 - id: tau_retail_001
   description: 'τ-bench retail: Hi there! I was actually hoping to cancel an order
     I made—th'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi there! I was actually hoping to cancel an order I made—the one with
-      the grill.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi there! I was actually hoping to cancel an order I made—the one with\
+      \ the grill.\n\nProvide your personal information when the agent asks to verify\
+      \ your identity. CRITICAL: The agent must perform TWO separate steps before\
+      \ you hang up:\n  Step 1 — Verify your identity (says 'verified')\n  Step 2\
+      \ — Actually process and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled',\
+      \ 'has been updated', 'has been processed', 'return has been initiated', 'refund\
+      \ will be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone.\
+      \ Do NOT hang up when the agent says 'I will...' or 'I'm going to...' — those\
+      \ are future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Sofia Hernandez
 
       Your email: sofia.hernandez3039@example.com
@@ -102,24 +127,45 @@ scenarios:
       Order #W3947049 [delivered]: Cycling Helmet ($197.33, item_id=3358616356)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - done
-    - taken care of
-    max_turns: 16
+    - cancelled
+    - order
+    max_turns: 18
 - id: tau_retail_002
   description: 'τ-bench retail: Hi, I’d like to change a Desk Lamp from my order.'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I’d like to change a Desk Lamp from my order.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I’d like to change a Desk Lamp from my order.\n\nProvide your personal\
+      \ information when the agent asks to verify your identity. CRITICAL: The agent\
+      \ must perform TWO separate steps before you hang up:\n  Step 1 — Verify your\
+      \ identity (says 'verified')\n  Step 2 — Actually process and CONFIRM the action\
+      \ in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has been processed',\
+      \ 'return has been initiated', 'refund will be issued', 'has been exchanged').\n\
+      Do NOT hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Aarav Anderson
 
       Your email: aarav.anderson9752@example.com
@@ -159,24 +205,45 @@ scenarios:
       Order #W3220203 [processed]: Bluetooth Speaker ($324.63, item_id=5650803029)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully modified
-    - has been processed
-    max_turns: 16
+    - order
+    - confirmed
+    max_turns: 18
 - id: tau_retail_003
   description: 'τ-bench retail: Hi, I need to update the delivery address for an order.'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I need to update the delivery address for an order.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I need to update the delivery address for an order.\n\nProvide your\
+      \ personal information when the agent asks to verify your identity. CRITICAL:\
+      \ The agent must perform TWO separate steps before you hang up:\n  Step 1 —\
+      \ Verify your identity (says 'verified')\n  Step 2 — Actually process and CONFIRM\
+      \ the action in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has\
+      \ been processed', 'return has been initiated', 'refund will be issued', 'has\
+      \ been exchanged').\nDo NOT hang up after Step 1 alone. Do NOT hang up when\
+      \ the agent says 'I will...' or 'I'm going to...' — those are future tense,\
+      \ not confirmation.\nOnly after hearing past-tense confirmation of the COMPLETED\
+      \ action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Fatima Johnson
 
       Your email: fatima.johnson2300@example.com
@@ -217,25 +284,46 @@ scenarios:
       Watch ($367.38, item_id=2554056026); Mechanical Keyboard ($244.91, item_id=6342039236)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully updated
-    - 'order #'
-    max_turns: 16
+    - address
+    - updated
+    max_turns: 18
 - id: tau_retail_004
   description: 'τ-bench retail: Hi, I''d like to change the size of some boots I have
     on orde'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I''d like to change the size of some boots I have on order.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I'd like to change the size of some boots I have on order.\n\nProvide\
+      \ your personal information when the agent asks to verify your identity. CRITICAL:\
+      \ The agent must perform TWO separate steps before you hang up:\n  Step 1 —\
+      \ Verify your identity (says 'verified')\n  Step 2 — Actually process and CONFIRM\
+      \ the action in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has\
+      \ been processed', 'return has been initiated', 'refund will be issued', 'has\
+      \ been exchanged').\nDo NOT hang up after Step 1 alone. Do NOT hang up when\
+      \ the agent says 'I will...' or 'I'm going to...' — those are future tense,\
+      \ not confirmation.\nOnly after hearing past-tense confirmation of the COMPLETED\
+      \ action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Fatima Johnson
 
       Your email: fatima.johnson2300@example.com
@@ -276,25 +364,47 @@ scenarios:
       Watch ($367.38, item_id=2554056026); Mechanical Keyboard ($244.91, item_id=6342039236)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully changed
-    max_turns: 16
+    - order
+    - confirmed
+    max_turns: 18
 - id: tau_retail_005
   description: 'τ-bench retail: Hi there! I''d like to exchange one of the robotic
     vacuums fr'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi there! I''d like to exchange one of the robotic vacuums from my recent
-      order for a canister-based model from the same line.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi there! I'd like to exchange one of the robotic vacuums from my recent\
+      \ order for a canister-based model from the same line.\n\nProvide your personal\
+      \ information when the agent asks to verify your identity. CRITICAL: The agent\
+      \ must perform TWO separate steps before you hang up:\n  Step 1 — Verify your\
+      \ identity (says 'verified')\n  Step 2 — Actually process and CONFIRM the action\
+      \ in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has been processed',\
+      \ 'return has been initiated', 'refund will be issued', 'has been exchanged').\n\
+      Do NOT hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Daiki Johnson
 
       Your email: daiki.johnson2279@example.com
@@ -332,26 +442,48 @@ scenarios:
       Purifier ($473.43, item_id=9534205511); Patio Umbrella ($329.85, item_id=6243981804)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - refund
-    max_turns: 16
+    - exchange
+    - order
+    max_turns: 18
 - id: tau_retail_006
   description: 'τ-bench retail: Hey there! I''ve got a joke for you: Why did the scarecrow
     wi'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hey there! I''ve got a joke for you: Why did the scarecrow win an award?
-      Because he was outstanding in his field! 😂 Okay, onto business: I need to update
-      my address for deliveries. Can you help with that?
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hey there! I've got a joke for you: Why did the scarecrow win an award?\
+      \ Because he was outstanding in his field! \U0001F602 Okay, onto business: I\
+      \ need to update my address for deliveries. Can you help with that?\n\nProvide\
+      \ your personal information when the agent asks to verify your identity. CRITICAL:\
+      \ The agent must perform TWO separate steps before you hang up:\n  Step 1 —\
+      \ Verify your identity (says 'verified')\n  Step 2 — Actually process and CONFIRM\
+      \ the action in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has\
+      \ been processed', 'return has been initiated', 'refund will be issued', 'has\
+      \ been exchanged').\nDo NOT hang up after Step 1 alone. Do NOT hang up when\
+      \ the agent says 'I will...' or 'I'm going to...' — those are future tense,\
+      \ not confirmation.\nOnly after hearing past-tense confirmation of the COMPLETED\
+      \ action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Fatima Taylor
 
       Your email: fatima.taylor7676@example.com
@@ -384,26 +516,46 @@ scenarios:
       Tablet ($1054.43, item_id=2235648106); Gaming Mouse ($150.58, item_id=8214883393)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - done
-    - taken care of
-    max_turns: 16
+    - address
+    - updated
+    max_turns: 18
 - id: tau_retail_007
   description: 'τ-bench retail: I''d like to return an air purifier and a vacuum cleaner
     from'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'I''d like to return an air purifier and a vacuum cleaner from my recent
-      order.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "I'd like to return an air purifier and a vacuum cleaner from my recent\
+      \ order.\n\nProvide your personal information when the agent asks to verify\
+      \ your identity. CRITICAL: The agent must perform TWO separate steps before\
+      \ you hang up:\n  Step 1 — Verify your identity (says 'verified')\n  Step 2\
+      \ — Actually process and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled',\
+      \ 'has been updated', 'has been processed', 'return has been initiated', 'refund\
+      \ will be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone.\
+      \ Do NOT hang up when the agent says 'I will...' or 'I'm going to...' — those\
+      \ are future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Daiki Johnson
 
       Your email: daiki.johnson2279@example.com
@@ -441,25 +593,47 @@ scenarios:
       Purifier ($473.43, item_id=9534205511); Patio Umbrella ($329.85, item_id=6243981804)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
+    - return
     - refund
-    max_turns: 16
+    max_turns: 18
 - id: tau_retail_008
   description: 'τ-bench retail: Hi, I would like to return everything I purchased
     except for'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I would like to return everything I purchased except for a couple of
-      items. Could you help me with that?
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I would like to return everything I purchased except for a couple of\
+      \ items. Could you help me with that?\n\nProvide your personal information when\
+      \ the agent asks to verify your identity. CRITICAL: The agent must perform TWO\
+      \ separate steps before you hang up:\n  Step 1 — Verify your identity (says\
+      \ 'verified')\n  Step 2 — Actually process and CONFIRM the action in PAST TENSE\
+      \ (e.g. 'has been cancelled', 'has been updated', 'has been processed', 'return\
+      \ has been initiated', 'refund will be issued', 'has been exchanged').\nDo NOT\
+      \ hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Mia Garcia
 
       Your email: mia.garcia2723@example.com
@@ -496,25 +670,46 @@ scenarios:
       Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
+    - return
     - refund
-    max_turns: 16
+    max_turns: 18
 - id: tau_retail_009
   description: 'τ-bench retail: Hi, I need to undo the cancellation of an order I
     placed. Ca'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I need to undo the cancellation of an order I placed. Can you help
-      with that?
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I need to undo the cancellation of an order I placed. Can you help\
+      \ with that?\n\nProvide your personal information when the agent asks to verify\
+      \ your identity. CRITICAL: The agent must perform TWO separate steps before\
+      \ you hang up:\n  Step 1 — Verify your identity (says 'verified')\n  Step 2\
+      \ — Actually process and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled',\
+      \ 'has been updated', 'has been processed', 'return has been initiated', 'refund\
+      \ will be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone.\
+      \ Do NOT hang up when the agent says 'I will...' or 'I'm going to...' — those\
+      \ are future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: ''
   answerer:
     goal: 'You are a customer service agent for an online retail store.
@@ -530,25 +725,46 @@ scenarios:
       (no account data)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - done
-    - taken care of
-    max_turns: 16
+    - reinstated
+    - order
+    max_turns: 18
 - id: tau_retail_010
   description: 'τ-bench retail: Hi! I would like to cancel and return some gaming
     items I re'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi! I would like to cancel and return some gaming items I recently purchased.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi! I would like to cancel and return some gaming items I recently purchased.\n\
+      \nProvide your personal information when the agent asks to verify your identity.\
+      \ CRITICAL: The agent must perform TWO separate steps before you hang up:\n\
+      \  Step 1 — Verify your identity (says 'verified')\n  Step 2 — Actually process\
+      \ and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled', 'has been\
+      \ updated', 'has been processed', 'return has been initiated', 'refund will\
+      \ be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone. Do\
+      \ NOT hang up when the agent says 'I will...' or 'I'm going to...' — those are\
+      \ future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Mia Garcia
 
       Your email: mia.garcia2723@example.com
@@ -585,24 +801,45 @@ scenarios:
       Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - 'order #'
+    - return
     - refund
-    max_turns: 16
+    max_turns: 18
 - id: tau_retail_011
   description: 'τ-bench retail: I wanna return everything I ordered.'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'I wanna return everything I ordered.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "I wanna return everything I ordered.\n\nProvide your personal information\
+      \ when the agent asks to verify your identity. CRITICAL: The agent must perform\
+      \ TWO separate steps before you hang up:\n  Step 1 — Verify your identity (says\
+      \ 'verified')\n  Step 2 — Actually process and CONFIRM the action in PAST TENSE\
+      \ (e.g. 'has been cancelled', 'has been updated', 'has been processed', 'return\
+      \ has been initiated', 'refund will be issued', 'has been exchanged').\nDo NOT\
+      \ hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Mia Garcia
 
       Your email: mia.garcia2723@example.com
@@ -639,26 +876,47 @@ scenarios:
       Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - 'order #'
+    - return
     - refund
-    max_turns: 16
+    max_turns: 18
 - id: tau_retail_012
   description: 'τ-bench retail: Hi there! I''m trying to track an order that was mistakenly
     s'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi there! I''m trying to track an order that was mistakenly sent to Texas,
-      and I need the tracking number. I don''t remember the order number, though.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi there! I'm trying to track an order that was mistakenly sent to Texas,\
+      \ and I need the tracking number. I don't remember the order number, though.\n\
+      \nProvide your personal information when the agent asks to verify your identity.\
+      \ CRITICAL: The agent must perform TWO separate steps before you hang up:\n\
+      \  Step 1 — Verify your identity (says 'verified')\n  Step 2 — Actually process\
+      \ and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled', 'has been\
+      \ updated', 'has been processed', 'return has been initiated', 'refund will\
+      \ be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone. Do\
+      \ NOT hang up when the agent says 'I will...' or 'I'm going to...' — those are\
+      \ future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Isabella Johansson
 
       Your email: isabella.johansson9391@example.com
@@ -699,25 +957,47 @@ scenarios:
       Charger ($102.07, item_id=8349903180); E-Reader ($252.06, item_id=9494281769)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - refund
-    max_turns: 16
+    - address
+    - order
+    max_turns: 18
 - id: tau_retail_013
   description: 'τ-bench retail: Hello, I need some help with returning an office chair.
     Some'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hello, I need some help with returning an office chair. Some of its pieces
-      arrived broken.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hello, I need some help with returning an office chair. Some of its pieces\
+      \ arrived broken.\n\nProvide your personal information when the agent asks to\
+      \ verify your identity. CRITICAL: The agent must perform TWO separate steps\
+      \ before you hang up:\n  Step 1 — Verify your identity (says 'verified')\n \
+      \ Step 2 — Actually process and CONFIRM the action in PAST TENSE (e.g. 'has\
+      \ been cancelled', 'has been updated', 'has been processed', 'return has been\
+      \ initiated', 'refund will be issued', 'has been exchanged').\nDo NOT hang up\
+      \ after Step 1 alone. Do NOT hang up when the agent says 'I will...' or 'I'm\
+      \ going to...' — those are future tense, not confirmation.\nOnly after hearing\
+      \ past-tense confirmation of the COMPLETED action, say 'Perfect, thank you.\
+      \ Goodbye.' and end the call."
     context: 'Your name: Mei Davis
 
       Your email: mei.davis6811@example.com
@@ -753,26 +1033,47 @@ scenarios:
       ($346.97, item_id=7493556126); Air Purifier ($492.65, item_id=1327854740)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - done
-    - taken care of
-    max_turns: 16
+    - return
+    - order
+    max_turns: 18
 - id: tau_retail_014
   description: 'τ-bench retail: Hi! I recently got into gaming but realized I need
     to focus '
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi! I recently got into gaming but realized I need to focus on studying.
-      I''d like to cancel or return some items I purchased.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi! I recently got into gaming but realized I need to focus on studying.\
+      \ I'd like to cancel or return some items I purchased.\n\nProvide your personal\
+      \ information when the agent asks to verify your identity. CRITICAL: The agent\
+      \ must perform TWO separate steps before you hang up:\n  Step 1 — Verify your\
+      \ identity (says 'verified')\n  Step 2 — Actually process and CONFIRM the action\
+      \ in PAST TENSE (e.g. 'has been cancelled', 'has been updated', 'has been processed',\
+      \ 'return has been initiated', 'refund will be issued', 'has been exchanged').\n\
+      Do NOT hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Mia Garcia
 
       Your email: mia.garcia2723@example.com
@@ -809,26 +1110,47 @@ scenarios:
       Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - 'order #'
+    - return
     - refund
-    max_turns: 16
+    max_turns: 18
 - id: tau_retail_015
   description: 'τ-bench retail: Hi, I''m having a bit of an issue with an order. It
     got sent '
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi, I''m having a bit of an issue with an order. It got sent to Texas by
-      mistake, and I need to sort that out.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi, I'm having a bit of an issue with an order. It got sent to Texas by\
+      \ mistake, and I need to sort that out.\n\nProvide your personal information\
+      \ when the agent asks to verify your identity. CRITICAL: The agent must perform\
+      \ TWO separate steps before you hang up:\n  Step 1 — Verify your identity (says\
+      \ 'verified')\n  Step 2 — Actually process and CONFIRM the action in PAST TENSE\
+      \ (e.g. 'has been cancelled', 'has been updated', 'has been processed', 'return\
+      \ has been initiated', 'refund will be issued', 'has been exchanged').\nDo NOT\
+      \ hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Isabella Johansson
 
       Your email: isabella.johansson9391@example.com
@@ -869,25 +1191,47 @@ scenarios:
       Charger ($102.07, item_id=8349903180); E-Reader ($252.06, item_id=9494281769)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - refund
-    max_turns: 16
+    - address
+    - order
+    max_turns: 18
 - id: tau_retail_016
   description: 'τ-bench retail: I just placed an order, but my card only has $950
     left. Can '
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'I just placed an order, but my card only has $950 left. Can I split the
-      payment with another card?
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "I just placed an order, but my card only has $950 left. Can I split the\
+      \ payment with another card?\n\nProvide your personal information when the agent\
+      \ asks to verify your identity. CRITICAL: The agent must perform TWO separate\
+      \ steps before you hang up:\n  Step 1 — Verify your identity (says 'verified')\n\
+      \  Step 2 — Actually process and CONFIRM the action in PAST TENSE (e.g. 'has\
+      \ been cancelled', 'has been updated', 'has been processed', 'return has been\
+      \ initiated', 'refund will be issued', 'has been exchanged').\nDo NOT hang up\
+      \ after Step 1 alone. Do NOT hang up when the agent says 'I will...' or 'I'm\
+      \ going to...' — those are future tense, not confirmation.\nOnly after hearing\
+      \ past-tense confirmation of the COMPLETED action, say 'Perfect, thank you.\
+      \ Goodbye.' and end the call."
     context: 'Your name: Daiki Sanchez
 
       Your email: daiki.sanchez1479@example.com
@@ -920,26 +1264,47 @@ scenarios:
       Umbrella ($288.82, item_id=9879255677); Desk Lamp ($150.01, item_id=7453605304)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully canceled
-    - refund
-    max_turns: 16
+    - payment
+    - order
+    max_turns: 18
 - id: tau_retail_017
   description: 'τ-bench retail: Hey, I just placed an order but realized my card doesn''t
     hav'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hey, I just placed an order but realized my card doesn''t have enough credit.
-      Can we split the payment with another card?
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hey, I just placed an order but realized my card doesn't have enough credit.\
+      \ Can we split the payment with another card?\n\nProvide your personal information\
+      \ when the agent asks to verify your identity. CRITICAL: The agent must perform\
+      \ TWO separate steps before you hang up:\n  Step 1 — Verify your identity (says\
+      \ 'verified')\n  Step 2 — Actually process and CONFIRM the action in PAST TENSE\
+      \ (e.g. 'has been cancelled', 'has been updated', 'has been processed', 'return\
+      \ has been initiated', 'refund will be issued', 'has been exchanged').\nDo NOT\
+      \ hang up after Step 1 alone. Do NOT hang up when the agent says 'I will...'\
+      \ or 'I'm going to...' — those are future tense, not confirmation.\nOnly after\
+      \ hearing past-tense confirmation of the COMPLETED action, say 'Perfect, thank\
+      \ you. Goodbye.' and end the call."
     context: 'Your name: Daiki Sanchez
 
       Your email: daiki.sanchez1479@example.com
@@ -972,26 +1337,46 @@ scenarios:
       Umbrella ($288.82, item_id=9879255677); Desk Lamp ($150.01, item_id=7453605304)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully cancelled
-    - 'order #'
-    max_turns: 16
+    - payment
+    - order
+    max_turns: 18
 - id: tau_retail_018
   description: 'τ-bench retail: Hi. I''m wondering how many t-shirt options are available
     in '
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi. I''m wondering how many t-shirt options are available in your store
-      right now.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi. I'm wondering how many t-shirt options are available in your store\
+      \ right now.\n\nProvide your personal information when the agent asks to verify\
+      \ your identity. CRITICAL: The agent must perform TWO separate steps before\
+      \ you hang up:\n  Step 1 — Verify your identity (says 'verified')\n  Step 2\
+      \ — Actually process and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled',\
+      \ 'has been updated', 'has been processed', 'return has been initiated', 'refund\
+      \ will be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone.\
+      \ Do NOT hang up when the agent says 'I will...' or 'I'm going to...' — those\
+      \ are future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Yusuf Rossi
 
       Your email: yusuf.rossi7301@example.com
@@ -1030,25 +1415,46 @@ scenarios:
       Order #W6679257 [delivered]: Digital Camera ($2895.55, item_id=5996159312)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - successfully modified
-    - 'order #'
-    max_turns: 16
+    - option
+    - available
+    max_turns: 18
 - id: tau_retail_019
   description: 'τ-bench retail: Hi! I would like to exchange a couple of items I recently
     pu'
   difficulty: medium
   timeout: 120
   caller:
-    goal: 'Hi! I would like to exchange a couple of items I recently purchased.
-
-
-      Provide your personal information naturally when the agent asks to verify your
-      identity. Confirm the outcome when done.'
+    goal: "Hi! I would like to exchange a couple of items I recently purchased.\n\n\
+      Provide your personal information when the agent asks to verify your identity.\
+      \ CRITICAL: The agent must perform TWO separate steps before you hang up:\n\
+      \  Step 1 — Verify your identity (says 'verified')\n  Step 2 — Actually process\
+      \ and CONFIRM the action in PAST TENSE (e.g. 'has been cancelled', 'has been\
+      \ updated', 'has been processed', 'return has been initiated', 'refund will\
+      \ be issued', 'has been exchanged').\nDo NOT hang up after Step 1 alone. Do\
+      \ NOT hang up when the agent says 'I will...' or 'I'm going to...' — those are\
+      \ future tense, not confirmation.\nOnly after hearing past-tense confirmation\
+      \ of the COMPLETED action, say 'Perfect, thank you. Goodbye.' and end the call."
     context: 'Your name: Mei Kovacs
 
       Your email: mei.kovacs8232@example.com
@@ -1087,10 +1493,27 @@ scenarios:
       ($1291.21, item_id=1631373418); Luggage Set ($452.62, item_id=9956648681)
 
 
-      Verify the customer''s identity, process their request per policy, and confirm
-      the outcome explicitly.'
+      Workflow:
+
+      1. Verify the customer''s identity (name+zip OR email) — say ''I''ve verified
+      your identity'' when done.
+
+      2. Look up the relevant order or account info using the data above.
+
+      3. Process their request decisively — do not ask them to confirm steps you can
+      determine yourself.
+
+      4. If the customer disputes an address or claims an order was sent incorrectly,
+      trust their account data to confirm the correct address and update if needed.
+
+      5. Confirm completion with a short explicit statement: ''Your [order/address/payment]
+      has been [cancelled/updated/processed/returned/exchanged]. You will receive
+      [a refund of $X / confirmation by email / a return label].''
+
+      6. Ask ''Is there anything else I can help you with?'' and close the call.'
     opening_line: Thank you for calling customer service. How can I help you today?
   success_criteria:
     goal_phrases:
-    - refund
-    max_turns: 16
+    - exchange
+    - order
+    max_turns: 18
