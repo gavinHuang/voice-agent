@@ -1,0 +1,617 @@
+scenarios:
+- id: abcd_product_defect_000
+  description: ABCD product_defect/return_size
+  difficulty: hard
+  timeout: 120
+  caller:
+    goal: 'You received a defective product from order #3348917502 and need to return
+      an item that doesn''t fit.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      return an item that doesn''t fit.'
+    context: 'Your name: crystal minh
+
+      Your email: cminh730@email.com
+
+      Your phone: (977) 625-2661
+
+      Your username: cminh730
+
+      Your membership: bronze
+
+      Your order ID: 3348917502'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: crystal minh\n  Email: cminh730@email.com\n  Phone: (977)\
+      \ 625-2661\n  Username: cminh730\n  Membership: bronze\n  Order #3348917502:\
+      \ jeans by michael_kors ($94) purchased 2019-11-06, ship to 6821 1st ave  san\
+      \ mateo, ny 75227\n\nVerify the customer's identity, then resolve their issue\
+      \ following company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - return
+    - replacement
+    max_turns: 16
+- id: abcd_product_defect_001
+  description: ABCD product_defect/refund_status
+  difficulty: hard
+  timeout: 120
+  caller:
+    goal: 'You received a defective product from order #7916676427 and need to refund
+      status.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      refund status.'
+    context: 'Your name: alessandro phoenix
+
+      Your email: aphoenix939@email.com
+
+      Your phone: (727) 760-7806
+
+      Your username: aphoenix939
+
+      Your membership: gold
+
+      Your order ID: 7916676427'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: alessandro phoenix\n  Email: aphoenix939@email.com\n  Phone:\
+      \ (727) 760-7806\n  Username: aphoenix939\n  Membership: gold\n  Order #7916676427:\
+      \ shirt by michael_kors ($69) purchased 2019-11-20, ship to 8865 lexington ave\
+      \  la fayette, tx 86229\n\nVerify the customer's identity, then resolve their\
+      \ issue following company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - return
+    - replacement
+    max_turns: 16
+- id: abcd_storewide_query_002
+  description: ABCD storewide_query/timing_4
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You have a general question about the store. You want to know timing 4.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      timing 4.'
+    context: "Your name: joyce wu\nYour email: \nYour phone: (859) 787-9085\nYour\
+      \ username: \nYour membership: bronze\nYour order ID: unknown"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: joyce wu\n  Email: \n  Phone: (859) 787-9085\n  Username:\
+      \ \n  Membership: bronze\n  Order #unknown: unknown items purchased recently,\
+      \ ship to 9998 lincoln ave  raleigh, mi 14573\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - sale
+    - discount
+    max_turns: 16
+- id: abcd_shipping_issue_003
+  description: ABCD shipping_issue/manage
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'There is a problem with the shipping of your order #4870952797. You need
+      to manage.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      manage.'
+    context: 'Your name: crystal minh
+
+      Your email: cminh948@email.com
+
+      Your phone: (656) 332-6844
+
+      Your username: cminh948
+
+      Your membership: silver
+
+      Your order ID: 4870952797'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: crystal minh\n  Email: cminh948@email.com\n  Phone: (656)\
+      \ 332-6844\n  Username: cminh948\n  Membership: silver\n  Order #4870952797:\
+      \ shirt by tommy_hilfiger ($94), shirt by michael_kors ($79), shirt by michael_kors\
+      \ ($54) purchased 2020-03-30, ship to 9723 primrose ave  newark, mi 85971\n\n\
+      Verify the customer's identity, then resolve their issue following company policy.\
+      \ Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - tracking
+    - reshipped
+    max_turns: 16
+- id: abcd_storewide_query_004
+  description: ABCD storewide_query/pricing_3
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You have a general question about the store. You want to know pricing 3.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      pricing 3.'
+    context: "Your name: norman bouchard\nYour email: \nYour phone: (480) 983-3323\n\
+      Your username: \nYour membership: guest\nYour order ID: unknown"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: norman bouchard\n  Email: \n  Phone: (480) 983-3323\n  Username:\
+      \ \n  Membership: guest\n  Order #unknown: jeans by michael_kors ($49), jeans\
+      \ by tommy_hilfiger ($79), boots by tommy_hilfiger ($54) purchased recently,\
+      \ ship to 7092 1st ave  raleigh, ca 46681\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - sale
+    - discount
+    max_turns: 16
+- id: abcd_subscription_inquiry_005
+  description: ABCD subscription_inquiry/manage_extension
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'You have a question about your subscription. You want to manage extension.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      manage extension.'
+    context: "Your name: chloe zhang\nYour email: \nYour phone: (816) 766-2714\nYour\
+      \ username: \nYour membership: silver\nYour order ID: 6820094438"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: chloe zhang\n  Email: \n  Phone: (816) 766-2714\n  Username:\
+      \ \n  Membership: silver\n  Order #6820094438: unknown items purchased recently,\
+      \ ship to 8537 2nd ave  brighton, ca 18534\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - subscription
+    - plan
+    max_turns: 16
+- id: abcd_account_access_006
+  description: ABCD account_access/recover_username
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You need help accessing your account. You have forgotten your username
+      and need help recovering it.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      recover your username.'
+    context: 'Your name: alessandro phoenix
+
+      Your email: alessandrop146@email.com
+
+      Your phone: (116) 048-7515
+
+      Your username: alessandrop146
+
+      Your membership: gold
+
+      Your order ID: unknown'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: alessandro phoenix\n  Email: alessandrop146@email.com\n\
+      \  Phone: (116) 048-7515\n  Username: alessandrop146\n  Membership: gold\n \
+      \ Order #unknown: unknown items purchased recently, ship to 6645 brushwick dr\
+      \  newark, ca 33186\n\nVerify the customer's identity, then resolve their issue\
+      \ following company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - account found
+    - verified
+    max_turns: 16
+- id: abcd_troubleshoot_site_007
+  description: ABCD troubleshoot_site/shopping_cart
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'You are having trouble with the website or app. The problem is: shopping
+      cart.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      shopping cart.'
+    context: 'Your name: joseph banter
+
+      Your email: josephb9@email.com
+
+      Your phone: (285) 488-6806
+
+      Your username: josephb9
+
+      Your membership: gold
+
+      Your order ID: unknown'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: joseph banter\n  Email: josephb9@email.com\n  Phone: (285)\
+      \ 488-6806\n  Username: josephb9\n  Membership: gold\n  Order #unknown: boots\
+      \ by calvin_klein ($59) purchased recently, ship to 2702 lincoln ave  raleigh,\
+      \ ca 43517\n\nVerify the customer's identity, then resolve their issue following\
+      \ company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - resolved
+    - try
+    max_turns: 16
+- id: abcd_shipping_issue_008
+  description: ABCD shipping_issue/manage
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'There is a problem with the shipping of your order #5545781356. You need
+      to manage.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      manage.'
+    context: 'Your name: norman bouchard
+
+      Your email: nb860284@email.com
+
+      Your phone: (510) 601-9475
+
+      Your username: nb860284
+
+      Your membership: gold
+
+      Your order ID: 5545781356'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: norman bouchard\n  Email: nb860284@email.com\n  Phone: (510)\
+      \ 601-9475\n  Username: nb860284\n  Membership: gold\n  Order #5545781356: jeans\
+      \ by michael_kors ($54) purchased 2020-03-22, ship to 9221 woodshore st  san\
+      \ mateo, wa 5940\n\nVerify the customer's identity, then resolve their issue\
+      \ following company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - tracking
+    - reshipped
+    max_turns: 16
+- id: abcd_shipping_issue_009
+  description: ABCD shipping_issue/status
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'There is a problem with the shipping of your order #7237754671. You need
+      to check the status of your order.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      check the status of your order.'
+    context: 'Your name: crystal minh
+
+      Your email: crystalm914@email.com
+
+      Your phone: (496) 325-5812
+
+      Your username: crystalm914
+
+      Your membership: guest
+
+      Your order ID: 7237754671'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: crystal minh\n  Email: crystalm914@email.com\n  Phone: (496)\
+      \ 325-5812\n  Username: crystalm914\n  Membership: guest\n  Order #7237754671:\
+      \ jacket by calvin_klein ($94), jacket by guess ($74) purchased 2019-10-29,\
+      \ ship to 7370 1st ave  newark, mi 79177\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - tracking
+    - reshipped
+    max_turns: 16
+- id: abcd_single_item_query_010
+  description: ABCD single_item_query/jacket_how_2
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You have a question about a specific item in your order #unknown. You want
+      to know jacket how 2.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      jacket how 2.'
+    context: "Your name: joseph banter\nYour email: \nYour phone: (197) 473-1437\n\
+      Your username: \nYour membership: silver\nYour order ID: unknown"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: joseph banter\n  Email: \n  Phone: (197) 473-1437\n  Username:\
+      \ \n  Membership: silver\n  Order #unknown: jacket by tommy_hilfiger ($54) purchased\
+      \ recently, ship to 6277 lincoln ave  monterey, tx 68132\n\nVerify the customer's\
+      \ identity, then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - here is
+    - the item
+    max_turns: 16
+- id: abcd_troubleshoot_site_011
+  description: ABCD troubleshoot_site/credit_card
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'You are having trouble with the website or app. The problem is: credit
+      card.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      credit card.'
+    context: 'Your name: david williams
+
+      Your email: dw811747@email.com
+
+      Your phone: (900) 690-8102
+
+      Your username: dw811747
+
+      Your membership: silver
+
+      Your order ID: unknown'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: david williams\n  Email: dw811747@email.com\n  Phone: (900)\
+      \ 690-8102\n  Username: dw811747\n  Membership: silver\n  Order #unknown: boots\
+      \ by guess ($74) purchased recently, ship to 4683 woodshore st  baltimore, tx\
+      \ 44036\n\nVerify the customer's identity, then resolve their issue following\
+      \ company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - resolved
+    - try
+    max_turns: 16
+- id: abcd_storewide_query_013
+  description: ABCD storewide_query/timing_2
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You have a general question about the store. You want to know timing 2.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      timing 2.'
+    context: "Your name: crystal minh\nYour email: \nYour phone: (228) 344-0469\n\
+      Your username: \nYour membership: bronze\nYour order ID: unknown"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: crystal minh\n  Email: \n  Phone: (228) 344-0469\n  Username:\
+      \ \n  Membership: bronze\n  Order #unknown: unknown items purchased recently,\
+      \ ship to 8081 primrose ave  monterey, mi 57988\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - sale
+    - discount
+    max_turns: 16
+- id: abcd_troubleshoot_site_014
+  description: ABCD troubleshoot_site/slow_speed
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'You are having trouble with the website or app. The problem is: slow speed.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      slow speed.'
+    context: 'Your name: alessandro phoenix
+
+      Your email: alessandrop648@email.com
+
+      Your phone: (213) 525-1666
+
+      Your username: alessandrop648
+
+      Your membership: gold
+
+      Your order ID: unknown'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: alessandro phoenix\n  Email: alessandrop648@email.com\n\
+      \  Phone: (213) 525-1666\n  Username: alessandrop648\n  Membership: gold\n \
+      \ Order #unknown: boots by guess ($84) purchased recently, ship to 5593 kennedy\
+      \ st  brighton, ca 26501\n\nVerify the customer's identity, then resolve their\
+      \ issue following company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - resolved
+    - try
+    max_turns: 16
+- id: abcd_order_issue_015
+  description: ABCD order_issue/status_quantity
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'You are calling about an issue with your order #7969620792. The problem
+      is: status quantity.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      status quantity.'
+    context: "Your name: sanya afzal\nYour email: \nYour phone: (456) 396-3118\nYour\
+      \ username: \nYour membership: gold\nYour order ID: 7969620792"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: sanya afzal\n  Email: \n  Phone: (456) 396-3118\n  Username:\
+      \ \n  Membership: gold\n  Order #7969620792: jeans by guess ($84) purchased\
+      \ recently, ship to 5806 woodshore st  jacksonville, wa 89513\n\nVerify the\
+      \ customer's identity, then resolve their issue following company policy. Confirm\
+      \ the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - resolved
+    - refund
+    max_turns: 16
+- id: abcd_purchase_dispute_016
+  description: ABCD purchase_dispute/mistimed_billing_already_returned
+  difficulty: hard
+  timeout: 120
+  caller:
+    goal: 'You are disputing a charge on your account related to order #0043600739.
+      You need to mistimed billing already returned.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      mistimed billing already returned.'
+    context: 'Your name: david williams
+
+      Your email: davidwilliams952@email.com
+
+      Your phone: (016) 076-8099
+
+      Your username: davidwilliams952
+
+      Your membership: silver
+
+      Your order ID: 0043600739'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: david williams\n  Email: davidwilliams952@email.com\n  Phone:\
+      \ (016) 076-8099\n  Username: davidwilliams952\n  Membership: silver\n  Order\
+      \ #0043600739: boots by guess ($64) purchased recently, ship to 7232 circle\
+      \ drive  san mateo, ny 73684\n\nVerify the customer's identity, then resolve\
+      \ their issue following company policy. Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - dispute
+    - investigation
+    max_turns: 16
+- id: abcd_single_item_query_017
+  description: ABCD single_item_query/jeans_how_4
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You have a question about a specific item in your order #unknown. You want
+      to know jeans how 4.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      jeans how 4.'
+    context: "Your name: joyce wu\nYour email: \nYour phone: (313) 166-1222\nYour\
+      \ username: \nYour membership: bronze\nYour order ID: unknown"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: joyce wu\n  Email: \n  Phone: (313) 166-1222\n  Username:\
+      \ \n  Membership: bronze\n  Order #unknown: jeans by guess ($49) purchased recently,\
+      \ ship to 6963 1st ave  monterey, tx 87422\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - here is
+    - the item
+    max_turns: 16
+- id: abcd_subscription_inquiry_018
+  description: ABCD subscription_inquiry/status_due_date
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'You have a question about your subscription. You want to status due date.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      status due date.'
+    context: "Your name: chloe zhang\nYour email: \nYour phone: (229) 482-5025\nYour\
+      \ username: \nYour membership: gold\nYour order ID: 7470634585"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: chloe zhang\n  Email: \n  Phone: (229) 482-5025\n  Username:\
+      \ \n  Membership: gold\n  Order #7470634585: unknown items purchased recently,\
+      \ ship to 9782 1st ave  baltimore, ny 80329\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - subscription
+    - plan
+    max_turns: 16
+- id: abcd_product_defect_019
+  description: ABCD product_defect/return_size
+  difficulty: hard
+  timeout: 120
+  caller:
+    goal: 'You received a defective product from order #2415811437 and need to return
+      an item that doesn''t fit.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      return an item that doesn''t fit.'
+    context: 'Your name: joyce wu
+
+      Your email: joycewu5@email.com
+
+      Your phone: (910) 685-2429
+
+      Your username: joycewu5
+
+      Your membership: silver
+
+      Your order ID: 2415811437'
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: joyce wu\n  Email: joycewu5@email.com\n  Phone: (910) 685-2429\n\
+      \  Username: joycewu5\n  Membership: silver\n  Order #2415811437: shirt by guess\
+      \ ($54) purchased 2020-03-06, ship to 2481 kennedy st  monterey, wa 97444\n\n\
+      Verify the customer's identity, then resolve their issue following company policy.\
+      \ Confirm the resolution at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - return
+    - replacement
+    max_turns: 16
+- id: abcd_account_access_020
+  description: ABCD account_access/recover_password
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'You need help accessing your account. You have forgotten your password
+      and need help recovering it.
+
+
+      Provide your information naturally when the agent asks. Your goal is to successfully
+      reset your password.'
+    context: "Your name: chloe zhang\nYour email: \nYour phone: (536) 385-3672\nYour\
+      \ username: chloez59\nYour membership: gold\nYour order ID: unknown"
+  answerer:
+    goal: "You are a customer service agent for an e-commerce company.\n\nCustomer\
+      \ account:\n  Name: chloe zhang\n  Email: \n  Phone: (536) 385-3672\n  Username:\
+      \ chloez59\n  Membership: gold\n  Order #unknown: unknown items purchased recently,\
+      \ ship to 2098 2nd ave  san lima, ny 48798\n\nVerify the customer's identity,\
+      \ then resolve their issue following company policy. Confirm the resolution\
+      \ at the end."
+    opening_line: Thank you for calling customer support. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - account found
+    - verified
+    max_turns: 16

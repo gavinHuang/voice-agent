@@ -1,0 +1,603 @@
+scenarios:
+- id: multiwoz_attraction+train_000
+  description: MultiWOZ attraction+train booking/info task (MUL0484.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a train with departure station: norwich, destination station: cambridge,
+      arrival time: 18:00, travel day: monday. Book it if suitable.. Find a attraction
+      with attraction name: cineworld cinema.'
+  answerer:
+    goal: 'You are a tourist information assistant for Cambridge, UK and a train booking
+      assistant for UK rail services.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (train): departure station=norwich, destination station=cambridge,
+      arrival time=18:00, travel day=monday
+
+      Customer needs (attraction): attraction name=cineworld cinema'
+    opening_line: UK Rail enquiries. How can I assist you today?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - ticket
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant+taxi_001
+  description: MultiWOZ restaurant+taxi booking/info task (PMUL4462.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a restaurant with restaurant name: golden wok, bookday: friday, booktime:
+      11:00, bookpeople: 4. Book it if suitable.. Find a attraction with type: architecture,
+      attraction name: old schools. Find a taxi with drop-off location: golden wok,
+      arrival time: 10:45, pickup location: old schools.'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a taxi
+      booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (restaurant): restaurant name=golden wok, bookday=friday, booktime=11:00,
+      bookpeople=4
+
+      Customer needs (attraction): type=architecture, attraction name=old schools
+
+      Customer needs (taxi): drop-off location=golden wok, arrival time=10:45, pickup
+      location=old schools'
+    opening_line: Cambridge Tourist Information, restaurant bookings. How can I help?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant+taxi_002
+  description: MultiWOZ restaurant+taxi booking/info task (PMUL0320.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a hotel with internet: yes, type: hotel, parking: yes, price range:
+      moderate, bookday: friday, bookpeople: 3, bookstay: 2, hotel name: lovell lodge.
+      Book it if suitable.. Find a restaurant with price range: moderate, area: centre,
+      booktime: 19:00, cuisine: chinese, restaurant name: lan hong house. Book it
+      if suitable.. Find a taxi with pickup location: lan hong house, drop-off location:
+      lovell lodge, departure time: 24:30.'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a taxi
+      booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (hotel): internet=yes, type=hotel, parking=yes, price range=moderate,
+      bookday=friday, bookpeople=3, bookstay=2, hotel name=lovell lodge
+
+      Customer needs (restaurant): price range=moderate, area=centre, booktime=19:00,
+      cuisine=chinese, restaurant name=lan hong house
+
+      Customer needs (taxi): pickup location=lan hong house, drop-off location=lovell
+      lodge, departure time=24:30'
+    opening_line: Cambridge Tourist Information, hotel reservations. How can I help
+      you?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_train+hotel_003
+  description: MultiWOZ train+hotel booking/info task (MUL2155.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a hotel with area: north, star rating: 4, type: guesthouse, hotel
+      name: avalon, bookday: sunday, bookpeople: 5, bookstay: 3. Book it if suitable..
+      Find a train with departure station: cambridge, travel day: wednesday, destination
+      station: leicester, arrival time: 19:15. Book it if suitable..'
+  answerer:
+    goal: 'You are a train booking assistant for UK rail services and a hotel booking
+      assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (hotel): area=north, star rating=4, type=guesthouse, hotel name=avalon,
+      bookday=sunday, bookpeople=5, bookstay=3
+
+      Customer needs (train): departure station=cambridge, travel day=wednesday, destination
+      station=leicester, arrival time=19:15'
+    opening_line: Cambridge Tourist Information, hotel reservations. How can I help
+      you?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant+train_004
+  description: MultiWOZ restaurant+train booking/info task (PMUL0815.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a restaurant with cuisine: asian oriental, price range: cheap. Book
+      it if suitable.. Find a train with travel day: tuesday, departure station: ely,
+      destination station: cambridge, departure time: 20:45, bookpeople: 5. Book it
+      if suitable..'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a train
+      booking assistant for UK rail services.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (restaurant): cuisine=asian oriental, price range=cheap
+
+      Customer needs (train): travel day=tuesday, departure station=ely, destination
+      station=cambridge, departure time=20:45, bookpeople=5'
+    opening_line: UK Rail enquiries. How can I assist you today?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - ticket
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant+train_005
+  description: MultiWOZ restaurant+train booking/info task (PMUL3263.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a restaurant with restaurant name: shiraz, bookday: saturday, bookpeople:
+      5, booktime: 19:45. Book it if suitable.. Find a train with departure station:
+      birmingham new street, destination station: cambridge, arrival time: 13:15,
+      travel day: saturday, bookpeople: 5. Book it if suitable..'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a train
+      booking assistant for UK rail services.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (restaurant): restaurant name=shiraz, bookday=saturday, bookpeople=5,
+      booktime=19:45
+
+      Customer needs (train): departure station=birmingham new street, destination
+      station=cambridge, arrival time=13:15, travel day=saturday, bookpeople=5'
+    opening_line: UK Rail enquiries. How can I assist you today?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - ticket
+    - reference number
+    max_turns: 20
+- id: multiwoz_attraction+train_006
+  description: MultiWOZ attraction+train booking/info task (PMUL3672.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a train with destination station: cambridge, arrival time: 10:30,
+      bookpeople: 3, travel day: tuesday, departure station: london kings cross. Book
+      it if suitable.. Find a attraction with area: south, type: entertainment.'
+  answerer:
+    goal: 'You are a tourist information assistant for Cambridge, UK and a train booking
+      assistant for UK rail services.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (train): destination station=cambridge, arrival time=10:30, bookpeople=3,
+      travel day=tuesday, departure station=london kings cross
+
+      Customer needs (attraction): area=south, type=entertainment'
+    opening_line: UK Rail enquiries. How can I assist you today?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - ticket
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant+hotel_009
+  description: MultiWOZ restaurant+hotel booking/info task (PMUL0079.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a hotel with area: north, star rating: 4, parking: yes. Book it if
+      suitable.. Find a restaurant with area: north, price range: expensive, bookday:
+      monday, bookpeople: 2, booktime: 12:15, restaurant name: saigon city. Book it
+      if suitable..'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a hotel
+      booking assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (hotel): area=north, star rating=4, parking=yes
+
+      Customer needs (restaurant): area=north, price range=expensive, bookday=monday,
+      bookpeople=2, booktime=12:15, restaurant name=saigon city'
+    opening_line: Cambridge Tourist Information, hotel reservations. How can I help
+      you?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_hotel_011
+  description: MultiWOZ hotel booking/info task (SNG0840.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a hotel with internet: yes, star rating: 4, price range: expensive,
+      bookstay: 3, bookday: saturday, bookpeople: 3, hotel name: huntingdon marriott
+      hotel. Book it if suitable..'
+  answerer:
+    goal: 'You are a hotel booking assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (hotel): internet=yes, star rating=4, price range=expensive,
+      bookstay=3, bookday=saturday, bookpeople=3, hotel name=huntingdon marriott hotel'
+    opening_line: Cambridge Tourist Information, hotel reservations. How can I help
+      you?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant+attraction_014
+  description: MultiWOZ restaurant+attraction booking/info task (PMUL2009.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a attraction with area: centre, type: architecture, attraction name:
+      great saint marys church. Find a restaurant with area: centre, cuisine: italian,
+      price range: expensive. Book it if suitable..'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a tourist
+      information assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (attraction): area=centre, type=architecture, attraction name=great
+      saint marys church
+
+      Customer needs (restaurant): area=centre, cuisine=italian, price range=expensive'
+    opening_line: Cambridge Tourist Information, restaurant bookings. How can I help?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_restaurant_015
+  description: MultiWOZ restaurant booking/info task (SNG0528.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a restaurant with cuisine: modern european, price range: moderate,
+      area: centre, bookday: saturday, bookpeople: 6, booktime: 19:15, restaurant
+      name: de luca cucina and bar. Book it if suitable..'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (restaurant): cuisine=modern european, price range=moderate,
+      area=centre, bookday=saturday, bookpeople=6, booktime=19:15, restaurant name=de
+      luca cucina and bar'
+    opening_line: Cambridge Tourist Information, restaurant bookings. How can I help?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_taxi_016
+  description: MultiWOZ taxi booking/info task (SNG01367.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a taxi with pickup location: la raza, departure time: 11:45, drop-off
+      location: restaurant one seven.'
+  answerer:
+    goal: 'You are a taxi booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (taxi): pickup location=la raza, departure time=11:45, drop-off
+      location=restaurant one seven'
+    opening_line: Cambridge Taxis. Where would you like to go?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - taxi
+    - cab
+    max_turns: 20
+- id: multiwoz_attraction_018
+  description: MultiWOZ attraction booking/info task (SNG1076.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a attraction with area: centre, type: museum, attraction name: broughton
+      house gallery.'
+  answerer:
+    goal: 'You are a tourist information assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (attraction): area=centre, type=museum, attraction name=broughton
+      house gallery'
+    opening_line: Cambridge Tourist Information. How can I help you?
+  success_criteria:
+    goal_phrases:
+    - located
+    - here is
+    - address
+    max_turns: 20
+- id: multiwoz_restaurant+taxi_019
+  description: MultiWOZ restaurant+taxi booking/info task (PMUL2166.json)
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Find a attraction with type: nightclub. Find a restaurant with area: centre,
+      cuisine: italian, restaurant name: zizzi cambridge, bookday: wednesday, bookpeople:
+      1, booktime: 16:00. Book it if suitable.. Find a taxi with pickup location:
+      zizzi cambridge, drop-off location: ballare, departure time: 05:00.'
+  answerer:
+    goal: 'You are a restaurant reservation assistant for Cambridge, UK and a taxi
+      booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (attraction): type=nightclub
+
+      Customer needs (restaurant): area=centre, cuisine=italian, restaurant name=zizzi
+      cambridge, bookday=wednesday, bookpeople=1, booktime=16:00
+
+      Customer needs (taxi): pickup location=zizzi cambridge, drop-off location=ballare,
+      departure time=05:00'
+    opening_line: Cambridge Tourist Information, restaurant bookings. How can I help?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - reservation
+    - reference number
+    max_turns: 20
+- id: multiwoz_attraction_026
+  description: MultiWOZ attraction booking/info task (SNG1150.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a attraction with area: east, type: entertainment.'
+  answerer:
+    goal: 'You are a tourist information assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (attraction): area=east, type=entertainment'
+    opening_line: Cambridge Tourist Information. How can I help you?
+  success_criteria:
+    goal_phrases:
+    - located
+    - here is
+    - address
+    max_turns: 20
+- id: multiwoz_taxi_044
+  description: MultiWOZ taxi booking/info task (SNG0081.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a taxi with pickup location: arbury lodge guesthouse, drop-off location:
+      whale of a time, departure time: 13:00.'
+  answerer:
+    goal: 'You are a taxi booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (taxi): pickup location=arbury lodge guesthouse, drop-off location=whale
+      of a time, departure time=13:00'
+    opening_line: Cambridge Taxis. Where would you like to go?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - taxi
+    - cab
+    max_turns: 20
+- id: multiwoz_taxi_055
+  description: MultiWOZ taxi booking/info task (SNG01359.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a taxi with pickup location: riverside brasserie, arrival time: 18:15,
+      drop-off location: shanghai family restaurant.'
+  answerer:
+    goal: 'You are a taxi booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (taxi): pickup location=riverside brasserie, arrival time=18:15,
+      drop-off location=shanghai family restaurant'
+    opening_line: Cambridge Taxis. Where would you like to go?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - taxi
+    - cab
+    max_turns: 20
+- id: multiwoz_taxi_059
+  description: MultiWOZ taxi booking/info task (SNG02315.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a taxi with arrival time: 20:00, pickup location: clare college, drop-off
+      location: parkside police station.'
+  answerer:
+    goal: 'You are a taxi booking assistant for local cab service.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (taxi): arrival time=20:00, pickup location=clare college, drop-off
+      location=parkside police station'
+    opening_line: Cambridge Taxis. Where would you like to go?
+  success_criteria:
+    goal_phrases:
+    - booked
+    - taxi
+    - cab
+    max_turns: 20
+- id: multiwoz_attraction_392
+  description: MultiWOZ attraction booking/info task (SNG1105.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a attraction with area: west, attraction name: whale of a time.'
+  answerer:
+    goal: 'You are a tourist information assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (attraction): area=west, attraction name=whale of a time'
+    opening_line: Cambridge Tourist Information. How can I help you?
+  success_criteria:
+    goal_phrases:
+    - located
+    - here is
+    - address
+    max_turns: 20
+- id: multiwoz_attraction_406
+  description: MultiWOZ attraction booking/info task (SNG1075.json)
+  difficulty: easy
+  timeout: 120
+  caller:
+    goal: 'Find a attraction with type: nightclub.'
+  answerer:
+    goal: 'You are a tourist information assistant for Cambridge, UK.
+
+      You have access to a database of local options and can make bookings.
+
+      Help the customer find what they are looking for and provide accurate information.
+
+      If they want to book, confirm with a reference number.
+
+      Be concise and helpful.
+
+      Customer needs (attraction): type=nightclub'
+    opening_line: Cambridge Tourist Information. How can I help you?
+  success_criteria:
+    goal_phrases:
+    - located
+    - here is
+    - address
+    max_turns: 20

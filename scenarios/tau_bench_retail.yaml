@@ -1,0 +1,1096 @@
+scenarios:
+- id: tau_retail_000
+  description: 'τ-bench retail: Hi, I was wondering how I can check the balance on
+    my gift c'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I was wondering how I can check the balance on my gift card?
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Isabella Lopez
+
+      Your email: isabella.lopez3271@example.com
+
+      Your zip code: 85034, state: AZ
+
+      Your order IDs: #W4923227'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: isabella_lopez_6490
+
+      Name: Isabella Lopez
+
+      Email: isabella.lopez3271@example.com
+
+      Address: 710 Sunset Drive, Phoenix, AZ 85034
+
+      Payment: visa ending in 8902 (ID: credit_card_8897086)
+
+      Payment: gift_card (ID: gift_card_8245350)
+
+      Order #W4923227 [pending]: Bluetooth Speaker ($321.18, item_id=7751905257)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully changed
+    - 'order #'
+    max_turns: 16
+- id: tau_retail_001
+  description: 'τ-bench retail: Hi there! I was actually hoping to cancel an order
+    I made—th'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi there! I was actually hoping to cancel an order I made—the one with
+      the grill.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Sofia Hernandez
+
+      Your email: sofia.hernandez3039@example.com
+
+      Your zip code: 98193, state: WA
+
+      Your order IDs: #W3561391, #W6876713, #W9609649'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: sofia_hernandez_5364
+
+      Name: Sofia Hernandez
+
+      Email: sofia.hernandez3039@example.com
+
+      Address: 652 Laurel Lane, Seattle, WA 98193
+
+      Payment: visa ending in 7312 (ID: credit_card_7901829)
+
+      Order #W3561391 [pending]: Grill ($1057.24, item_id=5946177616)
+
+      Order #W6876713 [delivered]: Espresso Machine ($2955.17, item_id=6200867091);
+      T-Shirt ($46.66, item_id=3234800602); Vacuum Cleaner ($655.59, item_id=1345513440)
+
+      Order #W9609649 [processed]: E-Reader ($267.07, item_id=5510402676); T-Shirt
+      ($50.88, item_id=9612497925); T-Shirt ($52.88, item_id=1176194968)
+
+      Order #W3947049 [delivered]: Cycling Helmet ($197.33, item_id=3358616356)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - done
+    - taken care of
+    max_turns: 16
+- id: tau_retail_002
+  description: 'τ-bench retail: Hi, I’d like to change a Desk Lamp from my order.'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I’d like to change a Desk Lamp from my order.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Aarav Anderson
+
+      Your email: aarav.anderson9752@example.com
+
+      Your zip code: 19031, state: PA
+
+      Your order IDs: #W4316152, #W9311069, #W9300146'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: aarav_anderson_8794
+
+      Name: Aarav Anderson
+
+      Email: aarav.anderson9752@example.com
+
+      Address: 931 Maple Drive, Philadelphia, PA 19031
+
+      Payment: gift_card (ID: gift_card_7245904)
+
+      Order #W4316152 [delivered]: Tea Kettle ($94.80, item_id=7292993796); Tea Kettle
+      ($94.80, item_id=7292993796)
+
+      Order #W9311069 [delivered]: Bookshelf ($505.62, item_id=7154215719); Espresso
+      Machine ($3081.91, item_id=7407838442); Garden Hose ($90.43, item_id=9829827210)
+
+      Order #W9300146 [pending]: Desk Lamp ($153.23, item_id=9190635437)
+
+      Order #W3220203 [processed]: Bluetooth Speaker ($324.63, item_id=5650803029)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully modified
+    - has been processed
+    max_turns: 16
+- id: tau_retail_003
+  description: 'τ-bench retail: Hi, I need to update the delivery address for an order.'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I need to update the delivery address for an order.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Fatima Johnson
+
+      Your email: fatima.johnson2300@example.com
+
+      Your zip code: 78712, state: TX
+
+      Your order IDs: #W5199551, #W8665881, #W9389413'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: fatima_johnson_7581
+
+      Name: Fatima Johnson
+
+      Email: fatima.johnson2300@example.com
+
+      Address: 123 Elm Street, Austin, TX 78712
+
+      Payment: paypal (ID: paypal_5364164)
+
+      Payment: gift_card (ID: gift_card_1675628)
+
+      Order #W5199551 [pending]: Hiking Boots ($253.89, item_id=1615379700); Action
+      Camera ($503.51, item_id=5925362855); Electric Kettle ($143.72, item_id=9472539378)
+
+      Order #W8665881 [pending]: Bluetooth Speaker ($293.46, item_id=5855700373);
+      Smart Watch ($381.26, item_id=9408160950); Dumbbell Set ($483.47, item_id=4422467033)
+
+      Order #W9389413 [delivered]: Hiking Boots ($251.82, item_id=4127323219); Smart
+      Watch ($367.38, item_id=2554056026); Mechanical Keyboard ($244.91, item_id=6342039236)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully updated
+    - 'order #'
+    max_turns: 16
+- id: tau_retail_004
+  description: 'τ-bench retail: Hi, I''d like to change the size of some boots I have
+    on orde'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I''d like to change the size of some boots I have on order.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Fatima Johnson
+
+      Your email: fatima.johnson2300@example.com
+
+      Your zip code: 78712, state: TX
+
+      Your order IDs: #W5199551, #W8665881, #W9389413'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: fatima_johnson_7581
+
+      Name: Fatima Johnson
+
+      Email: fatima.johnson2300@example.com
+
+      Address: 123 Elm Street, Austin, TX 78712
+
+      Payment: paypal (ID: paypal_5364164)
+
+      Payment: gift_card (ID: gift_card_1675628)
+
+      Order #W5199551 [pending]: Hiking Boots ($253.89, item_id=1615379700); Action
+      Camera ($503.51, item_id=5925362855); Electric Kettle ($143.72, item_id=9472539378)
+
+      Order #W8665881 [pending]: Bluetooth Speaker ($293.46, item_id=5855700373);
+      Smart Watch ($381.26, item_id=9408160950); Dumbbell Set ($483.47, item_id=4422467033)
+
+      Order #W9389413 [delivered]: Hiking Boots ($251.82, item_id=4127323219); Smart
+      Watch ($367.38, item_id=2554056026); Mechanical Keyboard ($244.91, item_id=6342039236)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully changed
+    max_turns: 16
+- id: tau_retail_005
+  description: 'τ-bench retail: Hi there! I''d like to exchange one of the robotic
+    vacuums fr'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi there! I''d like to exchange one of the robotic vacuums from my recent
+      order for a canister-based model from the same line.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Daiki Johnson
+
+      Your email: daiki.johnson2279@example.com
+
+      Your zip code: 80273, state: CO
+
+      Your order IDs: #W1436802, #W5282037, #W9502127'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: daiki_johnson_9523
+
+      Name: Daiki Johnson
+
+      Email: daiki.johnson2279@example.com
+
+      Address: 834 Park Avenue, Denver, CO 80273
+
+      Payment: paypal (ID: paypal_2433177)
+
+      Order #W1436802 [pending]: Tea Kettle ($98.25, item_id=3909406921)
+
+      Order #W5282037 [pending]: Garden Hose ($99.51, item_id=3230708338); Makeup
+      Kit ($248.85, item_id=6254646215)
+
+      Order #W9502127 [delivered]: Vacuum Cleaner ($622.12, item_id=2872451762); Air
+      Purifier ($473.43, item_id=9534205511); Patio Umbrella ($329.85, item_id=6243981804)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - refund
+    max_turns: 16
+- id: tau_retail_006
+  description: 'τ-bench retail: Hey there! I''ve got a joke for you: Why did the scarecrow
+    wi'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hey there! I''ve got a joke for you: Why did the scarecrow win an award?
+      Because he was outstanding in his field! 😂 Okay, onto business: I need to update
+      my address for deliveries. Can you help with that?
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Fatima Taylor
+
+      Your email: fatima.taylor7676@example.com
+
+      Your zip code: 32169, state: FL
+
+      Your order IDs: #W5285031'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: fatima_taylor_3452
+
+      Name: Fatima Taylor
+
+      Email: fatima.taylor7676@example.com
+
+      Address: 922 Pine Lane, Jacksonville, FL 32169
+
+      Payment: visa ending in 7684 (ID: credit_card_7952624)
+
+      Order #W5285031 [delivered]: Wireless Earbuds ($243.34, item_id=4063058357);
+      Tablet ($1054.43, item_id=2235648106); Gaming Mouse ($150.58, item_id=8214883393)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - done
+    - taken care of
+    max_turns: 16
+- id: tau_retail_007
+  description: 'τ-bench retail: I''d like to return an air purifier and a vacuum cleaner
+    from'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'I''d like to return an air purifier and a vacuum cleaner from my recent
+      order.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Daiki Johnson
+
+      Your email: daiki.johnson2279@example.com
+
+      Your zip code: 80273, state: CO
+
+      Your order IDs: #W1436802, #W5282037, #W9502127'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: daiki_johnson_9523
+
+      Name: Daiki Johnson
+
+      Email: daiki.johnson2279@example.com
+
+      Address: 834 Park Avenue, Denver, CO 80273
+
+      Payment: paypal (ID: paypal_2433177)
+
+      Order #W1436802 [pending]: Tea Kettle ($98.25, item_id=3909406921)
+
+      Order #W5282037 [pending]: Garden Hose ($99.51, item_id=3230708338); Makeup
+      Kit ($248.85, item_id=6254646215)
+
+      Order #W9502127 [delivered]: Vacuum Cleaner ($622.12, item_id=2872451762); Air
+      Purifier ($473.43, item_id=9534205511); Patio Umbrella ($329.85, item_id=6243981804)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - refund
+    max_turns: 16
+- id: tau_retail_008
+  description: 'τ-bench retail: Hi, I would like to return everything I purchased
+    except for'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I would like to return everything I purchased except for a couple of
+      items. Could you help me with that?
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Mia Garcia
+
+      Your email: mia.garcia2723@example.com
+
+      Your zip code: 46229, state: IN
+
+      Your order IDs: #W5490111, #W7387996'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: mia_garcia_4516
+
+      Name: Mia Garcia
+
+      Email: mia.garcia2723@example.com
+
+      Address: 537 Main Street, Indianapolis, IN 46229
+
+      Payment: paypal (ID: paypal_9497703)
+
+      Payment: visa ending in 7285 (ID: credit_card_3124723)
+
+      Order #W5490111 [delivered]: Water Bottle ($54.85, item_id=4579334072); Mechanical
+      Keyboard ($268.77, item_id=1421289881); Action Camera ($481.50, item_id=6117189161)
+
+      Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - refund
+    max_turns: 16
+- id: tau_retail_009
+  description: 'τ-bench retail: Hi, I need to undo the cancellation of an order I
+    placed. Ca'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I need to undo the cancellation of an order I placed. Can you help
+      with that?
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: ''
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      (no account data)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - done
+    - taken care of
+    max_turns: 16
+- id: tau_retail_010
+  description: 'τ-bench retail: Hi! I would like to cancel and return some gaming
+    items I re'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi! I would like to cancel and return some gaming items I recently purchased.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Mia Garcia
+
+      Your email: mia.garcia2723@example.com
+
+      Your zip code: 46229, state: IN
+
+      Your order IDs: #W5490111, #W7387996'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: mia_garcia_4516
+
+      Name: Mia Garcia
+
+      Email: mia.garcia2723@example.com
+
+      Address: 537 Main Street, Indianapolis, IN 46229
+
+      Payment: paypal (ID: paypal_9497703)
+
+      Payment: visa ending in 7285 (ID: credit_card_3124723)
+
+      Order #W5490111 [delivered]: Water Bottle ($54.85, item_id=4579334072); Mechanical
+      Keyboard ($268.77, item_id=1421289881); Action Camera ($481.50, item_id=6117189161)
+
+      Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - 'order #'
+    - refund
+    max_turns: 16
+- id: tau_retail_011
+  description: 'τ-bench retail: I wanna return everything I ordered.'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'I wanna return everything I ordered.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Mia Garcia
+
+      Your email: mia.garcia2723@example.com
+
+      Your zip code: 46229, state: IN
+
+      Your order IDs: #W5490111, #W7387996'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: mia_garcia_4516
+
+      Name: Mia Garcia
+
+      Email: mia.garcia2723@example.com
+
+      Address: 537 Main Street, Indianapolis, IN 46229
+
+      Payment: paypal (ID: paypal_9497703)
+
+      Payment: visa ending in 7285 (ID: credit_card_3124723)
+
+      Order #W5490111 [delivered]: Water Bottle ($54.85, item_id=4579334072); Mechanical
+      Keyboard ($268.77, item_id=1421289881); Action Camera ($481.50, item_id=6117189161)
+
+      Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - 'order #'
+    - refund
+    max_turns: 16
+- id: tau_retail_012
+  description: 'τ-bench retail: Hi there! I''m trying to track an order that was mistakenly
+    s'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi there! I''m trying to track an order that was mistakenly sent to Texas,
+      and I need the tracking number. I don''t remember the order number, though.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Isabella Johansson
+
+      Your email: isabella.johansson9391@example.com
+
+      Your zip code: 32286, state: FL
+
+      Your order IDs: #W3792453, #W7181492, #W5565470'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: isabella_johansson_2152
+
+      Name: Isabella Johansson
+
+      Email: isabella.johansson9391@example.com
+
+      Address: 313 Chestnut Street, Jacksonville, FL 32286
+
+      Payment: paypal (ID: paypal_3024827)
+
+      Order #W3792453 [delivered]: Skateboard ($200.80, item_id=4293355847)
+
+      Order #W7181492 [delivered]: Garden Hose ($96.35, item_id=5753502325); Backpack
+      ($193.38, item_id=9851293632); Bookshelf ($473.48, item_id=3778705663)
+
+      Order #W5565470 [delivered]: Electric Kettle ($153.25, item_id=7602931732);
+      Mechanical Keyboard ($231.37, item_id=9570044148); Pet Bed ($196.53, item_id=6857426243)
+
+      Order #W2575533 [pending]: Vacuum Cleaner ($658.89, item_id=4806644905); Portable
+      Charger ($102.07, item_id=8349903180); E-Reader ($252.06, item_id=9494281769)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - refund
+    max_turns: 16
+- id: tau_retail_013
+  description: 'τ-bench retail: Hello, I need some help with returning an office chair.
+    Some'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hello, I need some help with returning an office chair. Some of its pieces
+      arrived broken.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Mei Davis
+
+      Your email: mei.davis6811@example.com
+
+      Your zip code: 80217, state: CO
+
+      Your order IDs: #W2890441, #W1267569'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: mei_davis_8935
+
+      Name: Mei Davis
+
+      Email: mei.davis6811@example.com
+
+      Address: 698 Maple Drive, Denver, CO 80217
+
+      Payment: mastercard ending in 1037 (ID: credit_card_1061405)
+
+      Order #W2890441 [delivered]: Water Bottle ($54.04, item_id=2366567022); Pet
+      Bed ($195.11, item_id=2751999929); Office Chair ($499.28, item_id=8069050545)
+
+      Order #W1267569 [pending]: Gaming Mouse ($138.47, item_id=7420906769); Headphones
+      ($346.97, item_id=7493556126); Air Purifier ($492.65, item_id=1327854740)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - done
+    - taken care of
+    max_turns: 16
+- id: tau_retail_014
+  description: 'τ-bench retail: Hi! I recently got into gaming but realized I need
+    to focus '
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi! I recently got into gaming but realized I need to focus on studying.
+      I''d like to cancel or return some items I purchased.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Mia Garcia
+
+      Your email: mia.garcia2723@example.com
+
+      Your zip code: 46229, state: IN
+
+      Your order IDs: #W5490111, #W7387996'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: mia_garcia_4516
+
+      Name: Mia Garcia
+
+      Email: mia.garcia2723@example.com
+
+      Address: 537 Main Street, Indianapolis, IN 46229
+
+      Payment: paypal (ID: paypal_9497703)
+
+      Payment: visa ending in 7285 (ID: credit_card_3124723)
+
+      Order #W5490111 [delivered]: Water Bottle ($54.85, item_id=4579334072); Mechanical
+      Keyboard ($268.77, item_id=1421289881); Action Camera ($481.50, item_id=6117189161)
+
+      Order #W7387996 [delivered]: Gaming Mouse ($158.89, item_id=5796612084)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - 'order #'
+    - refund
+    max_turns: 16
+- id: tau_retail_015
+  description: 'τ-bench retail: Hi, I''m having a bit of an issue with an order. It
+    got sent '
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi, I''m having a bit of an issue with an order. It got sent to Texas by
+      mistake, and I need to sort that out.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Isabella Johansson
+
+      Your email: isabella.johansson9391@example.com
+
+      Your zip code: 32286, state: FL
+
+      Your order IDs: #W3792453, #W7181492, #W5565470'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: isabella_johansson_2152
+
+      Name: Isabella Johansson
+
+      Email: isabella.johansson9391@example.com
+
+      Address: 313 Chestnut Street, Jacksonville, FL 32286
+
+      Payment: paypal (ID: paypal_3024827)
+
+      Order #W3792453 [delivered]: Skateboard ($200.80, item_id=4293355847)
+
+      Order #W7181492 [delivered]: Garden Hose ($96.35, item_id=5753502325); Backpack
+      ($193.38, item_id=9851293632); Bookshelf ($473.48, item_id=3778705663)
+
+      Order #W5565470 [delivered]: Electric Kettle ($153.25, item_id=7602931732);
+      Mechanical Keyboard ($231.37, item_id=9570044148); Pet Bed ($196.53, item_id=6857426243)
+
+      Order #W2575533 [pending]: Vacuum Cleaner ($658.89, item_id=4806644905); Portable
+      Charger ($102.07, item_id=8349903180); E-Reader ($252.06, item_id=9494281769)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - refund
+    max_turns: 16
+- id: tau_retail_016
+  description: 'τ-bench retail: I just placed an order, but my card only has $950
+    left. Can '
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'I just placed an order, but my card only has $950 left. Can I split the
+      payment with another card?
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Daiki Sanchez
+
+      Your email: daiki.sanchez1479@example.com
+
+      Your zip code: 46236, state: IN
+
+      Your order IDs: #W9348897'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: daiki_sanchez_3253
+
+      Name: Daiki Sanchez
+
+      Email: daiki.sanchez1479@example.com
+
+      Address: 661 Elm Avenue, Indianapolis, IN 46236
+
+      Payment: visa ending in 6593 (ID: credit_card_8853416)
+
+      Order #W9348897 [pending]: Action Camera ($481.50, item_id=6117189161); Patio
+      Umbrella ($288.82, item_id=9879255677); Desk Lamp ($150.01, item_id=7453605304)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully canceled
+    - refund
+    max_turns: 16
+- id: tau_retail_017
+  description: 'τ-bench retail: Hey, I just placed an order but realized my card doesn''t
+    hav'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hey, I just placed an order but realized my card doesn''t have enough credit.
+      Can we split the payment with another card?
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Daiki Sanchez
+
+      Your email: daiki.sanchez1479@example.com
+
+      Your zip code: 46236, state: IN
+
+      Your order IDs: #W9348897'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: daiki_sanchez_3253
+
+      Name: Daiki Sanchez
+
+      Email: daiki.sanchez1479@example.com
+
+      Address: 661 Elm Avenue, Indianapolis, IN 46236
+
+      Payment: visa ending in 6593 (ID: credit_card_8853416)
+
+      Order #W9348897 [pending]: Action Camera ($481.50, item_id=6117189161); Patio
+      Umbrella ($288.82, item_id=9879255677); Desk Lamp ($150.01, item_id=7453605304)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully cancelled
+    - 'order #'
+    max_turns: 16
+- id: tau_retail_018
+  description: 'τ-bench retail: Hi. I''m wondering how many t-shirt options are available
+    in '
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi. I''m wondering how many t-shirt options are available in your store
+      right now.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Yusuf Rossi
+
+      Your email: yusuf.rossi7301@example.com
+
+      Your zip code: 19122, state: PA
+
+      Your order IDs: #W6247578, #W9711842, #W4776164'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: yusuf_rossi_9620
+
+      Name: Yusuf Rossi
+
+      Email: yusuf.rossi7301@example.com
+
+      Address: 763 Broadway, Philadelphia, PA 19122
+
+      Payment: mastercard ending in 2478 (ID: credit_card_9513926)
+
+      Order #W6247578 [pending]: T-Shirt ($53.27, item_id=3799046073)
+
+      Order #W9711842 [cancelled]: Sunglasses ($281.48, item_id=4245201809)
+
+      Order #W4776164 [pending]: T-Shirt ($53.43, item_id=8349118980); Espresso Machine
+      ($2719.01, item_id=6324294385)
+
+      Order #W6679257 [delivered]: Digital Camera ($2895.55, item_id=5996159312)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - successfully modified
+    - 'order #'
+    max_turns: 16
+- id: tau_retail_019
+  description: 'τ-bench retail: Hi! I would like to exchange a couple of items I recently
+    pu'
+  difficulty: medium
+  timeout: 120
+  caller:
+    goal: 'Hi! I would like to exchange a couple of items I recently purchased.
+
+
+      Provide your personal information naturally when the agent asks to verify your
+      identity. Confirm the outcome when done.'
+    context: 'Your name: Mei Kovacs
+
+      Your email: mei.kovacs8232@example.com
+
+      Your zip code: 28236, state: NC
+
+      Your order IDs: #W6390527, #W7800651, #W8065207'
+  answerer:
+    goal: 'You are a customer service agent for an online retail store.
+
+      Company policy: Returns accepted within 30 days for delivered items. Exchanges
+      allowed for delivered items within 30 days. Order modifications (items, address,
+      payment) only for pending orders. Cancellations only for pending orders. Verify
+      customer identity via name+zip OR email before any account changes.
+
+
+      Customer account data:
+
+      Account ID: mei_kovacs_8020
+
+      Name: Mei Kovacs
+
+      Email: mei.kovacs8232@example.com
+
+      Address: 317 Elm Street, Charlotte, NC 28236
+
+      Payment: paypal (ID: paypal_7644869)
+
+      Order #W6390527 [delivered]: Desk Lamp ($137.94, item_id=8384507844); Hiking
+      Boots ($253.89, item_id=1615379700); Water Bottle ($45.13, item_id=8538875209)
+
+      Order #W7800651 [pending]: Gaming Mouse ($158.89, item_id=5796612084); Bookshelf
+      ($473.48, item_id=3778705663); Office Chair ($503.76, item_id=4648362606)
+
+      Order #W8065207 [delivered]: Smart Watch ($323.19, item_id=5694328282); Smartphone
+      ($1291.21, item_id=1631373418); Luggage Set ($452.62, item_id=9956648681)
+
+
+      Verify the customer''s identity, process their request per policy, and confirm
+      the outcome explicitly.'
+    opening_line: Thank you for calling customer service. How can I help you today?
+  success_criteria:
+    goal_phrases:
+    - refund
+    max_turns: 16
