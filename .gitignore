@@ -44,3 +44,10 @@ htmlcov/
 # reports/*.md
 
 .venv-*/
+
+# Raw downloaded datasets (large files — regenerate with datasets/download.py)
+datasets/abcd/abcd_v1.1.json
+
+# Log files (may contain credentials)
+*.log
+*.log.*
