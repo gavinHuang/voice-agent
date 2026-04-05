@@ -17,6 +17,7 @@ import asyncio
 import random
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
@@ -122,6 +123,19 @@ _dtmf_lock: asyncio.Lock = asyncio.Lock()  # Protects concurrent access to _dtmf
 # ── Global pre-warmed service pools ──────────────────────────────────
 _tts_pool: Optional[TTSPool] = None
 _flux_pool: Optional[FluxPool] = None
+
+
+@dataclass
+class CallSession:
+    """
+    Per-call mutable context shared by the closures inside websocket_endpoint.
+
+    Replaces the raw ctx dict to provide type safety and explicit field names.
+    call_id may be reassigned on takeover reconnect (preserving the original
+    dashboard panel).
+    """
+    call_id: str
+    ivr_mode: bool = False
 
 
 @app.on_event("startup")
@@ -669,26 +683,26 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     _active_calls += 1
 
-    # Mutable context — call_id may change if this is a reconnection
-    ctx = {"call_id": uuid.uuid4().hex[:8], "ivr_mode": False}
-    dashboard_bus.create(ctx["call_id"])
-    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx["call_id"]))
+    # Typed per-call context — call_id may be reassigned on takeover reconnect
+    ctx = CallSession(call_id=uuid.uuid4().hex[:8])
+    dashboard_bus.create(ctx.call_id)
+    dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx.call_id))
 
     def observer(event: dict) -> None:
-        tagged = {**event, "call_id": ctx["call_id"]}
+        tagged = {**event, "call_id": ctx.call_id}
         # On stream_start: embed phone and goal into the broadcast so the
         # dashboard panel is created with both values in a single event.
         if event.get("type") == "stream_start":
-            c = dashboard_registry.get(ctx["call_id"])
+            c = dashboard_registry.get(ctx.call_id)
             tagged = {**tagged, "phone": c.phone if c else "", "goal": c.goal if c else ""}
         dashboard_bus.publish_global(tagged)
 
     def should_suppress_agent() -> bool:
-        c = dashboard_registry.get(ctx["call_id"])
+        c = dashboard_registry.get(ctx.call_id)
         return c is not None and c.mode == dashboard_registry.CallMode.TAKEOVER
 
     def on_agent_ready(agent) -> None:
-        dashboard_registry.update(ctx["call_id"], agent=agent)
+        dashboard_registry.update(ctx.call_id, agent=agent)
 
     def on_hangup():
         # Dashboard bookkeeping only — actual REST hangup is handled by TwilioISP.hangup()
@@ -702,8 +716,8 @@ async def websocket_endpoint(websocket: WebSocket):
         pending = dashboard_registry.pop_pending(call_sid)
         goal = pending["goal"] or os.getenv("CALL_GOAL", "")
         phone = pending["phone"]
-        ctx["ivr_mode"] = pending.get("ivr_mode", False)
-        dashboard_registry.update(ctx["call_id"], goal=goal, phone=phone, call_sid=call_sid)
+        ctx.ivr_mode = pending.get("ivr_mode", False)
+        dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid)
         return goal
 
     async def on_dtmf(digits: str) -> None:
@@ -711,7 +725,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         The actual REST redirect is handled by TwilioISP.send_dtmf().
         """
-        c = dashboard_registry.get(ctx["call_id"])
+        c = dashboard_registry.get(ctx.call_id)
         if not c or not c.call_sid:
             logger.warning("on_dtmf: no call_sid found")
             return
@@ -732,10 +746,10 @@ async def websocket_endpoint(websocket: WebSocket):
         async with _dtmf_lock:
             saved_dtmf = _dtmf_pending.pop(call_sid, None)
         if saved_dtmf:
-            ctx["ivr_mode"] = True
+            ctx.ivr_mode = True
             goal = saved_dtmf["goal"]
             phone = saved_dtmf["phone"]
-            dashboard_registry.update(ctx["call_id"], goal=goal, phone=phone, call_sid=call_sid)
+            dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid)
             logger.info(f"DTMF reconnect for call_sid={call_sid} goal={goal!r}")
             return {
                 "history": saved_dtmf["history"],
@@ -746,7 +760,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Takeover reconnect: check if this stream reconnects a call that was in take-over.
         existing = dashboard_registry.find_by_call_sid(call_sid)
-        if existing and existing.call_id != ctx["call_id"] and existing.saved_history:
+        if existing and existing.call_id != ctx.call_id and existing.saved_history:
             result = {
                 "history": existing.saved_history,
                 "takeover_transcript": existing.takeover_transcript,
@@ -754,11 +768,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 "phone": existing.phone,
             }
             # Clean up the temporary entry and bus
-            dashboard_registry.remove(ctx["call_id"])
-            dashboard_bus.destroy(ctx["call_id"])
+            dashboard_registry.remove(ctx.call_id)
+            dashboard_bus.destroy(ctx.call_id)
             # Reuse the original call_id so dashboard panel stays intact
-            ctx["call_id"] = existing.call_id
-            dashboard_registry.update(ctx["call_id"],
+            ctx.call_id = existing.call_id
+            dashboard_registry.update(ctx.call_id,
                 mode=dashboard_registry.CallMode.AGENT,
                 saved_history=[],
                 takeover_transcript=[],
@@ -766,12 +780,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 call_sid=call_sid,
             )
             dashboard_bus.publish_global({
-                "call_id": ctx["call_id"],
+                "call_id": ctx.call_id,
                 "type": "stream_start",
                 "phone": result["phone"],
                 "goal": result["goal"],
             })
-            logger.info(f"Reconnected call {ctx['call_id']} after take-over")
+            logger.info(f"Reconnected call {ctx.call_id} after take-over")
             return result
         return None
 
@@ -786,13 +800,13 @@ async def websocket_endpoint(websocket: WebSocket):
             on_dtmf=on_dtmf,
             get_saved_state=get_saved_state,
             tts_pool=_tts_pool,
-            ivr_mode=lambda: ctx["ivr_mode"],
+            ivr_mode=lambda: ctx.ivr_mode,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
         _active_calls -= 1
-        cid = ctx["call_id"]
+        cid = ctx.call_id
         call = dashboard_registry.get(cid)
         if call and call.mode == dashboard_registry.CallMode.TAKEOVER:
             # Preserve registry entry for reconnection after hand-back

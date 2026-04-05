@@ -103,8 +103,30 @@ def _model_supports_tools(model_string: str) -> bool:
     return not any(name in m for name in no_tool_models)
 
 
+def _build_goal_suffix(goal: str, tools_enabled: bool) -> str:
+    """Build the goal-specific system prompt suffix. Returns '' when goal is empty."""
+    if not goal:
+        return ""
+    if tools_enabled:
+        return (
+            f"\n\nYour goal for this call: {goal}\n"
+            "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
+            "Once accomplished, confirm details and STOP — wait for their reply. "
+            "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
+            "IVR NAVIGATION RULE: When you hear a recorded menu listing options, "
+            "call press_dtmf() with ONLY the digit — no words, no explanation."
+        )
+    return (
+        f"\n\nYour goal for this call: {goal}\n"
+        "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
+        "Once accomplished, confirm details and STOP — wait for their reply. "
+        "Only after they confirm, say goodbye and emit [HANGUP].\n"
+        "IVR NAVIGATION RULE: When you hear a recorded menu, emit ONLY the [DTMF:X] tag."
+    )
+
+
 # =============================================================================
-# TURN CONTEXT (shared state for tool side effects)
+# TURN CONTEXT (per-turn tool side effects)
 # =============================================================================
 
 @dataclass
@@ -113,13 +135,15 @@ class LLMTurnContext:
 
     Tools mutate this object directly. LLMService reads it after the run
     to determine what events to fire.
+
+    Note: goal_suffix was removed — it is a per-instance constant baked into
+    the system prompt at LLMService.__init__ time, not a per-turn side effect.
     """
     dtmf_queue: List[str] = field(default_factory=list)
     hold_start: bool = False
     hold_end: bool = False
     hold_continue: bool = False
     hangup_pending: bool = False
-    goal_suffix: str = ""
 
 
 # =============================================================================
@@ -153,20 +177,10 @@ class LLMService:
 
         base_prompt = SYSTEM_PROMPT if self._tools_enabled else SYSTEM_PROMPT_NO_TOOLS
 
-        self._goal_suffix = (
-            f"\n\nYour goal for this call: {goal}\n"
-            "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-            "Once accomplished, confirm details and STOP — wait for their reply. "
-            "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
-            "IVR NAVIGATION RULE: When you hear a recorded menu listing options, "
-            "call press_dtmf() with ONLY the digit — no words, no explanation."
-        ) if goal and self._tools_enabled else (
-            f"\n\nYour goal for this call: {goal}\n"
-            "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-            "Once accomplished, confirm details and STOP — wait for their reply. "
-            "Only after they confirm, say goodbye and emit [HANGUP].\n"
-            "IVR NAVIGATION RULE: When you hear a recorded menu, emit ONLY the [DTMF:X] tag."
-        ) if goal else ""
+        # Bake the full system prompt (base + goal suffix) at construction time.
+        # Goal is a per-instance constant — it does not belong in LLMTurnContext
+        # which is a per-turn side-effect container.
+        _full_system_prompt = base_prompt + _build_goal_suffix(goal, self._tools_enabled)
 
         _model_settings = ModelSettings(
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "500")),
@@ -179,10 +193,10 @@ class LLMService:
             model_settings=_model_settings,
         )
 
-        # Register dynamic system prompt (includes per-instance goal suffix via deps)
+        # Register static system prompt (goal suffix already included)
         @self._agent.system_prompt
         def _system_prompt(ctx: RunContext[LLMTurnContext]) -> str:
-            return base_prompt + ctx.deps.goal_suffix
+            return _full_system_prompt
 
         # Register tools only for models that support them
         if self._tools_enabled:
@@ -305,7 +319,7 @@ class LLMService:
 
     async def _generate_once(self) -> None:
         """Single generation attempt — raises on error, caller handles retry."""
-        self._turn_ctx = LLMTurnContext(goal_suffix=self._goal_suffix)
+        self._turn_ctx = LLMTurnContext()
 
         async with self._agent.iter(
             self._pending_message,

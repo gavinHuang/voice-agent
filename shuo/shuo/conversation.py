@@ -13,19 +13,24 @@ Events come from:
 - ISP (audio packets, stream start/stop)
 - Deepgram Flux (turn events)
 - Agent (playback complete)
+
+All state transitions — including the initial greeting and post-takeover
+handback — go through process_event via InitialGreetingEvent and
+HandbackStartEvent. There are no direct state mutations in this file.
 """
 
 import os
 import asyncio
-from dataclasses import replace
 from typing import Awaitable, Callable, Optional
 
 from .types import (
     AppState, Phase,
-    Event, StreamStartEvent, StreamStopEvent,
+    Event, Action,
+    StreamStartEvent, StreamStopEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
     AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupRequestEvent,
     DTMFToneEvent, MediaEvent,
+    InitialGreetingEvent, HandbackStartEvent,
     FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 from .state import process_event
@@ -87,7 +92,7 @@ async def run_conversation(
     3. Start ISP (registers callbacks, begins reading stream)
     4. On StreamStart, create Agent
     5. Process events through pure state machine
-    6. Dispatch actions inline
+    6. Dispatch actions via local dispatch() coroutine
     """
     event_log = Logger(verbose=False)
     event_queue: asyncio.Queue[Event] = asyncio.Queue()
@@ -122,6 +127,28 @@ async def run_conversation(
 
     async def on_isp_stop() -> None:
         await event_queue.put(StreamStopEvent())
+
+    # ── Action Dispatcher ────────────────────────────────────────────
+    # Single coroutine for all action dispatch — used both in the main loop
+    # and when processing synthetic events (InitialGreetingEvent, HandbackStartEvent).
+
+    async def dispatch(action: Action) -> None:
+        event_log.action(action)
+        if isinstance(action, FeedFluxAction):
+            if flux:
+                await flux.send(action.audio_bytes)
+
+        elif isinstance(action, StartAgentTurnAction):
+            if agent and not (should_suppress_agent and should_suppress_agent()):
+                await agent.start_turn(action.transcript, hold_check=action.hold_check)
+
+        elif isinstance(action, ResetAgentTurnAction):
+            # In IVR mode the remote party is an automated system —
+            # suppress barge-in so its background audio doesn't
+            # cancel the agent's response before audio is played.
+            _in_ivr = ivr_mode and ivr_mode()
+            if agent and not _in_ivr:
+                await agent.cancel_turn()
 
     # ── Initialize ──────────────────────────────────────────────────
 
@@ -229,22 +256,7 @@ async def run_conversation(
 
             # ─── DISPATCH (side effects) ────────────────────────────
             for action in actions:
-                event_log.action(action)
-                if isinstance(action, FeedFluxAction):
-                    if flux:
-                        await flux.send(action.audio_bytes)
-
-                elif isinstance(action, StartAgentTurnAction):
-                    if agent and not (should_suppress_agent and should_suppress_agent()):
-                        await agent.start_turn(action.transcript, hold_check=action.hold_check)
-
-                elif isinstance(action, ResetAgentTurnAction):
-                    # In IVR mode the remote party is an automated system —
-                    # suppress barge-in so its background audio doesn't
-                    # cancel the agent's response before audio is played.
-                    _in_ivr = ivr_mode and ivr_mode()
-                    if agent and not _in_ivr:
-                        await agent.cancel_turn()
+                await dispatch(action)
 
             # ─── DTMF DISPATCH ──────────────────────────────────────
             if isinstance(event, DTMFToneEvent):
@@ -253,13 +265,15 @@ async def run_conversation(
                 await isp.send_dtmf(event.digits)  # actual DTMF action via ISP
 
             # ─── INITIAL GREETING / HANDBACK RESPONSE ───────────────
+            # Route via process_event rather than direct state mutation so that
+            # LISTENING → RESPONDING transitions are logged and auditable.
             if isinstance(event, StreamStartEvent):
                 if saved:
-                    # Resuming after take-over hand-back — agent reacts to
-                    # what was discussed and continues toward the goal.
+                    # Resuming after take-over hand-back.
                     if _handback_prompt and agent:
-                        state = replace(state, phase=Phase.RESPONDING)
-                        await agent.start_turn(_handback_prompt)
+                        state, acts = process_event(state, HandbackStartEvent(prompt=_handback_prompt))
+                        for act in acts:
+                            await dispatch(act)
                 else:
                     # IVR mode: suppress opener — agent listens first, responds only
                     # after the IVR's EndOfTurn fires (no greeting from agent).
@@ -270,10 +284,11 @@ async def run_conversation(
                             "[CALL_STARTED]" if goal else ""
                         )
                         if opener and agent:
-                            state = replace(state, phase=Phase.RESPONDING)
-                            await agent.start_turn(opener)
+                            state, acts = process_event(state, InitialGreetingEvent(opener=opener))
+                            for act in acts:
+                                await dispatch(act)
 
-            # Start inactivity watchdog on first StreamStart — auto-hangup if no meaningful events
+            # Start inactivity watchdog on first StreamStart
             if isinstance(event, StreamStartEvent) and watchdog is None:
                 watchdog = asyncio.create_task(
                     _inactivity_watchdog(event_queue, CALL_INACTIVITY_TIMEOUT, last_activity)

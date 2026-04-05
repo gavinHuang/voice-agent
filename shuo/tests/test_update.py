@@ -31,13 +31,13 @@ def initial_state() -> AppState:
 @pytest.fixture
 def listening_state() -> AppState:
     """State after stream has started."""
-    return AppState(phase=Phase.LISTENING, stream_sid="test-stream-sid")
+    return AppState(phase=Phase.LISTENING)
 
 
 @pytest.fixture
 def responding_state() -> AppState:
     """State while agent is responding."""
-    return AppState(phase=Phase.RESPONDING, stream_sid="test-stream-sid")
+    return AppState(phase=Phase.RESPONDING)
 
 
 # =============================================================================
@@ -46,23 +46,21 @@ def responding_state() -> AppState:
 
 class TestStreamLifecycle:
 
-    def test_stream_start_sets_stream_sid(self, initial_state):
-        """StreamStartEvent should set the stream_sid."""
+    def test_stream_start_transitions_to_listening(self, initial_state):
+        """StreamStartEvent should transition to LISTENING with no actions."""
         event = StreamStartEvent(stream_sid="new-stream-123")
         new_state, actions = process_event(initial_state, event)
 
-        assert new_state.stream_sid == "new-stream-123"
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
     def test_stream_start_resets_phase(self):
         """StreamStartEvent should reset to LISTENING even if RESPONDING."""
-        state = AppState(phase=Phase.RESPONDING, stream_sid="old")
+        state = AppState(phase=Phase.RESPONDING)
         event = StreamStartEvent(stream_sid="new")
         new_state, _ = process_event(state, event)
 
         assert new_state.phase == Phase.LISTENING
-        assert new_state.stream_sid == "new"
 
     def test_stream_stop_resets_agent_if_responding(self, responding_state):
         """StreamStopEvent should reset agent turn if responding."""
@@ -280,8 +278,9 @@ class TestEdgeCases:
         event = StreamStartEvent(stream_sid="new-sid")
         new_state, _ = process_event(initial_state, event)
 
-        assert initial_state.stream_sid is None
-        assert new_state.stream_sid == "new-sid"
+        # AppState is immutable; original must be unchanged
+        assert initial_state.phase == Phase.LISTENING
+        assert new_state is not initial_state
 
     def test_stream_stop_in_listening_is_safe(self, listening_state):
         """StreamStopEvent while listening should produce no actions."""
@@ -300,8 +299,8 @@ class TestEdgeCases:
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
-    def test_end_of_turn_without_stream_sid(self, initial_state):
-        """EndOfTurn before stream starts should still work."""
+    def test_end_of_turn_in_listening_starts_agent(self, initial_state):
+        """FluxEndOfTurnEvent with transcript in LISTENING should start agent."""
         new_state, actions = process_event(initial_state, FluxEndOfTurnEvent(transcript="test"))
         assert new_state.phase == Phase.RESPONDING
         assert len(actions) == 1

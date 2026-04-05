@@ -11,7 +11,9 @@ Owns conversation history across turns.
 TTS connections are managed by TTSPool (see services/tts_pool.py).
 
 Tool effects (DTMF, hold, hangup) are delivered via pydantic-ai tool calls
-in LLMService. Agent reads them from LLMService.turn_context after each turn.
+in LLMService. After each LLM turn, _resolve_turn_outcome() (pure function)
+reads LLMService.turn_context and returns a TurnOutcome value object.
+_dispatch_outcome() then drives TTS/Player and emits events accordingly.
 """
 
 import asyncio
@@ -26,7 +28,12 @@ from .services.player import AudioPlayer
 from .services.dtmf import generate_dtmf_ulaw_b64
 from .tracer import Tracer
 from .log import ServiceLogger
-from .types import AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent, DTMFToneEvent
+from .types import (
+    TurnOutcome,
+    AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent,
+    HangupPendingEvent, HangupRequestEvent, DTMFToneEvent,
+)
+from .services.llm import LLMTurnContext
 
 log = ServiceLogger("Agent")
 
@@ -69,6 +76,85 @@ def _looks_like_farewell(text: str) -> bool:
 def _ms_since(t0: float) -> int:
     """Milliseconds elapsed since t0."""
     return int((time.monotonic() - t0) * 1000)
+
+
+# =============================================================================
+# PURE TURN RESOLUTION
+# =============================================================================
+
+def _resolve_turn_outcome(
+    ctx: LLMTurnContext,
+    turn_text: str,
+    tts_had_text: bool,
+) -> TurnOutcome:
+    """
+    Pure function: derive TurnOutcome from LLM context + accumulated turn text.
+
+    Reads tool side-effects from ctx (read-only) and applies fallback text
+    parsing for function-call leakage and no-tool text-tag protocol models.
+    Returns a TurnOutcome value object; all routing decisions are made here,
+    making this logic unit-testable without I/O or Agent state.
+
+    Priority order:
+      1. hold_continue  → silent done (skip TTS)
+      2. dtmf_digits    → send digit, suppress speech
+      3. has_speech     → flush TTS
+      4. (else)         → empty turn, silent done
+    """
+    # Start from tool-call results
+    dtmf_list = list(ctx.dtmf_queue)
+    hold_continue = ctx.hold_continue
+    hold_start = ctx.hold_start
+    hold_end = ctx.hold_end
+    hangup = ctx.hangup_pending
+
+    # Fallback: parse text tags when raw function-call syntax was detected.
+    # Handles both tool-call leakage (Llama 3.3) and the deliberate text-tag
+    # protocol used by no-tool models like compound-beta.
+    if _FC_SUPPRESS_RE.search(turn_text):
+        t = turn_text.lower()
+        if not dtmf_list:
+            text_dtmf = _DTMF_TEXT_RE_findall(turn_text)
+            if text_dtmf:
+                log.info(f"Fallback DTMF parsed from text: {text_dtmf}")
+                dtmf_list = text_dtmf
+        # Hold/hangup fallbacks only when no DTMF — they are mutually exclusive
+        if not dtmf_list:
+            if not hold_continue and ('signal_hold_continue' in t or '[hold_continue]' in t):
+                log.info("Fallback hold_continue detected in text")
+                hold_continue = True
+            if not hold_start and (
+                'signal_hold(' in t or
+                ('[hold]' in t and '[hold_continue]' not in t and '[hold_end]' not in t)
+            ):
+                log.info("Fallback hold_start detected in text")
+                hold_start = True
+            if not hold_end and ('signal_hold_end' in t or '[hold_end]' in t):
+                log.info("Fallback hold_end detected in text")
+                hold_end = True
+        if not hangup and ('signal_hangup' in t or '[hangup]' in t):
+            log.info("Fallback hangup detected in text")
+            hangup = True
+
+    dtmf_digits = "".join(dtmf_list) if dtmf_list else None
+
+    # Farewell fallback — only when no DTMF pending; LLM said goodbye but
+    # forgot to call signal_hangup().
+    if not hangup and dtmf_digits is None and _looks_like_farewell(turn_text):
+        log.info("Farewell detected without signal_hangup() — auto-hanging up after audio")
+        hangup = True
+
+    # has_speech: text was generated AND not suppressed by hold_continue or DTMF
+    has_speech = tts_had_text and not hold_continue and dtmf_digits is None
+
+    return TurnOutcome(
+        dtmf_digits=dtmf_digits,
+        hold_continue=hold_continue,
+        emit_hold_start=hold_start,
+        emit_hold_end=hold_end,
+        hangup=hangup,
+        has_speech=has_speech,
+    )
 
 
 # =============================================================================
@@ -124,11 +210,13 @@ class Agent:
         self._got_first_token = False
         self._got_first_audio = False
 
-        # Per-turn state (tool effects read from turn_context in _on_llm_done)
-        self._dtmf_queue: List[str] = []
+        # Per-turn accumulators (reset at turn start)
         self._tts_had_text: bool = False
         self._pending_hangup: bool = False
         self._current_turn_text: str = ""
+        # _dtmf_queue kept for backward compatibility (populated in legacy path,
+        # but routing now uses TurnOutcome.dtmf_digits from _resolve_turn_outcome)
+        self._dtmf_queue: List[str] = []
 
     @property
     def is_turn_active(self) -> bool:
@@ -174,7 +262,7 @@ class Agent:
         self._got_first_token = False
         self._got_first_audio = False
 
-        # Reset per-turn state
+        # Reset per-turn accumulators
         self._dtmf_queue = []
         self._tts_had_text = False
         self._pending_hangup = False
@@ -288,48 +376,23 @@ class Agent:
                 asyncio.get_event_loop().call_soon(self._on_token_observed, token)
 
     async def _on_llm_done(self) -> None:
-        """LLM finished -> read tool effects, fire events, flush TTS."""
+        """LLM finished -> resolve turn outcome and dispatch effects."""
         if not self._active or not self._tts:
             return
 
         self._tracer.end(self._turn, "llm")
 
-        # Read tool side effects from LLMService
-        ctx = self._llm.turn_context
+        outcome = _resolve_turn_outcome(
+            self._llm.turn_context,
+            self._current_turn_text,
+            self._tts_had_text,
+        )
+        await self._dispatch_outcome(outcome)
 
-        # Fallback: extract tool effects from raw text.
-        # Handles both tool-call leakage (Llama 3.3) and the deliberate text-tag
-        # protocol used by no-tool models like compound-beta ([DTMF:1], [HANGUP], etc.)
-        if _FC_SUPPRESS_RE.search(self._current_turn_text):
-            if not ctx.dtmf_queue:
-                text_dtmf = _DTMF_TEXT_RE_findall(self._current_turn_text)
-                if text_dtmf:
-                    log.info(f"Fallback DTMF parsed from text: {text_dtmf}")
-                    ctx.dtmf_queue.extend(text_dtmf)
-            t = self._current_turn_text.lower()
-            # Only apply hold/hangup fallbacks when no DTMF is queued —
-            # DTMF and hold states are mutually exclusive actions.
-            if not ctx.dtmf_queue:
-                if not ctx.hold_continue and ('signal_hold_continue' in t or '[hold_continue]' in t):
-                    log.info("Fallback hold_continue detected in text")
-                    ctx.hold_continue = True
-                if not ctx.hold_start and ('signal_hold(' in t or ('[hold]' in t and '[hold_continue]' not in t and '[hold_end]' not in t)):
-                    log.info("Fallback hold_start detected in text")
-                    ctx.hold_start = True
-                if not ctx.hold_end and ('signal_hold_end' in t or '[hold_end]' in t):
-                    log.info("Fallback hold_end detected in text")
-                    ctx.hold_end = True
-            if not ctx.hangup_pending and ('signal_hangup' in t or '[hangup]' in t):
-                log.info("Fallback hangup detected in text")
-                ctx.hangup_pending = True
-
-        # Copy DTMF queue from tool context
-        self._dtmf_queue = list(ctx.dtmf_queue)
-
-        # hold_continue MUST be checked FIRST — if true, skip TTS entirely
-        # (Pitfall 4 from research: if any text token came before the tool call,
-        # _tts_had_text would be True, but hold_continue overrides it)
-        if ctx.hold_continue:
+    async def _dispatch_outcome(self, outcome: TurnOutcome) -> None:
+        """Apply the resolved TurnOutcome: route TTS/Player and fire events."""
+        # hold_continue: silent on-hold wait — skip TTS entirely, end turn
+        if outcome.hold_continue:
             await self._tts.cancel()
             self._tts = None
             self._player = None
@@ -337,41 +400,33 @@ class Agent:
             self._emit(AgentTurnDoneEvent())
             return
 
-        # Fire hold state events
-        if ctx.hold_start:
+        # Hold state transitions
+        if outcome.emit_hold_start:
             self._emit(HoldStartEvent())
-        if ctx.hold_end:
+        if outcome.emit_hold_end:
             self._emit(HoldEndEvent())
 
-        # Set hangup flag for _on_playback_done to read after audio plays
-        if ctx.hangup_pending:
-            self._pending_hangup = True
-            self._emit(HangupPendingEvent())  # Block new turns immediately
-        elif _looks_like_farewell(self._current_turn_text):
-            # Fallback: LLM said goodbye but forgot to call signal_hangup().
-            # Trigger hangup after the audio plays so the goodbye is heard first.
-            log.info("Farewell detected without signal_hangup() — auto-hanging up after audio")
+        # Hangup: block new turns immediately; actual hangup fires after audio plays
+        if outcome.hangup:
             self._pending_hangup = True
             self._emit(HangupPendingEvent())
 
-        if self._dtmf_queue:
+        # Route: DTMF > speech > empty
+        if outcome.dtmf_digits:
             # DTMF takes priority over text — LLM may generate verbal confirmation
-            # alongside the tool call ("I'll press 1 for sales"), but IVR navigation
-            # must be silent. Discard any generated text and send only the digit.
+            # alongside the tool call, but IVR navigation must be silent.
             if self._tts_had_text:
                 log.debug("DTMF + text: suppressing spoken text, sending digit only")
-            digits = "".join(self._dtmf_queue)
-            self._dtmf_queue.clear()
             await self._tts.cancel()
             self._tts = None
             self._player = None
             self._active = False
-            self._emit(DTMFToneEvent(digits=digits))
-        elif self._tts_had_text:
-            # Normal path: flush TTS, playback will trigger AgentTurnDoneEvent
+            self._emit(DTMFToneEvent(digits=outcome.dtmf_digits))
+        elif outcome.has_speech:
+            # Normal path: flush TTS; playback completion triggers AgentTurnDoneEvent
             await self._tts.flush()
         else:
-            # No text, no DTMF, no hold_continue — empty turn, end silently
+            # Empty turn (no text, no DTMF, no hold_continue) — end silently
             await self._tts.cancel()
             self._tts = None
             self._player = None
@@ -401,7 +456,7 @@ class Agent:
 
         self._tracer.end(self._turn, "tts")
 
-        # Append DTMF tones after speech audio
+        # Append DTMF tones after speech audio (populated in legacy path)
         for digit in self._dtmf_queue:
             audio = generate_dtmf_ulaw_b64(digit)
             await self._player.send_chunk(audio)

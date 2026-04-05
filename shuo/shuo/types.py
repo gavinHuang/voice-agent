@@ -28,11 +28,39 @@ class AppState:
     """
     Application state -- just routing information.
 
-    Conversation history is owned by Agent, not tracked here.
+    Conversation history is owned by Agent.
+    Connection metadata (stream_sid) lives in CallSession (server) or
+    as a local variable in run_conversation -- it is not needed by the
+    state machine and was removed to keep AppState minimal.
     """
     phase: Phase = Phase.LISTENING
-    stream_sid: Optional[str] = None
     hold_mode: bool = False
+
+
+# =============================================================================
+# TURN OUTCOME
+# =============================================================================
+
+@dataclass(frozen=True)
+class TurnOutcome:
+    """
+    Result of resolving an LLM turn's side effects.
+
+    Returned by _resolve_turn_outcome() (pure function in agent.py).
+    Consumed by _dispatch_outcome() to drive TTS, events, and DTMF.
+
+    Priority order for routing:
+      hold_continue  → silent done (on-hold wait)
+      dtmf_digits    → send digit, suppress speech
+      has_speech     → flush TTS
+      (else)         → silent empty turn
+    """
+    dtmf_digits: Optional[str] = None    # digit(s) to send, or None
+    hold_continue: bool = False           # silent hold-wait — skip TTS, emit done
+    emit_hold_start: bool = False         # emit HoldStartEvent
+    emit_hold_end: bool = False           # emit HoldEndEvent
+    hangup: bool = False                  # emit HangupPendingEvent
+    has_speech: bool = False              # flush TTS (text was generated)
 
 
 # =============================================================================
@@ -107,6 +135,30 @@ class DTMFToneEvent:
     digits: str   # e.g. "2" or "12" for a sequence
 
 
+@dataclass(frozen=True)
+class InitialGreetingEvent:
+    """
+    Synthetic event: triggers the opening agent turn when a call connects.
+
+    Emitted by run_conversation after StreamStartEvent is processed (non-IVR,
+    non-handback path). Routes through process_event so the LISTENING →
+    RESPONDING transition is logged and auditable like any other transition.
+    """
+    opener: str
+
+
+@dataclass(frozen=True)
+class HandbackStartEvent:
+    """
+    Synthetic event: resumes the agent after a human supervisor take-over.
+
+    Emitted by run_conversation when a saved handback prompt exists.
+    Routes through process_event so the LISTENING → RESPONDING transition
+    is visible to the state machine rather than being a direct bypass.
+    """
+    prompt: str
+
+
 Event = Union[
     StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent,
@@ -114,6 +166,7 @@ Event = Union[
     HoldStartEvent, HoldEndEvent,
     HangupPendingEvent, HangupRequestEvent,
     DTMFToneEvent,
+    InitialGreetingEvent, HandbackStartEvent,
 ]
 
 

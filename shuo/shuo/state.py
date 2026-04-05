@@ -4,8 +4,10 @@ Pure state machine for shuo.
 The process_event function is the heart of the system:
     (State, Event) -> (State, List[Action])
 
-With Deepgram Flux handling turn detection, this is now
-a trivial conversation controller (~30 lines of logic).
+With Deepgram Flux handling turn detection, this is a simple
+conversation controller. All state transitions go through here —
+including synthetic events (InitialGreetingEvent, HandbackStartEvent)
+that were previously handled by direct state mutations in conversation.py.
 """
 
 from dataclasses import replace
@@ -16,6 +18,7 @@ from .types import (
     Event, StreamStartEvent, StreamStopEvent, MediaEvent,
     FluxStartOfTurnEvent, FluxEndOfTurnEvent, AgentTurnDoneEvent,
     HoldStartEvent, HoldEndEvent, HangupPendingEvent, HangupRequestEvent,
+    InitialGreetingEvent, HandbackStartEvent,
     Action, FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
 )
 
@@ -24,20 +27,22 @@ def process_event(state: AppState, event: Event) -> Tuple[AppState, List[Action]
     """
     Pure state machine: (State, Event) -> (State, Actions)
 
-    With Flux, this is just a simple router:
-    - MediaEvent        -> feed audio to Flux
-    - FluxEndOfTurnEvent -> start agent response
-    - FluxStartOfTurnEvent -> interrupt (barge-in)
-    - AgentTurnDoneEvent -> back to listening
+    Routing:
+    - MediaEvent            -> feed audio to Flux
+    - FluxEndOfTurnEvent    -> start agent response
+    - FluxStartOfTurnEvent  -> interrupt (barge-in)
+    - AgentTurnDoneEvent    -> back to listening
+    - InitialGreetingEvent  -> start opening turn (replaces direct state bypass)
+    - HandbackStartEvent    -> resume after take-over (replaces direct state bypass)
     """
     # Once hanging up, ignore everything except stream stop
     if state.phase == Phase.HANGING_UP:
-        if isinstance(event, StreamStopEvent):
-            return state, []
         return state, []
 
     if isinstance(event, StreamStartEvent):
-        return replace(state, stream_sid=event.stream_sid, phase=Phase.LISTENING), []
+        # stream_sid is connection metadata; it lives in CallSession / local vars,
+        # not in AppState which models only conversation routing.
+        return replace(state, phase=Phase.LISTENING), []
 
     if isinstance(event, StreamStopEvent):
         actions: List[Action] = []
@@ -75,5 +80,23 @@ def process_event(state: AppState, event: Event) -> Tuple[AppState, List[Action]
 
     if isinstance(event, (HangupPendingEvent, HangupRequestEvent)):
         return replace(state, phase=Phase.HANGING_UP), []
+
+    # ── Synthetic turn-start events (replace direct state bypasses) ──────────
+
+    if isinstance(event, InitialGreetingEvent):
+        # Opening turn when call connects (non-IVR path).
+        if state.phase == Phase.LISTENING:
+            return replace(state, phase=Phase.RESPONDING), [
+                StartAgentTurnAction(transcript=event.opener)
+            ]
+        return state, []
+
+    if isinstance(event, HandbackStartEvent):
+        # Resuming after human take-over hand-back.
+        if state.phase == Phase.LISTENING:
+            return replace(state, phase=Phase.RESPONDING), [
+                StartAgentTurnAction(transcript=event.prompt)
+            ]
+        return state, []
 
     return state, []

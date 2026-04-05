@@ -110,7 +110,7 @@ class MockFluxPool:
     def __init__(self, flux: MockFluxService):
         self._flux = flux
 
-    async def get(self, on_end_of_turn, on_start_of_turn, on_interim=None):
+    async def get(self, on_end_of_turn, on_start_of_turn, on_interim=None, on_dead=None):
         self._flux.bind(on_end_of_turn, on_start_of_turn, on_interim)
         return self._flux
 
