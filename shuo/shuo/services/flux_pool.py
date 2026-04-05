@@ -73,6 +73,7 @@ class FluxPool:
         self,
         on_end_of_turn: Callable[[str], Awaitable[None]],
         on_start_of_turn: Callable[[], Awaitable[None]],
+        on_dead: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> FluxService:
         """
         Get a connected Flux service with the given callbacks.
@@ -85,7 +86,7 @@ class FluxPool:
             age = time.monotonic() - entry.created_at
 
             if age < self._ttl:
-                entry.flux.bind(on_end_of_turn, on_start_of_turn)
+                entry.flux.bind(on_end_of_turn, on_start_of_turn, on_dead=on_dead)
                 log.info(f"Dispensed warm connection (idle {int(age * 1000)}ms)")
                 self._trigger_fill()
                 return entry.flux
@@ -94,7 +95,7 @@ class FluxPool:
                 await entry.flux.stop()
 
         log.info("Pool empty, connecting fresh...")
-        flux = FluxService(on_end_of_turn=on_end_of_turn, on_start_of_turn=on_start_of_turn)
+        flux = FluxService(on_end_of_turn=on_end_of_turn, on_start_of_turn=on_start_of_turn, on_dead=on_dead)
         await flux.start()
         self._trigger_fill()
         return flux

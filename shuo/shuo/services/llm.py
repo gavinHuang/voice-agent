@@ -20,6 +20,9 @@ from ..log import ServiceLogger
 
 log = ServiceLogger("LLM")
 
+_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "30.0"))
+_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
+
 
 # =============================================================================
 # SYSTEM PROMPT
@@ -269,45 +272,66 @@ class LLMService:
 
     async def _generate(self) -> None:
         """Generate response using pydantic-ai agent.iter(), streaming tokens via callback."""
-        assistant_text = ""
+        attempt = 0
+        while attempt <= _LLM_MAX_RETRIES:
+            try:
+                await asyncio.wait_for(
+                    self._generate_once(),
+                    timeout=_LLM_TIMEOUT,
+                )
+                return
+            except asyncio.CancelledError:
+                raise
+            except asyncio.TimeoutError:
+                log.warning(f"LLM generation timed out after {_LLM_TIMEOUT}s (attempt {attempt + 1})")
+                if attempt < _LLM_MAX_RETRIES:
+                    attempt += 1
+                    log.info(f"Retrying LLM generation (attempt {attempt + 1}/{_LLM_MAX_RETRIES + 1})")
+                    continue
+                log.error("LLM generation timed out — ending turn without response")
+                break
+            except Exception as e:
+                log.error(f"Generation failed (attempt {attempt + 1})", e)
+                if attempt < _LLM_MAX_RETRIES:
+                    attempt += 1
+                    log.info(f"Retrying LLM generation (attempt {attempt + 1}/{_LLM_MAX_RETRIES + 1})")
+                    continue
+                break
+
+        if self._running:
+            await self._on_done()
+        self._running = False
+        self._task = None
+
+    async def _generate_once(self) -> None:
+        """Single generation attempt — raises on error, caller handles retry."""
         self._turn_ctx = LLMTurnContext(goal_suffix=self._goal_suffix)
 
-        try:
-            async with self._agent.iter(
-                self._pending_message,
-                deps=self._turn_ctx,
-                message_history=self._history,
-            ) as run:
-                async for node in run:
-                    if Agent.is_model_request_node(node):
-                        async with node.stream(run.ctx) as stream:
-                            async for event in stream:
-                                if not self._running:
-                                    break
-                                if (
-                                    isinstance(event, PartDeltaEvent)
-                                    and isinstance(event.delta, TextPartDelta)
-                                    and event.delta.content_delta
-                                ):
-                                    token = event.delta.content_delta
-                                    assistant_text += token
-                                    await self._on_token(token)
-                    elif Agent.is_call_tools_node(node):
-                        async with node.stream(run.ctx) as stream:
-                            async for _ in stream:
-                                pass  # tools execute; ctx.deps gets mutated
+        async with self._agent.iter(
+            self._pending_message,
+            deps=self._turn_ctx,
+            message_history=self._history,
+        ) as run:
+            async for node in run:
+                if Agent.is_model_request_node(node):
+                    async with node.stream(run.ctx) as stream:
+                        async for event in stream:
+                            if not self._running:
+                                return
+                            if (
+                                isinstance(event, PartDeltaEvent)
+                                and isinstance(event.delta, TextPartDelta)
+                                and event.delta.content_delta
+                            ):
+                                token = event.delta.content_delta
+                                await self._on_token(token)
+                elif Agent.is_call_tools_node(node):
+                    async with node.stream(run.ctx) as stream:
+                        async for _ in stream:
+                            pass  # tools execute; ctx.deps gets mutated
 
-            if self._running:
-                self._history = list(run.result.all_messages())
-                await self._on_done()
-
-        except asyncio.CancelledError:
-            raise
-
-        except Exception as e:
-            log.error("Generation failed", e)
+        if self._running:
+            self._history = list(run.result.all_messages())
             await self._on_done()
-
-        finally:
-            self._running = False
-            self._task = None
+        self._running = False
+        self._task = None

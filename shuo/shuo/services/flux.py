@@ -17,6 +17,9 @@ from ..log import ServiceLogger
 
 log = ServiceLogger("Flux")
 
+_MAX_RECONNECTS = int(os.getenv("FLUX_MAX_RECONNECTS", "3"))
+_RECONNECT_BASE_DELAY = float(os.getenv("FLUX_RECONNECT_BASE_DELAY", "1.0"))
+
 
 class FluxService:
     """
@@ -24,6 +27,9 @@ class FluxService:
 
     Audio format: mulaw 8kHz (direct from Twilio, no conversion needed).
     Turn events: StartOfTurn (barge-in), EndOfTurn (with transcript).
+
+    Reconnects automatically on unexpected disconnect (up to _MAX_RECONNECTS
+    times with exponential backoff). If all reconnects fail, calls on_dead().
     """
 
     def __init__(
@@ -31,10 +37,12 @@ class FluxService:
         on_end_of_turn: Callable[[str], Awaitable[None]],
         on_start_of_turn: Callable[[], Awaitable[None]],
         on_interim: Optional[Callable[[str], Awaitable[None]]] = None,
+        on_dead: Optional[Callable[[], Awaitable[None]]] = None,
     ):
         self._on_end_of_turn = on_end_of_turn
         self._on_start_of_turn = on_start_of_turn
         self._on_interim = on_interim
+        self._on_dead = on_dead
 
         self._api_key = os.getenv("DEEPGRAM_API_KEY", "")
         self._client: Optional[AsyncDeepgramClient] = None
@@ -42,6 +50,8 @@ class FluxService:
         self._cm = None
         self._listener_task: Optional[asyncio.Task] = None
         self._running = False
+        self._reconnect_count = 0
+        self._reconnect_task: Optional[asyncio.Task] = None
 
     @property
     def is_active(self) -> bool:
@@ -52,11 +62,13 @@ class FluxService:
         on_end_of_turn: Callable[[str], Awaitable[None]],
         on_start_of_turn: Callable[[], Awaitable[None]],
         on_interim: Optional[Callable[[str], Awaitable[None]]] = None,
+        on_dead: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> None:
         """Rebind callbacks — used by FluxPool when dispensing a warm connection."""
         self._on_end_of_turn = on_end_of_turn
         self._on_start_of_turn = on_start_of_turn
         self._on_interim = on_interim
+        self._on_dead = on_dead
 
     async def start(self) -> None:
         """Connect to Deepgram Flux (always-on for the duration of the call)."""
@@ -113,6 +125,13 @@ class FluxService:
     async def stop(self) -> None:
         """Disconnect from Deepgram Flux."""
         self._running = False
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except asyncio.CancelledError:
+                pass
+            self._reconnect_task = None
         await self._cleanup()
         log.disconnected()
 
@@ -171,14 +190,63 @@ class FluxService:
             log.error("Message handling failed", e)
 
     async def _on_close(self, *args, **kwargs) -> None:
-        """Handle Deepgram connection close."""
+        """Handle Deepgram connection close — attempt reconnect."""
         if self._running:
             log.warning("Deepgram connection closed unexpectedly")
-            self._running = False
             self._connection = None
+            self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def _on_error(self, error, *args, **kwargs) -> None:
-        """Handle Deepgram errors."""
+        """Handle Deepgram errors — attempt reconnect."""
         log.error("Deepgram error: " + str(error))
-        self._running = False
         self._connection = None
+        if self._running:
+            self._reconnect_task = asyncio.create_task(self._reconnect_loop())
+
+    async def _reconnect_loop(self) -> None:
+        """Reconnect with exponential backoff. Calls on_dead() if all attempts fail."""
+        while self._running and self._reconnect_count < _MAX_RECONNECTS:
+            delay = _RECONNECT_BASE_DELAY * (2 ** self._reconnect_count)
+            self._reconnect_count += 1
+            log.warning(f"Reconnecting to Deepgram (attempt {self._reconnect_count}/{_MAX_RECONNECTS}) in {delay:.1f}s")
+            await asyncio.sleep(delay)
+
+            if not self._running:
+                return
+
+            try:
+                await self._cleanup()
+                deepgram_eu = DeepgramClientEnvironment(
+                    base="wss://api.eu.deepgram.com",
+                    production="wss://api.eu.deepgram.com",
+                    agent="wss://agent.eu.deepgram.com",
+                )
+                self._client = AsyncDeepgramClient(
+                    api_key=self._api_key,
+                    environment=deepgram_eu,
+                )
+                self._cm = self._client.listen.v2.connect(
+                    model="flux-general-en",
+                    encoding="mulaw",
+                    sample_rate=8000,
+                )
+                self._connection = await self._cm.__aenter__()
+                self._connection.on("message", self._on_message)
+                self._connection.on("error", self._on_error)
+                self._connection.on("close", self._on_close)
+                self._listener_task = asyncio.create_task(
+                    self._connection.start_listening()
+                )
+                self._reconnect_count = 0  # reset on success
+                log.connected()
+                log.info("Deepgram reconnected successfully")
+                return
+            except Exception as e:
+                log.error(f"Reconnect attempt {self._reconnect_count} failed", e)
+
+        # All reconnects exhausted
+        if self._running:
+            log.error(f"Deepgram permanently unavailable after {_MAX_RECONNECTS} attempts — hanging up")
+            self._running = False
+            if self._on_dead:
+                await self._on_dead()

@@ -19,6 +19,8 @@ from ..log import ServiceLogger
 
 log = ServiceLogger("TTS")
 
+_CONNECT_TIMEOUT = float(os.getenv("TTS_CONNECT_TIMEOUT", "10.0"))
+
 
 class ElevenLabsTTS:
     """ElevenLabs streaming TTS — WebSocket → μ-law 8 kHz base64 for Twilio."""
@@ -59,7 +61,10 @@ class ElevenLabsTTS:
             f"?model_id={self._model_id}&output_format=ulaw_8000"
         )
         try:
-            self._ws = await websockets.connect(url)
+            self._ws = await asyncio.wait_for(
+                websockets.connect(url),
+                timeout=_CONNECT_TIMEOUT,
+            )
             self._running = True
             resp = getattr(self._ws, "response", None)
             hdrs = getattr(resp, "headers", {}) if resp else {}

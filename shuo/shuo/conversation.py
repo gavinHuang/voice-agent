@@ -108,6 +108,10 @@ async def run_conversation(
     async def on_flux_start_of_turn() -> None:
         await event_queue.put(FluxStartOfTurnEvent())
 
+    async def on_flux_dead() -> None:
+        logger.error("STT permanently unavailable — hanging up")
+        await event_queue.put(HangupRequestEvent())
+
     # ── ISP Callbacks (push events to queue) ────────────────────────
 
     async def on_isp_media(audio_bytes: bytes) -> None:
@@ -162,11 +166,13 @@ async def run_conversation(
                     flux = await flux_pool.get(
                         on_end_of_turn=on_flux_end_of_turn,
                         on_start_of_turn=on_flux_start_of_turn,
+                        on_dead=on_flux_dead,
                     )
                 else:
                     flux = FluxService(
                         on_end_of_turn=on_flux_end_of_turn,
                         on_start_of_turn=on_flux_start_of_turn,
+                        on_dead=on_flux_dead,
                     )
                     await flux.start()
 
