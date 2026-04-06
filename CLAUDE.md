@@ -22,6 +22,10 @@ python -m pytest tests/test_agent.py::test_llm_service_streams_text_tokens -v
 python -m pytest simulator/tests/test_ivr.py::test_parse_simple_config -v
 ```
 
+**Test status:** 133/133 pass. 6 known warnings (all benign, do not fix):
+- `websockets.legacy` deprecation — third-party library internals, not our code
+- FastAPI `on_event` deprecation — `shuo/web.py` startup/shutdown hooks; migrate to `lifespan=` when convenient
+
 **Development shortcuts (via `run.sh`):**
 ```bash
 ./run.sh serve              # Agent server with auto ngrok
@@ -64,9 +68,9 @@ Caller ──(PSTN)──► Twilio ──(WebSocket μ-law 8kHz)──► FastA
 
 **State machine (pure functional core):**
 ```
-LISTENING ──FluxEndOfTurn──► RESPONDING ──AgentTurnDone──► LISTENING
-    ▲                              │
-    └──────FluxStartOfTurn─────────┘  (barge-in)
+LISTENING ──UserSpokeEvent──► RESPONDING ──AgentDoneEvent──► LISTENING
+    ▲                               │
+    └──────UserSpeakingEvent─────────┘  (barge-in)
 ```
 
 The state machine in `shuo/call.py` is the center of gravity — a pure function `step(state, event) → (state, actions)` (~30 lines). Immutable state and events make it easy to test in isolation with no I/O.
