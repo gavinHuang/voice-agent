@@ -1,5 +1,5 @@
 """
-FastAPI server for shuo.
+web.py — FastAPI server: HTTP routes + WebSocket call handler.
 
 Endpoints:
 - GET /health - Health check
@@ -35,19 +35,16 @@ from twilio.request_validator import RequestValidator
 from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 
-from .conversation import run_conversation
-from .services.twilio_isp import TwilioISP
-from .services.twilio_client import make_outbound_call, parse_twilio_message
-from .services.flux import FluxService
-from .services.tts_pool import TTSPool
-from .services.flux_pool import FluxPool
-from .types import MediaEvent, StreamStopEvent
+from .call import run_call
+from .phone import TwilioPhone, dial_out
+from .speech import Transcriber
+from .voice import VoicePool
 from .log import get_logger
 from .ttft import router as ttft_router
 from dashboard.server import router as dashboard_router
 from dashboard import bus as dashboard_bus, registry as dashboard_registry
 
-logger = get_logger("shuo.server")
+logger = get_logger("shuo.web")
 
 
 async def verify_twilio_signature(
@@ -118,9 +115,8 @@ _dtmf_pending: dict = {}   # call_sid -> {history, goal, phone, ivr_mode}
 _dtmf_lock: asyncio.Lock = asyncio.Lock()  # Protects concurrent access to _dtmf_pending
 
 
-# ── Global pre-warmed service pools ──────────────────────────────────
-_tts_pool: Optional[TTSPool] = None
-_flux_pool: Optional[FluxPool] = None
+# ── Global pre-warmed voice pool ─────────────────────────────────────
+_voice_pool: Optional[VoicePool] = None
 
 
 @dataclass
@@ -149,22 +145,22 @@ async def startup_warmup() -> None:
 
 
 async def _warmup() -> None:
-    global _tts_pool, _flux_pool
+    global _voice_pool
 
     # Pre-load TTS model so the first call doesn't pay model-load latency.
     provider = os.getenv("TTS_PROVIDER", "kokoro").lower()
     if provider == "kokoro":
         try:
-            from .services.tts_kokoro import _get_pipeline
+            from .voice_kokoro import _get_pipeline
             await _get_pipeline()
             logger.info("Kokoro model pre-loaded")
         except Exception as e:
             logger.warning(f"Kokoro pre-load failed: {e}")
 
-    # Global TTS pool — pre-warms a connection so the first call gets one immediately.
-    _tts_pool = TTSPool(pool_size=2, ttl=120.0)
-    await _tts_pool.start()
-    logger.info("Global TTS pool started")
+    # Global voice pool — pre-warms connections so the first call gets one immediately.
+    _voice_pool = VoicePool(pool_size=2, ttl=120.0)
+    await _voice_pool.start()
+    logger.info("Global voice pool started")
 
     # Trace file cleanup — remove old/excess traces at startup
     from .tracer import cleanup_traces
@@ -172,16 +168,16 @@ async def _warmup() -> None:
     if deleted:
         logger.info(f"Startup trace cleanup: removed {deleted} file(s)")
 
-    # NOTE: Flux (Deepgram) connections are NOT pooled.
-    # Reusing an idle Deepgram connection causes the turn detector to
-    # fire prematurely (calibrated to silence, not live speech).
-    # A fresh connection is created per call for correct turn detection.
+    # NOTE: Deepgram connections are NOT pooled.
+    # Reusing an idle connection causes the turn detector to fire prematurely
+    # (calibrated to silence, not live speech).
+    # A fresh Transcriber is created per call for correct turn detection.
 
 
 @app.on_event("shutdown")
 async def shutdown_pools() -> None:
-    if _tts_pool:
-        await _tts_pool.stop()
+    if _voice_pool:
+        await _voice_pool.stop()
 
 
 @app.get("/health")
@@ -367,13 +363,12 @@ async def trigger_call(phone_number: str, goal: Optional[str] = Query(None)):
     if not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
     try:
-        call_sid = make_outbound_call(phone_number)
+        call_sid = dial_out(phone_number)
         effective_goal = goal or os.getenv("CALL_GOAL", "")
         dashboard_registry.set_pending(call_sid, phone_number, effective_goal)
         return {"status": "calling", "to": phone_number, "call_sid": call_sid, "goal": effective_goal}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
 
 
 @app.websocket("/ws-listen")
@@ -385,8 +380,8 @@ async def ws_listen(websocket: WebSocket):
     identified from the Twilio 'start' event: first via customParameters
     (call_id injected via <Parameter> in the TwiML), then via callSid lookup.
 
-    Feeds callee (inbound) and human (outbound) audio to separate Deepgram
-    Flux instances for independent per-speaker transcription.
+    Feeds callee (inbound) and human (outbound) audio to separate Transcriber
+    instances for independent per-speaker transcription.
     """
     import base64 as _b64
 
@@ -435,7 +430,7 @@ async def ws_listen(websocket: WebSocket):
 
     logger.info(f"ws-listen connected for call {call_id}")
 
-    # ── Set up per-speaker Flux instances ────────────────────────────
+    # ── Set up per-speaker Transcriber instances ──────────────────────
     def make_on_end_of_turn(speaker: str):
         async def _cb(transcript: str) -> None:
             if not transcript:
@@ -454,16 +449,16 @@ async def ws_listen(websocket: WebSocket):
     async def _noop_start() -> None:
         pass
 
-    flux_callee = FluxService(
+    transcriber_callee = Transcriber(
         on_end_of_turn=make_on_end_of_turn("callee"),
         on_start_of_turn=_noop_start,
     )
-    flux_human = FluxService(
+    transcriber_human = Transcriber(
         on_end_of_turn=make_on_end_of_turn("human"),
         on_start_of_turn=_noop_start,
     )
-    await flux_callee.start()
-    await flux_human.start()
+    await transcriber_callee.start()
+    await transcriber_human.start()
 
     try:
         while True:
@@ -477,16 +472,16 @@ async def ws_listen(websocket: WebSocket):
                     audio = _b64.b64decode(payload)
                     # "inbound" = callee speaking; "outbound" = what callee hears (= human)
                     if media.get("track") == "outbound":
-                        await flux_human.send(audio)
+                        await transcriber_human.send(audio)
                     else:
-                        await flux_callee.send(audio)
+                        await transcriber_callee.send(audio)
             elif event_type == "stop":
                 break
     except Exception as e:
         logger.warning(f"ws-listen error for {call_id}: {e}")
     finally:
-        await flux_callee.stop()
-        await flux_human.stop()
+        await transcriber_callee.stop()
+        await transcriber_human.stop()
         logger.info(f"ws-listen disconnected for call {call_id}")
 
 
@@ -540,7 +535,7 @@ async def websocket_endpoint(websocket: WebSocket):
     async def on_dtmf(digits: str) -> None:
         """Save agent history for reconnection after DTMF redirect.
 
-        The actual REST redirect is handled by TwilioISP.send_dtmf().
+        The actual REST redirect is handled by TwilioPhone.send_dtmf().
         """
         c = dashboard_registry.get(ctx.call_id)
         if not c or not c.call_sid:
@@ -606,17 +601,17 @@ async def websocket_endpoint(websocket: WebSocket):
             return result
         return None
 
-    isp = TwilioISP(websocket)
+    phone = TwilioPhone(websocket)
     try:
-        await run_conversation(
-            isp,
+        await run_call(
+            phone,
             observer=observer,
             should_suppress_agent=should_suppress_agent,
             on_agent_ready=on_agent_ready,
             get_goal=get_goal,
             on_dtmf=on_dtmf,
             get_saved_state=get_saved_state,
-            tts_pool=_tts_pool,
+            voice_pool=_voice_pool,
             ivr_mode=lambda: ctx.ivr_mode,
         )
     except Exception as e:

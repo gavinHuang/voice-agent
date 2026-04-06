@@ -166,11 +166,11 @@ def evaluate_criteria(
 # BenchISP — LocalISP subclass for DTMF capture (BENCH-02)
 # ---------------------------------------------------------------------------
 
-from shuo.services.local_isp import LocalISP  # noqa: E402
+from shuo.phone import LocalPhone  # noqa: E402
 
 
-class BenchISP(LocalISP):
-    """LocalISP subclass that records DTMF digits and queues them for IVRDriver."""
+class BenchISP(LocalPhone):
+    """LocalPhone subclass that records DTMF digits and queues them for IVRDriver."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -247,7 +247,7 @@ class IVRDriver:
 
     async def drive(self, client: httpx.AsyncClient, timeout: float) -> None:
         """Walk the TwiML state machine until a <Hangup/> or timeout."""
-        from shuo.types import FluxEndOfTurnEvent
+        from shuo.call import UserSpokeEvent as FluxEndOfTurnEvent
 
         # Step 1: get the entry TwiML
         resp = await client.post(f"{self._base}/twiml")
@@ -357,7 +357,7 @@ async def run_scenario(scenario: ScenarioConfig, ivr_base_url: str) -> ScenarioR
     Spawns a BenchISP-connected agent and an IVRDriver, lets them interact,
     then evaluates success criteria.
     """
-    from shuo.conversation import run_conversation
+    from shuo.call import run_call
 
     bench_isp = BenchISP()
 
@@ -377,17 +377,17 @@ async def run_scenario(scenario: ScenarioConfig, ivr_base_url: str) -> ScenarioR
     start_time = time.monotonic()
 
     agent_task = asyncio.create_task(
-        run_conversation(
+        run_call(
             bench_isp,
             observer=observer,
             get_goal=lambda _: goal,
-            tts_pool=_BenchTTSPool(),
-            flux_pool=_BenchFluxPool(),
+            voice_pool=_BenchTTSPool(),
+            transcriber_pool=_BenchFluxPool(),
             ivr_mode=lambda: True,
         )
     )
 
-    # Wait for _inject to be set by run_conversation before driving IVR
+    # Wait for _inject to be set by run_call before driving IVR
     for _ in range(50):  # up to 0.5s
         if bench_isp._inject is not None:
             break
@@ -715,7 +715,7 @@ class TwoAgentBridge:
                     self._max_turns_event.set()
                     return
                 if self._answerer_isp._inject is not None:
-                    from shuo.types import FluxEndOfTurnEvent
+                    from shuo.call import UserSpokeEvent as FluxEndOfTurnEvent
                     self._answerer_isp._inject(FluxEndOfTurnEvent(transcript=text))
 
         return observer
@@ -743,7 +743,7 @@ class TwoAgentBridge:
                     self._max_turns_event.set()
                     return
                 if self._caller_isp._inject is not None:
-                    from shuo.types import FluxEndOfTurnEvent
+                    from shuo.call import UserSpokeEvent as FluxEndOfTurnEvent
                     self._caller_isp._inject(FluxEndOfTurnEvent(transcript=text))
 
         return observer
@@ -759,7 +759,7 @@ class TwoAgentBridge:
 
     async def fire_initial_event(self) -> None:
         """Inject the first event to start the conversation."""
-        from shuo.types import FluxEndOfTurnEvent
+        from shuo.call import UserSpokeEvent as FluxEndOfTurnEvent
         if self._opening_line:
             # Answerer speaks first — inject opening into caller
             self._bilateral_transcript.append({"role": "answerer", "text": self._opening_line})
@@ -836,11 +836,11 @@ async def run_two_agent_scenario(scenario: TwoAgentScenarioConfig) -> TwoAgentSc
     run_conversation tasks, bridges their speech via TwoAgentBridge, and
     evaluates success criteria on completion.
     """
-    from shuo.conversation import run_conversation
+    from shuo.call import run_call
 
     caller_isp = BenchISP()
     answerer_isp = BenchISP()
-    LocalISP.pair(caller_isp, answerer_isp)
+    LocalPhone.pair(caller_isp, answerer_isp)
 
     max_turns = scenario.success_criteria.max_turns or 50
     opening_line = scenario.answerer.get("opening_line") or ""
@@ -864,22 +864,22 @@ async def run_two_agent_scenario(scenario: TwoAgentScenarioConfig) -> TwoAgentSc
     error: Optional[str] = None
 
     caller_task = asyncio.create_task(
-        run_conversation(
+        run_call(
             caller_isp,
             observer=bridge.make_caller_observer(),
             get_goal=lambda _: caller_goal,
-            tts_pool=_BenchTTSPool(),
-            flux_pool=_BenchFluxPool(),
+            voice_pool=_BenchTTSPool(),
+            transcriber_pool=_BenchFluxPool(),
             ivr_mode=lambda: True,
         )
     )
     answerer_task = asyncio.create_task(
-        run_conversation(
+        run_call(
             answerer_isp,
             observer=bridge.make_answerer_observer(),
             get_goal=lambda _: answerer_goal,
-            tts_pool=_BenchTTSPool(),
-            flux_pool=_BenchFluxPool(),
+            voice_pool=_BenchTTSPool(),
+            transcriber_pool=_BenchFluxPool(),
             ivr_mode=lambda: True,
         )
     )

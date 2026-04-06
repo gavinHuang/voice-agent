@@ -4,9 +4,9 @@ Tests for the voice-agent CLI (serve, call, bench subcommands + YAML config).
 Uses Click's CliRunner for isolated invocation and unittest.mock for
 blocking I/O (uvicorn, threading, time.sleep, make_outbound_call).
 
-NOTE: shuo.server imports 'dashboard' (a repo-root package not on the test
+NOTE: shuo.web imports 'dashboard' (a repo-root package not on the test
 sys.path).  All tests that exercise serve/call must pre-inject fake modules for
-'shuo.server', 'uvicorn', and related heavy deps before importing cli so that
+'shuo.web', 'uvicorn', and related heavy deps before importing cli so that
 the deferred imports inside the Click commands resolve to mocks.
 """
 
@@ -19,12 +19,12 @@ from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
 # Lightweight fake modules injected into sys.modules before any test that
-# exercises serve/call (both commands import shuo.server and uvicorn inside
+# exercises serve/call (both commands import shuo.web and uvicorn inside
 # their function body).
 # ---------------------------------------------------------------------------
 
 def _make_fake_server_module():
-    mod = types.ModuleType("shuo.server")
+    mod = types.ModuleType("shuo.web")
     mod.app = MagicMock(name="app")
     mod._draining = False
     mod._active_calls = 0
@@ -50,17 +50,17 @@ class _ServerModuleContext:
     def __enter__(self):
         self._fake_server = _make_fake_server_module()
         self._fake_uvicorn = _make_fake_uvicorn()
-        self._orig_server = sys.modules.get("shuo.server")
+        self._orig_server = sys.modules.get("shuo.web")
         self._orig_uvicorn = sys.modules.get("uvicorn")
-        sys.modules["shuo.server"] = self._fake_server
+        sys.modules["shuo.web"] = self._fake_server
         sys.modules["uvicorn"] = self._fake_uvicorn
         return self._fake_server, self._fake_uvicorn
 
     def __exit__(self, *args):
         if self._orig_server is None:
-            sys.modules.pop("shuo.server", None)
+            sys.modules.pop("shuo.web", None)
         else:
-            sys.modules["shuo.server"] = self._orig_server
+            sys.modules["shuo.web"] = self._orig_server
         if self._orig_uvicorn is None:
             sys.modules.pop("uvicorn", None)
         else:
@@ -216,11 +216,9 @@ def test_serve_env_check_fails():
 def test_call_invokes_outbound():
     """call subcommand invokes make_outbound_call with the phone number."""
     fake_make_call = MagicMock(return_value="CA_FAKE_SID_123")
-    fake_twilio_client = types.ModuleType("shuo.services.twilio_client")
-    fake_twilio_client.make_outbound_call = fake_make_call
 
     with _ServerModuleContext(), \
-         patch.dict(sys.modules, {"shuo.services.twilio_client": fake_twilio_client}), \
+         patch("shuo.phone.dial_out", fake_make_call), \
          patch.dict(os.environ, _FULL_ENV), \
          patch("shuo.cli.threading.Thread") as mock_thread, \
          patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
@@ -232,11 +230,9 @@ def test_call_invokes_outbound():
 def test_call_identity_prepended_to_goal():
     """call with --identity prepends 'You are {identity}.' to goal in CALL_GOAL."""
     fake_make_call = MagicMock(return_value="SID")
-    fake_twilio_client = types.ModuleType("shuo.services.twilio_client")
-    fake_twilio_client.make_outbound_call = fake_make_call
 
     with _ServerModuleContext(), \
-         patch.dict(sys.modules, {"shuo.services.twilio_client": fake_twilio_client}), \
+         patch("shuo.phone.dial_out", fake_make_call), \
          patch.dict(os.environ, _FULL_ENV), \
          patch("shuo.cli.threading.Thread"), \
          patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
@@ -270,8 +266,8 @@ def test_local_call_help():
     assert "--callee-identity" in result.output
 
 
-@patch("shuo.conversation.run_conversation")
-@patch("shuo.services.local_isp.LocalISP")
+@patch("shuo.call.run_call")
+@patch("shuo.phone.LocalPhone")
 @patch.dict(os.environ, _LOCAL_CALL_ENV)
 def test_local_call_runs(mock_isp_cls, mock_run_conv):
     """local-call creates two ISP instances, pairs them, runs two conversations."""
@@ -297,8 +293,8 @@ def test_local_call_runs(mock_isp_cls, mock_run_conv):
     assert mock_isp_cls.pair.called
 
 
-@patch("shuo.conversation.run_conversation")
-@patch("shuo.services.local_isp.LocalISP")
+@patch("shuo.call.run_call")
+@patch("shuo.phone.LocalPhone")
 def test_local_call_config_merge(mock_isp_cls, mock_run_conv):
     """local-call reads caller/callee goals from YAML config when no flags given."""
     async def _noop(*args, **kwargs):
@@ -328,8 +324,8 @@ def test_local_call_config_merge(mock_isp_cls, mock_run_conv):
     assert callee_get_goal("dummy_sid") == "answer questions"
 
 
-@patch("shuo.conversation.run_conversation")
-@patch("shuo.services.local_isp.LocalISP")
+@patch("shuo.call.run_call")
+@patch("shuo.phone.LocalPhone")
 def test_local_call_flag_overrides_config(mock_isp_cls, mock_run_conv):
     """--caller-goal flag overrides the value from YAML config."""
     async def _noop(*args, **kwargs):
@@ -362,8 +358,8 @@ def test_local_call_env_check(mock_load_dotenv):
     assert result.exit_code != 0 or "Missing" in (result.output + (result.stderr or ""))
 
 
-@patch("shuo.conversation.run_conversation")
-@patch("shuo.services.local_isp.LocalISP")
+@patch("shuo.call.run_call")
+@patch("shuo.phone.LocalPhone")
 @patch.dict(os.environ, _LOCAL_CALL_ENV)
 def test_local_call_identity_in_goal(mock_isp_cls, mock_run_conv):
     """--caller-identity is folded into the goal string as 'You are {identity}.'"""

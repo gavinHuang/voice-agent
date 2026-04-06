@@ -23,7 +23,7 @@ def twiml_client(monkeypatch):
     monkeypatch.delenv("TWILIO_AUTH_TOKEN", raising=False)
     monkeypatch.setenv("TWILIO_PUBLIC_URL", "https://example.ngrok.io")
     from fastapi.testclient import TestClient
-    from shuo.server import app
+    from shuo.web import app
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -65,7 +65,7 @@ def test_amd_unknown_was_previously_hanging_up():
     Regression: the old condition `answered_by != 'human'` treated 'unknown' as machine.
     Verify the fix uses an explicit machine-values set instead.
     """
-    import shuo.server as server_module
+    import shuo.web as server_module
     import inspect
     src = inspect.getsource(server_module.twiml)
     # The fixed code must NOT contain the old catch-all condition
@@ -193,16 +193,16 @@ async def test_greeting_sent_when_goal_set():
     REG-03: When a goal is provided and not IVR mode, agent.start_turn is called
     with '[CALL_STARTED]' on StreamStart.
     """
-    from shuo.conversation import run_conversation
+    from shuo.call import run_call
 
     mock_isp, mock_flux, mock_tts_pool, mock_agent_cls, agent_turns = _make_fake_isp()
 
-    with patch("shuo.conversation.FluxService", return_value=mock_flux), \
-         patch("shuo.conversation.Agent", mock_agent_cls):
-        await run_conversation(
+    with patch("shuo.speech.Transcriber", return_value=mock_flux), \
+         patch("shuo.agent.Agent", mock_agent_cls):
+        await run_call(
             mock_isp,
             get_goal=lambda call_sid: "Check today's date",
-            tts_pool=mock_tts_pool,
+            voice_pool=mock_tts_pool,
         )
 
     assert len(agent_turns) >= 1, "agent.start_turn was never called — no opening greeting sent"
@@ -217,16 +217,16 @@ async def test_no_greeting_when_goal_empty():
     REG-03: When goal is empty string, no opener is sent — agent stays silent
     (avoids unintelligible greetings when no task is defined).
     """
-    from shuo.conversation import run_conversation
+    from shuo.call import run_call
 
     mock_isp, mock_flux, mock_tts_pool, mock_agent_cls, agent_turns = _make_fake_isp()
 
-    with patch("shuo.conversation.FluxService", return_value=mock_flux), \
-         patch("shuo.conversation.Agent", mock_agent_cls):
-        await run_conversation(
+    with patch("shuo.speech.Transcriber", return_value=mock_flux), \
+         patch("shuo.agent.Agent", mock_agent_cls):
+        await run_call(
             mock_isp,
             get_goal=lambda call_sid: "",  # empty goal
-            tts_pool=mock_tts_pool,
+            voice_pool=mock_tts_pool,
         )
 
     assert agent_turns == [], (
@@ -240,17 +240,17 @@ async def test_no_greeting_in_ivr_mode():
     REG-04: In IVR mode, agent must listen first — no opening greeting sent.
     The agent responds only after the IVR's EndOfTurn fires.
     """
-    from shuo.conversation import run_conversation
+    from shuo.call import run_call
 
     mock_isp, mock_flux, mock_tts_pool, mock_agent_cls, agent_turns = _make_fake_isp(ivr=True)
 
-    with patch("shuo.conversation.FluxService", return_value=mock_flux), \
-         patch("shuo.conversation.Agent", mock_agent_cls):
-        await run_conversation(
+    with patch("shuo.speech.Transcriber", return_value=mock_flux), \
+         patch("shuo.agent.Agent", mock_agent_cls):
+        await run_call(
             mock_isp,
             get_goal=lambda call_sid: "Navigate the IVR menu",
             ivr_mode=lambda: True,   # IVR mode on
-            tts_pool=mock_tts_pool,
+            voice_pool=mock_tts_pool,
         )
 
     assert agent_turns == [], (
@@ -263,16 +263,16 @@ async def test_custom_initial_message_overrides_call_started(monkeypatch):
     """INITIAL_MESSAGE env var is used as opener instead of '[CALL_STARTED]'."""
     monkeypatch.setenv("INITIAL_MESSAGE", "Hi there, calling to confirm your appointment.")
 
-    from shuo.conversation import run_conversation
+    from shuo.call import run_call
 
     mock_isp, mock_flux, mock_tts_pool, mock_agent_cls, agent_turns = _make_fake_isp()
 
-    with patch("shuo.conversation.FluxService", return_value=mock_flux), \
-         patch("shuo.conversation.Agent", mock_agent_cls):
-        await run_conversation(
+    with patch("shuo.speech.Transcriber", return_value=mock_flux), \
+         patch("shuo.agent.Agent", mock_agent_cls):
+        await run_call(
             mock_isp,
             get_goal=lambda call_sid: "Confirm appointment",
-            tts_pool=mock_tts_pool,
+            voice_pool=mock_tts_pool,
         )
 
     assert len(agent_turns) >= 1
@@ -294,7 +294,7 @@ def dashboard_client(monkeypatch):
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", "test_token")
     monkeypatch.setenv("TWILIO_PHONE_NUMBER", "+15550000000")
     from fastapi.testclient import TestClient
-    from shuo.server import app
+    from shuo.web import app
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -307,7 +307,7 @@ def test_dashboard_call_registers_pending_goal(monkeypatch, dashboard_client):
 
     fake_call_sid = "CA_dashboard_test_001"
 
-    with patch("shuo.services.twilio_client.make_outbound_call", return_value=fake_call_sid):
+    with patch("shuo.phone.dial_out", return_value=fake_call_sid):
         resp = dashboard_client.post(
             "/dashboard/call",
             json={"phone": "+61400000001", "goal": "Check today's date", "ivr_mode": False},
@@ -333,7 +333,7 @@ def test_dashboard_call_ivr_mode_sets_flag(monkeypatch, dashboard_client):
 
     fake_call_sid = "CA_ivr_mode_test"
 
-    with patch("shuo.services.twilio_client.make_outbound_call", return_value=fake_call_sid):
+    with patch("shuo.phone.dial_out", return_value=fake_call_sid):
         resp = dashboard_client.post(
             "/dashboard/call",
             json={"phone": "+61400000002", "goal": "Navigate IVR menu", "ivr_mode": True},

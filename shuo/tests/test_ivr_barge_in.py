@@ -1,7 +1,7 @@
 """
 End-to-end test: IVR barge-in suppression.
 
-Verifies that when ivr_mode=True, a FluxStartOfTurnEvent while the agent is
+Verifies that when ivr_mode=True, a UserSpeakingEvent while the agent is
 RESPONDING does NOT cancel the agent's turn (no barge-in from IVR audio).
 
 Without the fix, the IVR's background audio would trigger cancel_turn() before
@@ -12,24 +12,24 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from shuo.types import (
-    AppState, Phase,
-    FluxEndOfTurnEvent, FluxStartOfTurnEvent, AgentTurnDoneEvent,
-    StreamStartEvent, StreamStopEvent,
-    ResetAgentTurnAction, StartAgentTurnAction,
+from shuo.call import (
+    CallState, Phase,
+    UserSpokeEvent, UserSpeakingEvent, AgentDoneEvent,
+    CallStartedEvent, CallEndedEvent,
+    CancelTurnAction, StartTurnAction,
+    run_call,
 )
-from shuo.conversation import run_conversation
 
 
-# ── MockISP ───────────────────────────────────────────────────────────────────
+# ── MockPhone ─────────────────────────────────────────────────────────────────
 
-class MockISP:
+class MockPhone:
     """
-    Fake ISP for testing.
+    Fake Phone for testing.
 
     Fires on_start(stream_sid, call_sid, phone) during start() to simulate
-    stream initialization. Accepts all ISP methods as no-ops or tracked calls.
-    Supports push_stop() to trigger on_stop() and end the conversation loop.
+    stream initialization. Accepts all Phone methods as no-ops or tracked calls.
+    Supports push_stop() to trigger on_stop() and end the call loop.
     """
 
     def __init__(self, stream_sid="test-stream-sid", call_sid="test-call-sid", phone=""):
@@ -39,7 +39,7 @@ class MockISP:
         self._on_stop = None
         self.sent_audio: list[str] = []
         self.sent_dtmf: list[str] = []
-        self._inject = None  # Set by conversation loop for LocalISP-style DTMF injection
+        self._inject = None  # Set by call loop for LocalPhone-style DTMF injection
 
     async def start(self, on_media, on_start, on_stop):
         self._on_stop = on_stop
@@ -64,16 +64,16 @@ class MockISP:
         pass
 
     async def push_stop(self):
-        """Trigger on_stop() to push StreamStopEvent into the conversation loop."""
+        """Trigger on_stop() to push CallEndedEvent into the call loop."""
         if self._on_stop:
             await self._on_stop()
 
 
-# ── Flux helpers ──────────────────────────────────────────────────────────────
+# ── Transcriber helpers ───────────────────────────────────────────────────────
 
-class MockFluxService:
+class MockTranscriber:
     """
-    Fake Flux that lets us fire turn events manually.
+    Fake Transcriber that lets us fire turn events manually.
     """
 
     def __init__(self):
@@ -89,7 +89,7 @@ class MockFluxService:
     async def send(self, audio_bytes: bytes) -> None:
         pass
 
-    def bind(self, on_end_of_turn, on_start_of_turn, on_interim=None):
+    def bind(self, on_end_of_turn, on_start_of_turn, on_interim=None, on_dead=None):
         self._on_end_of_turn = on_end_of_turn
         self._on_start_of_turn = on_start_of_turn
 
@@ -102,25 +102,25 @@ class MockFluxService:
             await self._on_start_of_turn()
 
 
-class MockFluxPool:
+class MockTranscriberPool:
     """
-    Fake FluxPool that returns a shared MockFluxService.
+    Fake TranscriberPool that returns a shared MockTranscriber.
     """
 
-    def __init__(self, flux: MockFluxService):
-        self._flux = flux
+    def __init__(self, transcriber: MockTranscriber):
+        self._transcriber = transcriber
 
     async def get(self, on_end_of_turn, on_start_of_turn, on_interim=None, on_dead=None):
-        self._flux.bind(on_end_of_turn, on_start_of_turn, on_interim)
-        return self._flux
+        self._transcriber.bind(on_end_of_turn, on_start_of_turn, on_interim, on_dead)
+        return self._transcriber
 
     async def stop(self) -> None:
         pass
 
 
-class MockTTSPool:
+class MockVoicePool:
     """
-    Fake TTSPool that returns a mock TTS which never produces audio.
+    Fake VoicePool that returns a mock TTS which never produces audio.
     """
 
     async def start(self) -> None:
@@ -147,14 +147,14 @@ class MockTTSPool:
 @pytest.mark.asyncio
 async def test_ivr_barge_in_suppressed():
     """
-    In IVR mode, FluxStartOfTurnEvent while RESPONDING must NOT cancel the
+    In IVR mode, UserSpeakingEvent while RESPONDING must NOT cancel the
     agent's turn (barge-in is suppressed).
     """
-    flux = MockFluxService()
-    flux_pool = MockFluxPool(flux)
-    tts_pool = MockTTSPool()
+    transcriber = MockTranscriber()
+    transcriber_pool = MockTranscriberPool(transcriber)
+    voice_pool = MockVoicePool()
 
-    mock_isp = MockISP(stream_sid="sid-1", call_sid="call-1")
+    mock_phone = MockPhone(stream_sid="sid-1", call_sid="call-1")
 
     captured_agent = {}
 
@@ -165,7 +165,7 @@ async def test_ivr_barge_in_suppressed():
     cancel_turn_calls = []
 
     async def run_test():
-        with patch("shuo.conversation.Agent") as MockAgent:
+        with patch("shuo.agent.Agent") as MockAgent:
             # Create a real-ish agent mock that tracks cancel_turn
             agent_instance = MagicMock()
             agent_instance.is_turn_active = False
@@ -177,12 +177,12 @@ async def test_ivr_barge_in_suppressed():
             MockAgent.return_value = agent_instance
 
             task = asyncio.create_task(
-                run_conversation(
-                    mock_isp,
+                run_call(
+                    mock_phone,
                     ivr_mode=lambda: True,
                     on_agent_ready=on_agent_ready,
-                    tts_pool=tts_pool,
-                    flux_pool=flux_pool,
+                    voice_pool=voice_pool,
+                    transcriber_pool=transcriber_pool,
                 )
             )
 
@@ -190,14 +190,14 @@ async def test_ivr_barge_in_suppressed():
             await asyncio.sleep(0.05)
 
             # Simulate: IVR speaks → end of turn → agent starts responding
-            await flux.fire_end_of_turn("Press 1 for sales, press 2 for support.")
+            await transcriber.fire_end_of_turn("Press 1 for sales, press 2 for support.")
             await asyncio.sleep(0.05)
 
             # Verify agent.start_turn was called (agent is now RESPONDING)
-            assert agent_instance.start_turn.called, "start_turn should be called after FluxEndOfTurnEvent"
+            assert agent_instance.start_turn.called, "start_turn should be called after UserSpokeEvent"
 
             # Simulate: IVR's background audio fires a barge-in event
-            await flux.fire_start_of_turn()
+            await transcriber.fire_start_of_turn()
             await asyncio.sleep(0.05)
 
             # Key assertion: cancel_turn must NOT have been called in IVR mode
@@ -207,7 +207,7 @@ async def test_ivr_barge_in_suppressed():
             )
 
             # Clean up
-            await mock_isp.push_stop()
+            await mock_phone.push_stop()
             try:
                 await asyncio.wait_for(task, timeout=1.0)
             except (asyncio.TimeoutError, Exception):
@@ -223,19 +223,19 @@ async def test_ivr_barge_in_suppressed():
 @pytest.mark.asyncio
 async def test_normal_mode_barge_in_still_works():
     """
-    In normal (non-IVR) mode, FluxStartOfTurnEvent while RESPONDING MUST
+    In normal (non-IVR) mode, UserSpeakingEvent while RESPONDING MUST
     cancel the agent's turn (barge-in still active for human calls).
     """
-    flux = MockFluxService()
-    flux_pool = MockFluxPool(flux)
-    tts_pool = MockTTSPool()
+    transcriber = MockTranscriber()
+    transcriber_pool = MockTranscriberPool(transcriber)
+    voice_pool = MockVoicePool()
 
-    mock_isp = MockISP(stream_sid="sid-2", call_sid="call-2")
+    mock_phone = MockPhone(stream_sid="sid-2", call_sid="call-2")
 
     cancel_turn_calls = []
 
     async def run_test():
-        with patch("shuo.conversation.Agent") as MockAgent:
+        with patch("shuo.agent.Agent") as MockAgent:
             agent_instance = MagicMock()
             agent_instance.is_turn_active = False
             agent_instance.cancel_turn = AsyncMock(side_effect=lambda: cancel_turn_calls.append("cancelled"))
@@ -246,24 +246,24 @@ async def test_normal_mode_barge_in_still_works():
             MockAgent.return_value = agent_instance
 
             task = asyncio.create_task(
-                run_conversation(
-                    mock_isp,
+                run_call(
+                    mock_phone,
                     ivr_mode=lambda: False,   # Normal mode
-                    tts_pool=tts_pool,
-                    flux_pool=flux_pool,
+                    voice_pool=voice_pool,
+                    transcriber_pool=transcriber_pool,
                 )
             )
 
             await asyncio.sleep(0.05)
 
             # Agent responds
-            await flux.fire_end_of_turn("Hello there!")
+            await transcriber.fire_end_of_turn("Hello there!")
             await asyncio.sleep(0.05)
 
             assert agent_instance.start_turn.called
 
             # Human barges in
-            await flux.fire_start_of_turn()
+            await transcriber.fire_start_of_turn()
             await asyncio.sleep(0.05)
 
             # In normal mode, cancel_turn SHOULD be called
@@ -271,7 +271,7 @@ async def test_normal_mode_barge_in_still_works():
                 f"Expected 1 cancel_turn call in normal mode, got {len(cancel_turn_calls)}"
             )
 
-            await mock_isp.push_stop()
+            await mock_phone.push_stop()
             try:
                 await asyncio.wait_for(task, timeout=1.0)
             except (asyncio.TimeoutError, Exception):

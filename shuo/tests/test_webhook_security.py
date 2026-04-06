@@ -21,7 +21,7 @@ def twilio_client(monkeypatch):
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", "test-token")
     monkeypatch.setenv("TWILIO_PUBLIC_URL", "https://example.ngrok.io")
     from fastapi.testclient import TestClient
-    from shuo.server import app
+    from shuo.web import app
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -31,14 +31,14 @@ def twilio_client_no_token(monkeypatch):
     monkeypatch.delenv("TWILIO_AUTH_TOKEN", raising=False)
     monkeypatch.setenv("TWILIO_PUBLIC_URL", "https://example.ngrok.io")
     from fastapi.testclient import TestClient
-    from shuo.server import app
+    from shuo.web import app
     return TestClient(app, raise_server_exceptions=False)
 
 
 def test_twilio_post_twiml_valid_signature(monkeypatch, twilio_client):
     """POST /twiml with a valid Twilio signature returns 200 (XML content)."""
     monkeypatch.setattr(
-        "shuo.server.RequestValidator.validate",
+        "shuo.web.RequestValidator.validate",
         lambda self, url, params, sig: True,
     )
     resp = twilio_client.post(
@@ -59,7 +59,7 @@ def test_twilio_post_twiml_missing_signature(monkeypatch, twilio_client):
 def test_twilio_post_twiml_wrong_signature(monkeypatch, twilio_client):
     """POST /twiml with wrong X-Twilio-Signature returns 403."""
     monkeypatch.setattr(
-        "shuo.server.RequestValidator.validate",
+        "shuo.web.RequestValidator.validate",
         lambda self, url, params, sig: False,
     )
     resp = twilio_client.post(
@@ -80,7 +80,7 @@ def test_twilio_no_auth_token_skips_validation(monkeypatch, twilio_client_no_tok
 def test_twilio_post_ivr_dtmf_valid_signature(monkeypatch, twilio_client):
     """POST /twiml/ivr-dtmf?digit=1 with valid signature returns 200."""
     monkeypatch.setattr(
-        "shuo.server.RequestValidator.validate",
+        "shuo.web.RequestValidator.validate",
         lambda self, url, params, sig: True,
     )
     resp = twilio_client.post(

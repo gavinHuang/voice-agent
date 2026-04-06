@@ -11,15 +11,9 @@ import logging
 import sys
 from typing import Optional
 
-from .types import (
-    Event,
-    StreamStartEvent, StreamStopEvent, MediaEvent,
-    FluxStartOfTurnEvent, FluxEndOfTurnEvent,
-    AgentTurnDoneEvent, HoldStartEvent, HoldEndEvent,
-    Action,
-    FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
-    Phase,
-)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .call import Event, Action, Phase
 
 
 # =============================================================================
@@ -160,48 +154,53 @@ class Logger:
         self._events_logger = logging.getLogger("shuo.events")
         self._verbose = verbose
 
-    def event(self, event: Event) -> None:
+    def event(self, event: "Event") -> None:
         """Log an incoming event."""
+        from .call import (
+            AudioChunkEvent, CallStartedEvent, CallEndedEvent,
+            UserSpokeEvent, UserSpeakingEvent, AgentDoneEvent,
+            HoldStartEvent, HoldEndEvent,
+        )
 
-        if isinstance(event, MediaEvent):
+        if isinstance(event, AudioChunkEvent):
             if self._verbose:
                 size = len(event.audio_bytes)
-                self._events_logger.debug(_c(C.DIM, "\u2190 MediaEvent (" + str(size) + " bytes)"))
+                self._events_logger.debug(_c(C.DIM, "\u2190 AudioChunk (" + str(size) + " bytes)"))
             return
 
-        if isinstance(event, StreamStartEvent):
+        if isinstance(event, CallStartedEvent):
             self._events_logger.info(
                 _c(C.GREEN, "\u25B6  Stream started") + " " +
                 _c(C.DIM, "SID: " + event.stream_sid[:8] + "...")
             )
             return
 
-        if isinstance(event, StreamStopEvent):
+        if isinstance(event, CallEndedEvent):
             self._events_logger.info("\u23F9  " + _c(C.DIM, "Stream stopped"))
             return
 
-        if isinstance(event, FluxEndOfTurnEvent):
+        if isinstance(event, UserSpokeEvent):
             text = event.transcript
             if len(text) > 60:
                 text = text[:57] + "..."
             self._events_logger.info(
                 _c(C.GREEN, "\u2190") + " " +
-                _c(C.BRIGHT_BLUE, "Flux") + " " +
+                _c(C.BRIGHT_BLUE, "STT") + " " +
                 _c(C.GREEN, "EndOfTurn") + " " +
                 _quote(text)
             )
             return
 
-        if isinstance(event, FluxStartOfTurnEvent):
+        if isinstance(event, UserSpeakingEvent):
             self._events_logger.info(
                 _c(C.BRIGHT_RED, "\u26A1") + " " +
-                _c(C.BRIGHT_BLUE, "Flux") + " " +
+                _c(C.BRIGHT_BLUE, "STT") + " " +
                 _c(C.BRIGHT_RED, "StartOfTurn") + " " +
                 _c(C.DIM, "(barge-in)")
             )
             return
 
-        if isinstance(event, AgentTurnDoneEvent):
+        if isinstance(event, AgentDoneEvent):
             self._events_logger.info(
                 _c(C.GREEN, "\u2190") + " " +
                 _c(C.DIM, "Agent turn done")
@@ -222,16 +221,17 @@ class Logger:
             )
             return
 
-    def action(self, action: Action) -> None:
+    def action(self, action: "Action") -> None:
         """Log an outgoing action."""
+        from .call import StreamToSTTAction, StartTurnAction, CancelTurnAction
 
-        if isinstance(action, FeedFluxAction):
+        if isinstance(action, StreamToSTTAction):
             if self._verbose:
                 size = len(action.audio_bytes)
-                self._events_logger.debug(_c(C.DIM, "\u2192 FeedFlux (" + str(size) + " bytes)"))
+                self._events_logger.debug(_c(C.DIM, "\u2192 StreamToSTT (" + str(size) + " bytes)"))
             return
 
-        if isinstance(action, StartAgentTurnAction):
+        if isinstance(action, StartTurnAction):
             msg = action.transcript
             if len(msg) > 40:
                 msg = msg[:37] + "..."
@@ -243,7 +243,7 @@ class Logger:
             )
             return
 
-        if isinstance(action, ResetAgentTurnAction):
+        if isinstance(action, CancelTurnAction):
             self._events_logger.info(
                 _c(C.YELLOW, "\u2192") + " " +
                 _c(C.BRIGHT_RED, "Reset") + " " +

@@ -137,8 +137,8 @@ def cli(ctx: click.Context, config: str | None) -> None:
 def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_ngrok: bool) -> None:
     """Start the FastAPI server and wait for inbound calls."""
     import uvicorn
-    from shuo.server import app
-    import shuo.server as server_module
+    from shuo.web import app
+    import shuo.web as server_module
 
     cfg = ctx.obj["config"].get("serve", {})
     effective_port = port if port is not None else cfg.get("port", int(os.getenv("PORT", "3040")))
@@ -223,8 +223,8 @@ def call_cmd(
 ) -> None:
     """Initiate an outbound call to PHONE."""
     import uvicorn
-    from shuo.server import app
-    from shuo.services.twilio_client import make_outbound_call
+    from shuo.web import app
+    from shuo.phone import dial_out
 
     if use_ngrok:
         agent_port = int(os.getenv("PORT", "3040"))
@@ -258,7 +258,7 @@ def call_cmd(
     Logger.server_ready(os.getenv("TWILIO_PUBLIC_URL", ""))
 
     Logger.call_initiating(phone)
-    call_sid = make_outbound_call(phone)
+    call_sid = dial_out(phone)
     Logger.call_initiated(call_sid)
 
     try:
@@ -326,25 +326,25 @@ def _build_goal(goal: str, identity: str) -> str:
 
 async def _run_local_call(caller_cfg: dict, callee_cfg: dict) -> None:
     """Run two concurrent conversations via LocalISP and wait for the first to complete."""
-    from shuo.services.local_isp import LocalISP
-    from shuo.conversation import run_conversation
+    from shuo.phone import LocalPhone
+    from shuo.call import run_call
 
-    isp_caller = LocalISP()
-    isp_callee = LocalISP()
-    LocalISP.pair(isp_caller, isp_callee)
+    isp_caller = LocalPhone()
+    isp_callee = LocalPhone()
+    LocalPhone.pair(isp_caller, isp_callee)
 
     caller_goal = _build_goal(caller_cfg.get("goal", ""), caller_cfg.get("identity", ""))
     callee_goal = _build_goal(callee_cfg.get("goal", ""), callee_cfg.get("identity", ""))
 
     task_caller = asyncio.create_task(
-        run_conversation(
+        run_call(
             isp_caller,
             observer=_make_observer("CALLER"),
             get_goal=lambda _: caller_goal,
         )
     )
     task_callee = asyncio.create_task(
-        run_conversation(
+        run_call(
             isp_callee,
             observer=_make_observer("CALLEE"),
             get_goal=lambda _: callee_goal,
@@ -510,7 +510,7 @@ def softphone(
     """Start the server and open the browser softphone at /phone."""
     import uvicorn
     import webbrowser
-    from shuo.server import app
+    from shuo.web import app
 
     cfg = ctx.obj["config"].get("serve", {})
     effective_port = port if port is not None else cfg.get("port", int(os.getenv("PORT", "3040")))

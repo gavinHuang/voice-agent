@@ -283,7 +283,7 @@ async def test_run_scenario_wires_localISP(tmp_path):
         # Also simulate _inject being set so IVRDriver can proceed
         await asyncio.sleep(0.05)
 
-    with patch("shuo.conversation.run_conversation", side_effect=_fake_run_conversation), \
+    with patch("shuo.call.run_call", side_effect=_fake_run_conversation), \
          patch("shuo.bench.IVRDriver") as MockDriver:
         # Make IVRDriver.drive a coroutine that returns immediately
         driver_instance = MagicMock()
@@ -432,7 +432,7 @@ async def test_sample_scenarios_pass():
     run_conversation is mocked to simulate the agent's DTMF responses for each
     scenario, so no real LLM API keys are required.
     """
-    from shuo.types import FluxEndOfTurnEvent
+    from shuo.call import UserSpokeEvent as FluxEndOfTurnEvent
 
     # ---------------------------------------------------------------------------
     # Per-scenario fake agent factories
@@ -507,7 +507,7 @@ async def test_sample_scenarios_pass():
     # ---------------------------------------------------------------------------
     sales_scenario = scenario_map["navigate-to-sales"]
     fake_sales = _make_fake_conversation("navigate-to-sales")
-    with patch("shuo.conversation.run_conversation", side_effect=fake_sales):
+    with patch("shuo.call.run_call", side_effect=fake_sales):
         sales_result = await run_scenario(sales_scenario, base_url)
 
     assert sales_result.passed is True, (
@@ -522,7 +522,7 @@ async def test_sample_scenarios_pass():
     # ---------------------------------------------------------------------------
     tech_scenario = scenario_map["navigate-to-tech-support"]
     fake_tech = _make_fake_conversation("navigate-to-tech-support")
-    with patch("shuo.conversation.run_conversation", side_effect=fake_tech):
+    with patch("shuo.call.run_call", side_effect=fake_tech):
         tech_result = await run_scenario(tech_scenario, base_url)
 
     assert tech_result.passed is True, (
@@ -536,7 +536,7 @@ async def test_sample_scenarios_pass():
     # ---------------------------------------------------------------------------
     timeout_scenario = scenario_map["timeout-no-input"]
     fake_timeout = _make_fake_conversation("timeout-no-input")
-    with patch("shuo.conversation.run_conversation", side_effect=fake_timeout):
+    with patch("shuo.call.run_call", side_effect=fake_timeout):
         timeout_result = await run_scenario(timeout_scenario, base_url)
 
     assert timeout_result.passed is True, (

@@ -1,5 +1,5 @@
 """
-Unit tests for the pure process_event function.
+Unit tests for the pure step() function.
 
 These tests verify the state machine logic without any I/O.
 With Deepgram Flux handling turn detection, the state machine
@@ -9,13 +9,13 @@ is a simple conversation controller.
 import pytest
 from dataclasses import replace
 
-from shuo.types import (
-    AppState, Phase,
-    StreamStartEvent, StreamStopEvent, MediaEvent,
-    FluxStartOfTurnEvent, FluxEndOfTurnEvent, AgentTurnDoneEvent,
-    FeedFluxAction, StartAgentTurnAction, ResetAgentTurnAction,
+from shuo.call import (
+    CallState, Phase,
+    CallStartedEvent, CallEndedEvent, AudioChunkEvent,
+    UserSpeakingEvent, UserSpokeEvent, AgentDoneEvent,
+    StreamToSTTAction, StartTurnAction, CancelTurnAction,
+    step,
 )
-from shuo.state import process_event
 
 
 # =============================================================================
@@ -23,21 +23,21 @@ from shuo.state import process_event
 # =============================================================================
 
 @pytest.fixture
-def initial_state() -> AppState:
+def initial_state() -> CallState:
     """Fresh state at the start of a call."""
-    return AppState()
+    return CallState()
 
 
 @pytest.fixture
-def listening_state() -> AppState:
+def listening_state() -> CallState:
     """State after stream has started."""
-    return AppState(phase=Phase.LISTENING)
+    return CallState(phase=Phase.LISTENING)
 
 
 @pytest.fixture
-def responding_state() -> AppState:
+def responding_state() -> CallState:
     """State while agent is responding."""
-    return AppState(phase=Phase.RESPONDING)
+    return CallState(phase=Phase.RESPONDING)
 
 
 # =============================================================================
@@ -47,33 +47,33 @@ def responding_state() -> AppState:
 class TestStreamLifecycle:
 
     def test_stream_start_transitions_to_listening(self, initial_state):
-        """StreamStartEvent should transition to LISTENING with no actions."""
-        event = StreamStartEvent(stream_sid="new-stream-123")
-        new_state, actions = process_event(initial_state, event)
+        """CallStartedEvent should transition to LISTENING with no actions."""
+        event = CallStartedEvent(stream_sid="new-stream-123")
+        new_state, actions = step(initial_state, event)
 
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
     def test_stream_start_resets_phase(self):
-        """StreamStartEvent should reset to LISTENING even if RESPONDING."""
-        state = AppState(phase=Phase.RESPONDING)
-        event = StreamStartEvent(stream_sid="new")
-        new_state, _ = process_event(state, event)
+        """CallStartedEvent should reset to LISTENING even if RESPONDING."""
+        state = CallState(phase=Phase.RESPONDING)
+        event = CallStartedEvent(stream_sid="new")
+        new_state, _ = step(state, event)
 
         assert new_state.phase == Phase.LISTENING
 
     def test_stream_stop_resets_agent_if_responding(self, responding_state):
-        """StreamStopEvent should reset agent turn if responding."""
-        event = StreamStopEvent()
-        _, actions = process_event(responding_state, event)
+        """CallEndedEvent should reset agent turn if responding."""
+        event = CallEndedEvent()
+        _, actions = step(responding_state, event)
 
         assert len(actions) == 1
-        assert isinstance(actions[0], ResetAgentTurnAction)
+        assert isinstance(actions[0], CancelTurnAction)
 
     def test_stream_stop_no_action_if_listening(self, listening_state):
-        """StreamStopEvent should produce no actions when listening."""
-        event = StreamStopEvent()
-        _, actions = process_event(listening_state, event)
+        """CallEndedEvent should produce no actions when listening."""
+        event = CallEndedEvent()
+        _, actions = step(listening_state, event)
 
         assert actions == []
 
@@ -84,79 +84,79 @@ class TestStreamLifecycle:
 
 class TestMediaRouting:
 
-    def test_media_feeds_flux(self, listening_state):
-        """MediaEvent should always produce FeedFluxAction."""
-        event = MediaEvent(audio_bytes=b"\x00\x01\x02")
-        _, actions = process_event(listening_state, event)
+    def test_media_feeds_stt(self, listening_state):
+        """AudioChunkEvent should always produce StreamToSTTAction."""
+        event = AudioChunkEvent(audio_bytes=b"\x00\x01\x02")
+        _, actions = step(listening_state, event)
 
         assert len(actions) == 1
-        assert isinstance(actions[0], FeedFluxAction)
+        assert isinstance(actions[0], StreamToSTTAction)
         assert actions[0].audio_bytes == b"\x00\x01\x02"
 
-    def test_media_feeds_flux_in_any_phase(self, responding_state):
-        """Audio should flow to Flux regardless of phase."""
-        event = MediaEvent(audio_bytes=b"\xff")
-        _, actions = process_event(responding_state, event)
+    def test_media_feeds_stt_in_any_phase(self, responding_state):
+        """Audio should flow to STT regardless of phase."""
+        event = AudioChunkEvent(audio_bytes=b"\xff")
+        _, actions = step(responding_state, event)
 
         assert len(actions) == 1
-        assert isinstance(actions[0], FeedFluxAction)
+        assert isinstance(actions[0], StreamToSTTAction)
 
     def test_media_does_not_change_state(self, listening_state):
-        """MediaEvent should not change application state."""
-        event = MediaEvent(audio_bytes=b"\x00")
-        new_state, _ = process_event(listening_state, event)
+        """AudioChunkEvent should not change application state."""
+        event = AudioChunkEvent(audio_bytes=b"\x00")
+        new_state, _ = step(listening_state, event)
 
         assert new_state == listening_state
 
 
 # =============================================================================
-# FLUX TURN EVENTS
+# TURN EVENTS
 # =============================================================================
 
-class TestFluxEndOfTurn:
+class TestUserSpokeEvent:
 
     def test_end_of_turn_starts_agent(self, listening_state):
-        """FluxEndOfTurnEvent with transcript should start agent turn."""
-        event = FluxEndOfTurnEvent(transcript="Hello, how are you?")
-        new_state, actions = process_event(listening_state, event)
+        """UserSpokeEvent with transcript should start agent turn."""
+        event = UserSpokeEvent(transcript="Hello, how are you?")
+        new_state, actions = step(listening_state, event)
 
         assert new_state.phase == Phase.RESPONDING
         assert len(actions) == 1
-        assert isinstance(actions[0], StartAgentTurnAction)
+        assert isinstance(actions[0], StartTurnAction)
         assert actions[0].transcript == "Hello, how are you?"
 
     def test_end_of_turn_empty_transcript_ignored(self, listening_state):
         """Empty transcript should be ignored."""
-        event = FluxEndOfTurnEvent(transcript="")
-        new_state, actions = process_event(listening_state, event)
+        event = UserSpokeEvent(transcript="")
+        new_state, actions = step(listening_state, event)
 
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
     def test_end_of_turn_ignored_if_responding(self, responding_state):
-        """EndOfTurn should be ignored if already responding."""
-        event = FluxEndOfTurnEvent(transcript="Interrupt text")
-        new_state, actions = process_event(responding_state, event)
+        """UserSpokeEvent should be ignored if already responding."""
+        event = UserSpokeEvent(transcript="Interrupt text")
+        new_state, actions = step(responding_state, event)
 
         assert new_state.phase == Phase.RESPONDING  # Unchanged
         assert actions == []
 
 
-class TestFluxStartOfTurn:
+class TestUserSpeakingEvent:
 
     def test_start_of_turn_interrupts_agent(self, responding_state):
-        """StartOfTurn during RESPONDING should trigger barge-in."""
-        event = FluxStartOfTurnEvent()
-        new_state, actions = process_event(responding_state, event)
+        """UserSpeakingEvent during RESPONDING should trigger barge-in."""
+        event = UserSpeakingEvent()
+        new_state, actions = step(responding_state, event)
 
         assert new_state.phase == Phase.LISTENING
         assert len(actions) == 1
-        assert isinstance(actions[0], ResetAgentTurnAction)
+        assert isinstance(actions[0], CancelTurnAction)
 
     def test_start_of_turn_ignored_if_listening(self, listening_state):
-        """StartOfTurn during LISTENING should be a no-op."""
-        event = FluxStartOfTurnEvent()
-        new_state, actions = process_event(listening_state, event)
+        """UserSpeakingEvent during LISTENING should be a no-op."""
+        event = UserSpeakingEvent()
+        new_state, actions = step(listening_state, event)
 
         assert new_state.phase == Phase.LISTENING
         assert actions == []
@@ -166,20 +166,20 @@ class TestFluxStartOfTurn:
 # AGENT TURN DONE
 # =============================================================================
 
-class TestAgentTurnDone:
+class TestAgentDone:
 
     def test_done_transitions_to_listening(self, responding_state):
-        """AgentTurnDoneEvent should transition back to LISTENING."""
-        event = AgentTurnDoneEvent()
-        new_state, actions = process_event(responding_state, event)
+        """AgentDoneEvent should transition back to LISTENING."""
+        event = AgentDoneEvent()
+        new_state, actions = step(responding_state, event)
 
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
     def test_done_ignored_if_listening(self, listening_state):
-        """AgentTurnDoneEvent should be ignored if already listening."""
-        event = AgentTurnDoneEvent()
-        new_state, actions = process_event(listening_state, event)
+        """AgentDoneEvent should be ignored if already listening."""
+        event = AgentDoneEvent()
+        new_state, actions = step(listening_state, event)
 
         assert new_state.phase == Phase.LISTENING
         assert actions == []
@@ -192,78 +192,78 @@ class TestAgentTurnDone:
 class TestCompleteFlow:
 
     def test_full_conversation_turn(self, listening_state):
-        """Complete turn: Flux EndOfTurn -> Agent responds -> Done."""
+        """Complete turn: UserSpokeEvent -> Agent responds -> Done."""
         state = listening_state
 
-        # Flux detects end of user turn
-        state, actions = process_event(state, FluxEndOfTurnEvent(transcript="Hello"))
+        # User finishes speaking
+        state, actions = step(state, UserSpokeEvent(transcript="Hello"))
         assert state.phase == Phase.RESPONDING
-        assert any(isinstance(a, StartAgentTurnAction) for a in actions)
+        assert any(isinstance(a, StartTurnAction) for a in actions)
 
         # Agent finishes speaking
-        state, actions = process_event(state, AgentTurnDoneEvent())
+        state, actions = step(state, AgentDoneEvent())
         assert state.phase == Phase.LISTENING
         assert actions == []
 
     def test_interrupt_during_response(self, listening_state):
-        """Barge-in: Agent responding -> Flux StartOfTurn -> Reset."""
+        """Barge-in: Agent responding -> UserSpeakingEvent -> Reset."""
         state = listening_state
 
         # Start responding
-        state, _ = process_event(state, FluxEndOfTurnEvent(transcript="Hello"))
+        state, _ = step(state, UserSpokeEvent(transcript="Hello"))
         assert state.phase == Phase.RESPONDING
 
         # User interrupts
-        state, actions = process_event(state, FluxStartOfTurnEvent())
+        state, actions = step(state, UserSpeakingEvent())
         assert state.phase == Phase.LISTENING
-        assert any(isinstance(a, ResetAgentTurnAction) for a in actions)
+        assert any(isinstance(a, CancelTurnAction) for a in actions)
 
     def test_multi_turn(self, listening_state):
         """Multiple turns work correctly."""
         state = listening_state
 
         # Turn 1
-        state, _ = process_event(state, FluxEndOfTurnEvent(transcript="Hi"))
+        state, _ = step(state, UserSpokeEvent(transcript="Hi"))
         assert state.phase == Phase.RESPONDING
-        state, _ = process_event(state, AgentTurnDoneEvent())
+        state, _ = step(state, AgentDoneEvent())
         assert state.phase == Phase.LISTENING
 
         # Turn 2
-        state, _ = process_event(state, FluxEndOfTurnEvent(transcript="How are you?"))
+        state, _ = step(state, UserSpokeEvent(transcript="How are you?"))
         assert state.phase == Phase.RESPONDING
-        state, _ = process_event(state, AgentTurnDoneEvent())
+        state, _ = step(state, AgentDoneEvent())
         assert state.phase == Phase.LISTENING
 
-    def test_audio_always_forwarded_to_flux(self, listening_state):
-        """MediaEvents should always produce FeedFluxAction."""
+    def test_audio_always_forwarded_to_stt(self, listening_state):
+        """AudioChunkEvents should always produce StreamToSTTAction."""
         state = listening_state
 
         # While listening
-        _, actions = process_event(state, MediaEvent(audio_bytes=b"\x00"))
-        assert isinstance(actions[0], FeedFluxAction)
+        _, actions = step(state, AudioChunkEvent(audio_bytes=b"\x00"))
+        assert isinstance(actions[0], StreamToSTTAction)
 
         # While responding
         state = replace(state, phase=Phase.RESPONDING)
-        _, actions = process_event(state, MediaEvent(audio_bytes=b"\x00"))
-        assert isinstance(actions[0], FeedFluxAction)
+        _, actions = step(state, AudioChunkEvent(audio_bytes=b"\x00"))
+        assert isinstance(actions[0], StreamToSTTAction)
 
     def test_interrupt_then_new_turn(self, listening_state):
         """After barge-in, a new turn can start."""
         state = listening_state
 
         # Start turn
-        state, _ = process_event(state, FluxEndOfTurnEvent(transcript="Hello"))
+        state, _ = step(state, UserSpokeEvent(transcript="Hello"))
         assert state.phase == Phase.RESPONDING
 
         # Interrupt
-        state, actions = process_event(state, FluxStartOfTurnEvent())
+        state, actions = step(state, UserSpeakingEvent())
         assert state.phase == Phase.LISTENING
-        assert any(isinstance(a, ResetAgentTurnAction) for a in actions)
+        assert any(isinstance(a, CancelTurnAction) for a in actions)
 
         # New turn after interrupt
-        state, actions = process_event(state, FluxEndOfTurnEvent(transcript="Never mind, goodbye"))
+        state, actions = step(state, UserSpokeEvent(transcript="Never mind, goodbye"))
         assert state.phase == Phase.RESPONDING
-        assert any(isinstance(a, StartAgentTurnAction) for a in actions)
+        assert any(isinstance(a, StartTurnAction) for a in actions)
         assert actions[0].transcript == "Never mind, goodbye"
 
 
@@ -275,32 +275,32 @@ class TestEdgeCases:
 
     def test_state_immutability(self, initial_state):
         """State updates should not mutate original."""
-        event = StreamStartEvent(stream_sid="new-sid")
-        new_state, _ = process_event(initial_state, event)
+        event = CallStartedEvent(stream_sid="new-sid")
+        new_state, _ = step(initial_state, event)
 
-        # AppState is immutable; original must be unchanged
+        # CallState is immutable; original must be unchanged
         assert initial_state.phase == Phase.LISTENING
         assert new_state is not initial_state
 
     def test_stream_stop_in_listening_is_safe(self, listening_state):
-        """StreamStopEvent while listening should produce no actions."""
-        _, actions = process_event(listening_state, StreamStopEvent())
+        """CallEndedEvent while listening should produce no actions."""
+        _, actions = step(listening_state, CallEndedEvent())
         assert actions == []
 
     def test_agent_done_in_wrong_phase_is_safe(self, listening_state):
-        """AgentTurnDoneEvent in LISTENING should not crash."""
-        new_state, actions = process_event(listening_state, AgentTurnDoneEvent())
+        """AgentDoneEvent in LISTENING should not crash."""
+        new_state, actions = step(listening_state, AgentDoneEvent())
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
     def test_start_of_turn_in_listening_is_safe(self, listening_state):
-        """FluxStartOfTurnEvent in LISTENING is normal (user talking)."""
-        new_state, actions = process_event(listening_state, FluxStartOfTurnEvent())
+        """UserSpeakingEvent in LISTENING is normal (user talking)."""
+        new_state, actions = step(listening_state, UserSpeakingEvent())
         assert new_state.phase == Phase.LISTENING
         assert actions == []
 
     def test_end_of_turn_in_listening_starts_agent(self, initial_state):
-        """FluxEndOfTurnEvent with transcript in LISTENING should start agent."""
-        new_state, actions = process_event(initial_state, FluxEndOfTurnEvent(transcript="test"))
+        """UserSpokeEvent with transcript in LISTENING should start agent."""
+        new_state, actions = step(initial_state, UserSpokeEvent(transcript="test"))
         assert new_state.phase == Phase.RESPONDING
         assert len(actions) == 1

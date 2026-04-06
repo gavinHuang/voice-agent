@@ -14,7 +14,7 @@ import asyncio
 import audioop
 from typing import Optional, Callable, Awaitable
 
-from ..log import ServiceLogger
+from .log import ServiceLogger
 
 log = ServiceLogger("TTS")
 

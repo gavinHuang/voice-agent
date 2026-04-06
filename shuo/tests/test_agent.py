@@ -39,7 +39,7 @@ async def test_llm_service_streams_text_tokens():
         done_count[0] += 1
 
     with patch.dict(os.environ, {"GROQ_API_KEY": _FAKE_GROQ_KEY}):
-        from shuo.services.llm import LLMService
+        from shuo.language import LanguageModel as LLMService
         llm = LLMService(on_token=on_token, on_done=on_done)
 
     # Use TestModel for deterministic results — it returns a short canned response
@@ -72,7 +72,7 @@ async def test_llm_service_press_dtmf_tool():
         done_count[0] += 1
 
     with patch.dict(os.environ, {"GROQ_API_KEY": _FAKE_GROQ_KEY}):
-        from shuo.services.llm import LLMService
+        from shuo.language import LanguageModel as LLMService
         llm = LLMService(on_token=on_token, on_done=on_done)
 
     # TestModel auto-calls all registered tools, so press_dtmf will fire
@@ -107,7 +107,7 @@ async def test_llm_service_signal_hangup_tool():
         done_count[0] += 1
 
     with patch.dict(os.environ, {"GROQ_API_KEY": _FAKE_GROQ_KEY}):
-        from shuo.services.llm import LLMService
+        from shuo.language import LanguageModel as LLMService
         llm = LLMService(on_token=on_token, on_done=on_done)
 
     # TestModel will call signal_hangup tool
@@ -141,7 +141,7 @@ async def test_llm_service_hold_continue_no_tts():
         done_count[0] += 1
 
     with patch.dict(os.environ, {"GROQ_API_KEY": _FAKE_GROQ_KEY}):
-        from shuo.services.llm import LLMService
+        from shuo.language import LanguageModel as LLMService
         llm = LLMService(on_token=on_token, on_done=on_done)
 
     # TestModel with only signal_hold_continue tool — no text output
@@ -199,7 +199,7 @@ async def test_llm_model_groq_prefix():
 
     env_overrides = {"LLM_MODEL": model_string, "GROQ_API_KEY": _FAKE_GROQ_KEY}
     with patch.dict(os.environ, env_overrides):
-        from shuo.services.llm import LLMService
+        from shuo.language import LanguageModel as LLMService
 
         async def noop_token(t: str) -> None:
             pass
@@ -228,7 +228,7 @@ async def test_llm_model_openai_prefix():
 
     env_overrides = {"LLM_MODEL": model_string, "OPENAI_API_KEY": "sk-test-fake-key"}
     with patch.dict(os.environ, env_overrides):
-        from shuo.services.llm import LLMService
+        from shuo.language import LanguageModel as LLMService
 
         async def noop_token(t: str) -> None:
             pass

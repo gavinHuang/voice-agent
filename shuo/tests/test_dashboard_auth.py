@@ -193,7 +193,7 @@ def _make_call_client(monkeypatch, limit="3"):
 def test_rate_limit_allows_up_to_limit(monkeypatch):
     """First CALL_RATE_LIMIT POST /call requests succeed (200 or 500 from Twilio mock)."""
     mock_sid = "CA123"
-    with patch("shuo.services.twilio_client.make_outbound_call", return_value=mock_sid), \
+    with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("dashboard.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="3")
         payload = {"phone": "+15550001111", "goal": "test"}
@@ -207,7 +207,7 @@ def test_rate_limit_allows_up_to_limit(monkeypatch):
 def test_rate_limit_blocks_over_limit(monkeypatch):
     """(CALL_RATE_LIMIT+1)th request returns 429 with Retry-After header."""
     mock_sid = "CA123"
-    with patch("shuo.services.twilio_client.make_outbound_call", return_value=mock_sid), \
+    with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("dashboard.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="3")
         payload = {"phone": "+15550001111", "goal": "test"}
@@ -225,7 +225,7 @@ def test_rate_limit_blocks_over_limit(monkeypatch):
 def test_rate_limit_retry_after_is_numeric(monkeypatch):
     """Retry-After header value in 429 response is a positive integer."""
     mock_sid = "CA123"
-    with patch("shuo.services.twilio_client.make_outbound_call", return_value=mock_sid), \
+    with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("dashboard.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="2")
         payload = {"phone": "+15550001111", "goal": "test"}
@@ -241,7 +241,7 @@ def test_rate_limit_retry_after_is_numeric(monkeypatch):
 def test_call_rate_limit_env_var_respected(monkeypatch):
     """CALL_RATE_LIMIT=2 means 3rd request is blocked."""
     mock_sid = "CA456"
-    with patch("shuo.services.twilio_client.make_outbound_call", return_value=mock_sid), \
+    with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("dashboard.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="2")
         payload = {"phone": "+15550009999", "goal": "env-var test"}

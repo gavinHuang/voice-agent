@@ -342,8 +342,8 @@ async def start_call(body: CallRequest, request: Request):
         phone = f"+{phone}"
 
     try:
-        from shuo.services.twilio_client import make_outbound_call
-        call_sid = make_outbound_call(phone, ivr_mode=body.ivr_mode)
+        from shuo.phone import dial_out
+        call_sid = dial_out(phone, ivr_mode=body.ivr_mode)
         registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode)
         return {"status": "calling", "to": phone, "call_sid": call_sid}
     except Exception as e:

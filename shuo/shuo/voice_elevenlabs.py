@@ -15,7 +15,7 @@ from typing import Optional, Callable, Awaitable
 import websockets
 from websockets.client import WebSocketClientProtocol
 
-from ..log import ServiceLogger
+from .log import ServiceLogger
 
 log = ServiceLogger("TTS")
 

@@ -22,10 +22,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import uvicorn
 from dotenv import load_dotenv
 
-from shuo.server import app
-from shuo.services.twilio_client import make_outbound_call
+from shuo.web import app
+from shuo.phone import dial_out as make_outbound_call
 from shuo.log import setup_logging, Logger, get_logger
-import shuo.server as server_module
+import shuo.web as server_module
 
 # Load environment variables
 load_dotenv()

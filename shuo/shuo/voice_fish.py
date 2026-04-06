@@ -14,7 +14,7 @@ from typing import Optional, Callable, Awaitable
 import audioop
 import httpx
 
-from ..log import ServiceLogger
+from .log import ServiceLogger
 
 log = ServiceLogger("TTS")
 
