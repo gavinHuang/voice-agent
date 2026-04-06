@@ -217,10 +217,14 @@ def test_confirm_context_source_annotations(capsys):
 
 
 def test_confirm_context_negative_answer_exits(monkeypatch):
-    """Pressing Enter (empty input) at 'Proceed?' aborts with exit code 0."""
-    from shuo.context import CallContext, confirm_context
-    import click
-    monkeypatch.setattr("click.prompt", lambda *a, **kw: "")
+    """Selecting Cancel at the questionary prompt aborts with exit code 0."""
+    from shuo.context import CallContext, confirm_context, _ACTION_CANCEL
+
+    class _MockQ:
+        def __init__(self, val): self._val = val
+        def ask(self): return self._val
+
+    monkeypatch.setattr("questionary.select", lambda *a, **kw: _MockQ(_ACTION_CANCEL))
     ctx = CallContext(goal="Book a table")
     with pytest.raises(SystemExit) as exc_info:
         confirm_context(ctx, yes=False)
@@ -228,9 +232,14 @@ def test_confirm_context_negative_answer_exits(monkeypatch):
 
 
 def test_confirm_context_affirmative_returns_ctx(monkeypatch):
-    """Entering 'y' returns the confirmed context."""
-    from shuo.context import CallContext, confirm_context
-    monkeypatch.setattr("click.prompt", lambda *a, **kw: "y")
+    """Selecting Proceed returns the confirmed context."""
+    from shuo.context import CallContext, confirm_context, _ACTION_PROCEED
+
+    class _MockQ:
+        def __init__(self, val): self._val = val
+        def ask(self): return self._val
+
+    monkeypatch.setattr("questionary.select", lambda *a, **kw: _MockQ(_ACTION_PROCEED))
     ctx = CallContext(goal="Book a table")
     result = confirm_context(ctx, yes=False)
     assert result.goal == "Book a table"

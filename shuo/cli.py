@@ -755,6 +755,189 @@ def show_config(ctx: click.Context) -> None:
         click.echo()
 
 
+def _check_result(label: str, ok: bool, detail: str = "", warn: bool = False) -> None:
+    """Print a single diagnostic result line."""
+    if ok:
+        icon = click.style("✓", fg="green", bold=True)
+    elif warn:
+        icon = click.style("!", fg="yellow", bold=True)
+    else:
+        icon = click.style("✗", fg="red", bold=True)
+    suffix = f"  {click.style(detail, fg=8)}" if detail else ""
+    click.echo(f"  {icon}  {label:<40}{suffix}")
+
+
+@cli.command("diagnose")
+@click.option("--skip-connectivity", is_flag=True, default=False,
+              help="Only check that vars are set; skip live API calls")
+@click.pass_context
+def diagnose(ctx: click.Context, skip_connectivity: bool) -> None:
+    """Check configuration and test connectivity to each service."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    e = os.environ.get
+
+    any_fail = False
+
+    # ── .env file ──────────────────────────────────────────────────────
+    click.echo(_section(".env file"))
+    env_path = Path(os.getcwd()) / ".env"
+    if env_path.exists():
+        _check_result(".env present", True, str(env_path))
+    else:
+        _check_result(".env present", False, "not found in cwd (values may come from shell env)")
+        any_fail = True
+    click.echo()
+
+    # ── Twilio ─────────────────────────────────────────────────────────
+    click.echo(_section("Twilio"))
+    twilio_vars = [
+        ("TWILIO_ACCOUNT_SID",  e("TWILIO_ACCOUNT_SID")),
+        ("TWILIO_AUTH_TOKEN",   e("TWILIO_AUTH_TOKEN")),
+        ("TWILIO_PHONE_NUMBER", e("TWILIO_PHONE_NUMBER")),
+        ("TWILIO_PUBLIC_URL",   e("TWILIO_PUBLIC_URL")),
+    ]
+    twilio_ok = True
+    for name, val in twilio_vars:
+        if val:
+            _check_result(f"{name} set", True)
+        else:
+            _check_result(f"{name} set", False, "missing")
+            twilio_ok = False
+            any_fail = True
+
+    # Format check: account SID starts with AC
+    sid = e("TWILIO_ACCOUNT_SID") or ""
+    if sid and not sid.startswith("AC"):
+        _check_result("TWILIO_ACCOUNT_SID format (starts AC)", False, f"got: {sid[:4]}...")
+        twilio_ok = False
+        any_fail = True
+    elif sid:
+        _check_result("TWILIO_ACCOUNT_SID format (starts AC)", True)
+
+    if not skip_connectivity and twilio_ok:
+        try:
+            from twilio.rest import Client
+            client = Client(e("TWILIO_ACCOUNT_SID"), e("TWILIO_AUTH_TOKEN"))
+            account = client.api.accounts(e("TWILIO_ACCOUNT_SID")).fetch()
+            _check_result("Twilio credentials valid", True, f"account: {account.friendly_name}")
+        except Exception as exc:
+            _check_result("Twilio credentials valid", False, str(exc)[:60])
+            any_fail = True
+    elif skip_connectivity:
+        _check_result("Twilio credentials valid", True, "skipped", warn=False)
+    click.echo()
+
+    # ── Deepgram ───────────────────────────────────────────────────────
+    click.echo(_section("Deepgram (STT)"))
+    dg_key = e("DEEPGRAM_API_KEY")
+    if dg_key:
+        _check_result("DEEPGRAM_API_KEY set", True)
+    else:
+        _check_result("DEEPGRAM_API_KEY set", False, "missing")
+        any_fail = True
+
+    if not skip_connectivity and dg_key:
+        try:
+            import httpx
+            resp = httpx.get(
+                "https://api.deepgram.com/v1/projects",
+                headers={"Authorization": f"Token {dg_key}"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                _check_result("Deepgram API key valid", True)
+            elif resp.status_code == 401:
+                _check_result("Deepgram API key valid", False, "401 Unauthorized")
+                any_fail = True
+            else:
+                _check_result("Deepgram API key valid", True,
+                              f"HTTP {resp.status_code} (key accepted)", warn=False)
+        except Exception as exc:
+            _check_result("Deepgram connectivity", False, str(exc)[:60])
+            any_fail = True
+    elif skip_connectivity:
+        _check_result("Deepgram API key valid", True, "skipped", warn=False)
+    click.echo()
+
+    # ── Groq (LLM) ────────────────────────────────────────────────────
+    click.echo(_section("Groq (LLM)"))
+    groq_key = e("GROQ_API_KEY")
+    if groq_key:
+        _check_result("GROQ_API_KEY set", True)
+    else:
+        _check_result("GROQ_API_KEY set", False, "missing")
+        any_fail = True
+
+    if not skip_connectivity and groq_key:
+        try:
+            from groq import Groq
+            client = Groq(api_key=groq_key)
+            models = client.models.list()
+            model_ids = [m.id for m in models.data]
+            default_model = e("LLM_MODEL") or "llama-3.3-70b-versatile"
+            # Strip "groq:" prefix if present
+            bare_model = default_model.removeprefix("groq:")
+            if bare_model in model_ids:
+                _check_result("Groq API key valid", True, f"model '{bare_model}' available")
+            else:
+                _check_result("Groq API key valid", True,
+                              f"key valid but '{bare_model}' not listed — check LLM_MODEL",
+                              warn=True)
+        except Exception as exc:
+            _check_result("Groq API key valid", False, str(exc)[:60])
+            any_fail = True
+    elif skip_connectivity:
+        _check_result("Groq API key valid", True, "skipped", warn=False)
+    click.echo()
+
+    # ── ElevenLabs (TTS) ──────────────────────────────────────────────
+    click.echo(_section("ElevenLabs (TTS)"))
+    el_key = e("ELEVENLABS_API_KEY")
+    tts_provider = e("TTS_PROVIDER") or "kokoro"
+    if tts_provider != "elevenlabs":
+        _check_result("ELEVENLABS_API_KEY set", el_key is not None,
+                      f"TTS_PROVIDER={tts_provider} — ElevenLabs not active", warn=True)
+    else:
+        if el_key:
+            _check_result("ELEVENLABS_API_KEY set", True)
+        else:
+            _check_result("ELEVENLABS_API_KEY set", False, "missing")
+            any_fail = True
+
+        if not skip_connectivity and el_key:
+            try:
+                import httpx
+                resp = httpx.get(
+                    "https://api.elevenlabs.io/v1/user",
+                    headers={"xi-api-key": el_key},
+                    timeout=8,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    tier = data.get("subscription", {}).get("tier", "unknown")
+                    _check_result("ElevenLabs API key valid", True, f"tier: {tier}")
+                elif resp.status_code == 401:
+                    _check_result("ElevenLabs API key valid", False, "401 Unauthorized")
+                    any_fail = True
+                else:
+                    _check_result("ElevenLabs API key valid", True,
+                                  f"HTTP {resp.status_code}", warn=False)
+            except Exception as exc:
+                _check_result("ElevenLabs connectivity", False, str(exc)[:60])
+                any_fail = True
+        elif skip_connectivity:
+            _check_result("ElevenLabs API key valid", True, "skipped", warn=False)
+    click.echo()
+
+    # ── Summary ───────────────────────────────────────────────────────
+    if any_fail:
+        click.echo(click.style("Some checks failed. Fix the issues above before running.", fg="red", bold=True))
+        sys.exit(1)
+    else:
+        click.echo(click.style("All checks passed.", fg="green", bold=True))
+
+
 def main() -> None:
     """Entry point for the voice-agent CLI."""
     cli()

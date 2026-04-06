@@ -95,6 +95,7 @@ def setup_logging(level: int = logging.INFO) -> None:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("websockets").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("twilio.http_client").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

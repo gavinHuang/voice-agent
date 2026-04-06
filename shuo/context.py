@@ -239,6 +239,114 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
 # PRE-CALL CONFIRMATION
 # =============================================================================
 
+# Editable fields in display order: (label, field_name, is_list)
+_EDITABLE_FIELDS = [
+    ("Agent name",       "agent_name",       False),
+    ("Agent role",       "agent_role",       False),
+    ("Agent tone",       "agent_tone",       False),
+    ("Goal",             "goal",             False),
+    ("Caller name",      "caller_name",      False),
+    ("Caller context",   "caller_context",   False),
+    ("Constraints",      "constraints",      True),
+    ("Success criteria", "success_criteria", False),
+]
+
+_ACTION_PROCEED = "Proceed with call"
+_ACTION_CANCEL  = "Cancel"
+
+
+def _render_context(ctx: CallContext, sources: dict) -> None:
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+
+    console = Console()
+    table = Table(box=box.SIMPLE, show_header=False, pad_edge=False,
+                  show_edge=False, padding=(0, 1))
+    table.add_column("Field", style="dim", min_width=18)
+    table.add_column("Value")
+    table.add_column("Source", style="dim italic")
+
+    for label, fname, is_list in _EDITABLE_FIELDS:
+        value = getattr(ctx, fname)
+        src   = sources.get(fname, "")
+
+        if is_list:
+            display = ", ".join(value) if value else "[dim](none)[/dim]"
+        else:
+            display = value if value else "[dim](not set)[/dim]"
+
+        from rich.markup import escape as _escape
+        table.add_row(label, display, _escape(f"[{src}]") if src else "")
+
+    if ctx.agent_background:
+        preview = ctx.agent_background[:80].replace("\n", " ")
+        if len(ctx.agent_background) > 80:
+            preview += "…"
+        src = sources.get("agent_background", "")
+        table.add_row("Agent background", preview, f"[{src}]" if src else "")
+
+    console.print()
+    console.rule("[bold]Call Context[/bold]", style="dim")
+    console.print(table)
+    console.rule(style="dim")
+    console.print()
+
+
+def _build_choices(ctx: CallContext) -> list:
+    """Build the questionary choice list: action choices + one choice per field."""
+    import questionary
+
+    choices = [
+        questionary.Choice(title=_ACTION_PROCEED, value=_ACTION_PROCEED),
+        questionary.Choice(title=_ACTION_CANCEL,  value=_ACTION_CANCEL),
+        questionary.Separator(),
+    ]
+    for label, fname, is_list in _EDITABLE_FIELDS:
+        value = getattr(ctx, fname)
+        if is_list:
+            preview = ", ".join(value) if value else "(none)"
+        else:
+            preview = (value[:50] + "…") if value and len(value) > 50 else (value or "(not set)")
+        title = f"Edit  {label:<20}  {preview}"
+        choices.append(questionary.Choice(title=title, value=fname))
+    return choices
+
+
+def _edit_field(ctx: CallContext, fname: str, sources: dict) -> CallContext:
+    import questionary
+    from dataclasses import replace
+
+    label, _, is_list = next(f for f in _EDITABLE_FIELDS if f[1] == fname)
+    current = getattr(ctx, fname)
+
+    if is_list:
+        current_str = ", ".join(current) if current else ""
+        new_str = questionary.text(
+            f"{label} (comma-separated, blank to clear):",
+            default=current_str,
+        ).ask()
+        if new_str is None:          # Ctrl-C
+            return ctx
+        new_val = [s.strip() for s in new_str.split(",") if s.strip()]
+        sources.pop(fname, None)
+        return replace(ctx, **{fname: new_val})
+    else:
+        new_val = questionary.text(
+            f"{label}:",
+            default=current or "",
+        ).ask()
+        if new_val is None:          # Ctrl-C
+            return ctx
+        new_val = new_val.strip()
+        if fname == "goal" and not new_val:
+            print("  Goal cannot be empty.")
+            return ctx
+        sources.pop(fname, None)
+        result = new_val if new_val else None
+        return replace(ctx, **{fname: new_val if fname == "goal" else result})
+
+
 def confirm_context(
     ctx: CallContext,
     yes: bool = False,
@@ -259,6 +367,7 @@ def confirm_context(
     Exits the process if the operator declines or if --yes is set with no goal.
     """
     import click
+    from dataclasses import replace
 
     sources = sources or {}
 
@@ -271,59 +380,30 @@ def confirm_context(
         if not goal_input:
             click.echo("Error: goal cannot be empty.", err=True)
             sys.exit(1)
-        from dataclasses import replace
         ctx = replace(ctx, goal=goal_input)
 
-    # ── Display summary ──────────────────────────────────────────────
-    click.echo()
-    click.echo(click.style("── Call Context " + "─" * 34, bold=True))
-
-    def _line(label: str, value: Optional[str], fname: str) -> None:
-        src = sources.get(fname)
-        if value:
-            shown = click.style(value, fg="white")
-            annotation = (click.style(f"  [{src}]", fg=8) if src else "")
-            click.echo(f"  {label:<22} {shown}{annotation}")
-        else:
-            click.echo(f"  {label:<22} " + click.style("(not set)", fg=8))
-
-    _line("Agent name",       ctx.agent_name,       "agent_name")
-    _line("Agent role",       ctx.agent_role,       "agent_role")
-    _line("Agent tone",       ctx.agent_tone,       "agent_tone")
-    if ctx.agent_background:
-        bg_preview = ctx.agent_background[:80].replace("\n", " ")
-        if len(ctx.agent_background) > 80:
-            bg_preview += "…"
-        src = sources.get("agent_background")
-        annotation = click.style(f"  [{src}]", fg=8) if src else ""
-        click.echo(f"  {'Agent background':<22} {bg_preview}{annotation}")
-    _line("Goal",             ctx.goal,             "goal")
-    _line("Caller name",      ctx.caller_name,      "caller_name")
-    _line("Caller context",   ctx.caller_context,   "caller_context")
-
-    if ctx.constraints:
-        click.echo(f"  {'Constraints':<22}")
-        for c in ctx.constraints:
-            click.echo(f"    - {c}")
-    else:
-        click.echo(f"  {'Constraints':<22} " + click.style("(none)", fg=8))
-
-    _line("Success criteria", ctx.success_criteria, "success_criteria")
-    click.echo(click.style("─" * 50, bold=True))
-    click.echo()
-
-    # ── Confirm ──────────────────────────────────────────────────────
+    # ── Skip confirmation ────────────────────────────────────────────
     if yes:
+        _render_context(ctx, sources)
         return ctx
 
-    answer = click.prompt(
-        "Proceed with call? [y/N]",
-        default="",
-        show_default=False,
-    ).strip().lower()
+    # ── Interactive confirm loop ─────────────────────────────────────
+    import questionary
 
-    if answer != "y":
-        click.echo("Call cancelled.")
-        sys.exit(0)
+    while True:
+        _render_context(ctx, sources)
 
-    return ctx
+        action = questionary.select(
+            "What would you like to do?",
+            choices=_build_choices(ctx),
+            use_shortcuts=False,
+        ).ask()
+
+        if action is None or action == _ACTION_CANCEL:
+            click.echo("Call cancelled.")
+            sys.exit(0)
+        elif action == _ACTION_PROCEED:
+            return ctx
+        else:
+            # action is a field name
+            ctx = _edit_field(ctx, action, sources)
