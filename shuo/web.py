@@ -18,13 +18,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-# Ensure project root is on sys.path so dashboard/ and ivr/ are importable
+# Ensure project root is on sys.path so monitor/ and simulator/ are importable
 # when running via pipx or any venv that only installed the shuo package.
 # PYTHONPATH (set by run.sh) is the reliable path; __file__-based calculation
 # only works when running from source, not from a pipx-installed binary.
 _project_root = os.environ.get(
     "VOICE_AGENT_ROOT",
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -41,8 +41,8 @@ from .speech import Transcriber
 from .voice import VoicePool
 from .log import get_logger
 from .ttft import router as ttft_router
-from dashboard.server import router as dashboard_router
-from dashboard import bus as dashboard_bus, registry as dashboard_registry
+from monitor.server import router as dashboard_router
+from monitor import bus as dashboard_bus, registry as dashboard_registry
 
 logger = get_logger("shuo.web")
 
@@ -98,8 +98,8 @@ app.include_router(ttft_router)
 # ── Mount IVR mock server at /ivr-mock ───────────────────────────────
 try:
     import sys as _sys, os as _os
-    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-    from ivr.server import app as _ivr_app
+    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    from simulator.server import app as _ivr_app
     app.mount("/ivr-mock", _ivr_app)
     logger.info("IVR mock mounted at /ivr-mock")
 except Exception as _e:

@@ -16,8 +16,8 @@ import signal
 import threading
 import time
 
-# Add repo root to sys.path so `dashboard` package can be imported
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add repo root to sys.path so `monitor` and `simulator` packages are importable
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import uvicorn
 from dotenv import load_dotenv

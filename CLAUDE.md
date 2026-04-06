@@ -6,20 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Install (editable):**
 ```bash
-pipx install -e ./shuo
+pipx install -e .
 ```
 
 **Run tests:**
 ```bash
-# Core shuo tests (pure, no I/O, ~0.03s)
-cd shuo && python -m pytest tests/ -v
+# Core tests (pure, no I/O, ~0.03s)
+python -m pytest tests/ -v
 
-# IVR integration tests (~1s)
-python -m pytest ivr/tests/ -v
+# Simulator integration tests (~1s)
+python -m pytest simulator/tests/ -v
 
 # Single test
-python -m pytest shuo/tests/test_agent.py::test_llm_service_streams_text_tokens -v
-python -m pytest ivr/tests/test_ivr.py::test_parse_simple_config -v
+python -m pytest tests/test_agent.py::test_llm_service_streams_text_tokens -v
+python -m pytest simulator/tests/test_ivr.py::test_parse_simple_config -v
 ```
 
 **Development shortcuts (via `run.sh`):**
@@ -39,7 +39,7 @@ voice-agent serve [--ngrok] [--port N]
 voice-agent call <phone> [--goal "..."] [--ngrok]
 voice-agent ivr-serve [--port N]
 voice-agent local-call [--caller-goal "..."]
-voice-agent bench --dataset scenarios/example.yaml
+voice-agent bench --dataset eval/scenarios/example_ivr.yaml
 ```
 
 ## Architecture
@@ -69,40 +69,49 @@ LISTENING ──FluxEndOfTurn──► RESPONDING ──AgentTurnDone──► L
     └──────FluxStartOfTurn─────────┘  (barge-in)
 ```
 
-The state machine in `shuo/shuo/state.py` is the center of gravity — a pure function `process_event(state, event) → (state, actions)` (~30 lines). Immutable state and events make it easy to test in isolation with no I/O.
+The state machine in `shuo/call.py` is the center of gravity — a pure function `step(state, event) → (state, actions)` (~30 lines). Immutable state and events make it easy to test in isolation with no I/O.
 
-**Key modules:**
+**Key modules (`shuo/`):**
 
 | File | Role |
 |------|------|
-| `shuo/shuo/types.py` | Frozen dataclasses: `State`, all `Event` types, all `Action` types |
-| `shuo/shuo/state.py` | Pure state machine — the only place state transitions live |
-| `shuo/shuo/conversation.py` | Async event loop: receives events, calls `process_event`, dispatches actions |
-| `shuo/shuo/agent.py` | LLM → TTS → Player pipeline; owns conversation history; emits `AgentTurnDone` |
-| `shuo/shuo/server.py` | FastAPI server; Twilio WebSocket `/ws`; all HTTP routes |
-| `shuo/shuo/cli.py` | Click CLI wiring (`serve`, `call`, `bench`, etc.) |
-| `shuo/shuo/services/flux.py` | Deepgram Flux WebSocket client (STT + turn detection) |
-| `shuo/shuo/services/llm.py` | Groq streaming with pydantic-ai tools (DTMF, hold, hangup) |
-| `shuo/shuo/services/tts_*.py` | TTS providers: ElevenLabs (primary), Kokoro (local), Fish Audio |
-| `shuo/shuo/services/player.py` | Streams TTS audio back to Twilio WebSocket |
-| `shuo/shuo/services/flux_pool.py` | Pre-warmed Deepgram connection pool |
-| `shuo/shuo/services/tts_pool.py` | Pre-warmed TTS connection pool |
-| `shuo/shuo/services/isp.py` | Abstract telephony backend interface |
-| `shuo/shuo/services/twilio_isp.py` | Twilio implementation of ISP |
-| `shuo/shuo/services/local_isp.py` | In-process loopback (no Twilio, for `local-call`) |
-| `dashboard/` | Supervisor UI: call registry, real-time event bus, human takeover |
-| `ivr/` | YAML-driven IVR mock server for testing agent call flows |
-| `softphone/phone.html` | Browser WebRTC softphone via Twilio SDK |
+| `call.py` | Everything about a call: events, actions, state, `step()`, `run_call()` |
+| `language.py` | LLM: `LanguageModel` class (Groq streaming + pydantic-ai tools) |
+| `speech.py` | STT: `Transcriber` + `TranscriberPool` (Deepgram Flux) |
+| `voice.py` | TTS: `VoicePool` + `AudioPlayer` + dtmf_tone() |
+| `voice_elevenlabs.py` / `voice_kokoro.py` / `voice_fish.py` | TTS providers |
+| `phone.py` | Phone protocol + `TwilioPhone` + `LocalPhone` + `dial_out()` |
+| `agent.py` | LLM→TTS→Player pipeline per turn |
+| `web.py` | FastAPI server (HTTP routes + WebSocket call handler) |
+| `cli.py` | Click CLI |
+| `bench.py` | Benchmark runner |
+| `tracer.py` | Latency tracing |
+| `ttft.py` | TTFT benchmark endpoint |
 
-**Connection pooling:** Both Deepgram Flux and TTS providers maintain pre-warmed connection pools (`flux_pool.py`, `tts_pool.py`) to avoid cold-start latency on each turn.
+**Top-level directories:**
 
-**ISP abstraction:** `isp.py` defines a pluggable telephony backend. `TwilioISP` is used in production; `LocalISP` creates an in-process loopback for Twilio-free local development and benchmarking.
+| Directory | Role |
+|-----------|------|
+| `shuo/` | Python package — core runtime |
+| `monitor/` | Supervisor UI: call registry, real-time event bus, human takeover |
+| `simulator/` | YAML-driven call flow simulator for benchmarking |
+| `ui/` | Browser WebRTC softphone |
+| `tests/` | Test suite (133 tests) |
+| `eval/` | Benchmark datasets, scenarios, and reports |
+| `specs/` | API and design specs |
+| `docs/` | Project documentation |
+| `assets/` | Architecture diagrams |
+| `scripts/` | Analysis and visualization scripts |
 
-**IVR mock server:** The `ivr/` directory contains a YAML-configurable IVR server (flows in `ivr/flows/`). Used with `voice-agent bench` to run automated benchmarks against scripted call flows.
+**Connection pooling:** Both Deepgram Flux and TTS providers maintain pre-warmed connection pools (`speech.py` `TranscriberPool`, `voice.py` `VoicePool`) to avoid cold-start latency on each turn.
+
+**Phone abstraction:** `phone.py` defines a pluggable telephony backend. `TwilioPhone` is used in production; `LocalPhone` creates an in-process loopback for Twilio-free local development and benchmarking.
+
+**Simulator:** The `simulator/` directory contains a YAML-configurable call flow server (flows in `simulator/flows/`). Used with `voice-agent bench` to run automated benchmarks.
 
 ## Environment Setup
 
-Copy `shuo/.env.example` to `shuo/.env`. Required variables:
+Copy `.env.example` to `.env` in the repo root. Required variables:
 
 ```
 TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER

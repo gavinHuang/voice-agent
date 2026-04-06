@@ -462,7 +462,7 @@ def _start_ivr_server(port: int, flow_path: Optional[str] = None) -> None:
         os.environ["IVR_CONFIG"] = flow_path
 
     # Deferred import keeps top-level imports lightweight (Phase 3 convention)
-    import ivr.server as ivr_server_mod
+    import simulator.server as ivr_server_mod
 
     config = uvicorn.Config(
         ivr_server_mod.app,

@@ -26,3 +26,6 @@ dependencies = [
 
 [project.scripts]
 voice-agent = "shuo.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["shuo*"]

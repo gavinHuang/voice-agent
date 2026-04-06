@@ -6,7 +6,7 @@ import pytest
 import httpx
 from httpx import AsyncClient, ASGITransport
 
-from ivr.server import app, reload_config
+from simulator.server import app, reload_config
 
 
 SIMPLE_FLOW = """

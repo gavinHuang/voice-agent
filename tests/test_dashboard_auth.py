@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient
 def _make_app():
     """Create a minimal FastAPI app with the dashboard router mounted."""
     app = FastAPI()
-    from dashboard.server import router
+    from monitor.server import router
     app.include_router(router)
     return app
 
@@ -59,7 +59,7 @@ def test_correct_api_key_returns_200(monkeypatch):
     monkeypatch.setenv("DASHBOARD_API_KEY", "test-secret-key")
     app = _make_app()
     # Patch registry to avoid needing a full server setup
-    with patch("dashboard.registry.all_calls", return_value=[]):
+    with patch("monitor.registry.all_calls", return_value=[]):
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/dashboard/calls", headers={"X-API-Key": "test-secret-key"})
     assert response.status_code == 200
@@ -69,7 +69,7 @@ def test_auth_disabled_when_env_var_unset(monkeypatch):
     """When DASHBOARD_API_KEY is unset, GET /dashboard/calls returns 200 (auth disabled)."""
     monkeypatch.delenv("DASHBOARD_API_KEY", raising=False)
     app = _make_app()
-    with patch("dashboard.registry.all_calls", return_value=[]):
+    with patch("monitor.registry.all_calls", return_value=[]):
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/dashboard/calls")
     assert response.status_code == 200
@@ -111,9 +111,9 @@ def test_websocket_accepts_with_valid_token(monkeypatch):
     mock_q = MagicMock()
     mock_q.get = MagicMock(side_effect=Exception("stop-loop"))
 
-    with patch("dashboard.bus.subscribe_global", return_value=mock_q), \
-         patch("dashboard.registry.all_calls", return_value=[]), \
-         patch("dashboard.bus.unsubscribe_global"):
+    with patch("monitor.bus.subscribe_global", return_value=mock_q), \
+         patch("monitor.registry.all_calls", return_value=[]), \
+         patch("monitor.bus.unsubscribe_global"):
         client = TestClient(app)
         try:
             with client.websocket_connect("/dashboard/ws?token=test-secret-key") as ws:
@@ -157,9 +157,9 @@ def test_websocket_open_when_auth_disabled(monkeypatch):
     mock_q = MagicMock()
     mock_q.get = MagicMock(side_effect=Exception("stop-loop"))
 
-    with patch("dashboard.bus.subscribe_global", return_value=mock_q), \
-         patch("dashboard.registry.all_calls", return_value=[]), \
-         patch("dashboard.bus.unsubscribe_global"):
+    with patch("monitor.bus.subscribe_global", return_value=mock_q), \
+         patch("monitor.registry.all_calls", return_value=[]), \
+         patch("monitor.bus.unsubscribe_global"):
         client = TestClient(app)
         try:
             with client.websocket_connect("/dashboard/ws") as ws:
@@ -176,7 +176,7 @@ def test_websocket_open_when_auth_disabled(monkeypatch):
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset the in-process rate limiter state between tests to prevent pollution."""
-    import dashboard.server as srv
+    import monitor.server as srv
     srv._call_limiter._hits.clear()
     yield
     srv._call_limiter._hits.clear()
@@ -194,7 +194,7 @@ def test_rate_limit_allows_up_to_limit(monkeypatch):
     """First CALL_RATE_LIMIT POST /call requests succeed (200 or 500 from Twilio mock)."""
     mock_sid = "CA123"
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
-         patch("dashboard.registry.set_pending"):
+         patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="3")
         payload = {"phone": "+15550001111", "goal": "test"}
         for i in range(3):
@@ -208,7 +208,7 @@ def test_rate_limit_blocks_over_limit(monkeypatch):
     """(CALL_RATE_LIMIT+1)th request returns 429 with Retry-After header."""
     mock_sid = "CA123"
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
-         patch("dashboard.registry.set_pending"):
+         patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="3")
         payload = {"phone": "+15550001111", "goal": "test"}
         # Exhaust the limit
@@ -226,7 +226,7 @@ def test_rate_limit_retry_after_is_numeric(monkeypatch):
     """Retry-After header value in 429 response is a positive integer."""
     mock_sid = "CA123"
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
-         patch("dashboard.registry.set_pending"):
+         patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="2")
         payload = {"phone": "+15550001111", "goal": "test"}
         for _ in range(2):
@@ -242,7 +242,7 @@ def test_call_rate_limit_env_var_respected(monkeypatch):
     """CALL_RATE_LIMIT=2 means 3rd request is blocked."""
     mock_sid = "CA456"
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
-         patch("dashboard.registry.set_pending"):
+         patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="2")
         payload = {"phone": "+15550009999", "goal": "env-var test"}
         # First 2 succeed

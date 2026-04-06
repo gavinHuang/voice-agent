@@ -25,9 +25,9 @@ from shuo.bench import (
     run_benchmark,
 )
 
-# Absolute path to scenarios/example_ivr.yaml — two levels above this file
+# Absolute path to eval/scenarios/example_ivr.yaml — one level above tests/
 _SCENARIOS_PATH = str(
-    Path(__file__).parent.parent.parent / "scenarios" / "example_ivr.yaml"
+    Path(__file__).parent.parent / "eval" / "scenarios" / "example_ivr.yaml"
 )
 
 

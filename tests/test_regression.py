@@ -84,7 +84,7 @@ def test_amd_unknown_was_previously_hanging_up():
 
 def test_registry_set_and_pop_pending():
     """set_pending followed by pop_pending returns the correct goal and metadata."""
-    from dashboard import registry
+    from monitor import registry
     call_sid = "CA_reg_test_001"
     registry._pending.pop(call_sid, None)
 
@@ -98,14 +98,14 @@ def test_registry_set_and_pop_pending():
 
 def test_registry_pop_pending_missing_returns_defaults():
     """pop_pending on an unknown call_sid returns empty defaults (not KeyError)."""
-    from dashboard import registry
+    from monitor import registry
     result = registry.pop_pending("CA_nonexistent_sid")
     assert result == {"phone": "", "goal": "", "ivr_mode": False}
 
 
 def test_registry_pop_pending_removes_entry():
     """After pop_pending, the entry is gone — second pop returns defaults."""
-    from dashboard import registry
+    from monitor import registry
     call_sid = "CA_reg_test_002"
     registry.set_pending(call_sid, phone="+1000000000", goal="test goal")
     registry.pop_pending(call_sid)
@@ -119,7 +119,7 @@ def test_get_goal_falls_back_to_env_var(monkeypatch):
     back to CALL_GOAL env var so the agent still has a goal.
     """
     monkeypatch.setenv("CALL_GOAL", "Fallback goal from env")
-    from dashboard import registry
+    from monitor import registry
     call_sid = "CA_no_pending_sid"
     registry._pending.pop(call_sid, None)
 
@@ -132,7 +132,7 @@ def test_get_goal_falls_back_to_env_var(monkeypatch):
 def test_get_goal_prefers_registry_over_env_var(monkeypatch):
     """Registry goal takes precedence over CALL_GOAL env var."""
     monkeypatch.setenv("CALL_GOAL", "env goal")
-    from dashboard import registry
+    from monitor import registry
     call_sid = "CA_priority_test"
     registry.set_pending(call_sid, phone="+1000000000", goal="registry goal")
 
@@ -303,7 +303,7 @@ def test_dashboard_call_registers_pending_goal(monkeypatch, dashboard_client):
     REG-02: POST /dashboard/call must register goal via registry.set_pending
     so the running server's get_goal() can retrieve it when the call connects.
     """
-    from dashboard import registry
+    from monitor import registry
 
     fake_call_sid = "CA_dashboard_test_001"
 
@@ -329,7 +329,7 @@ def test_dashboard_call_registers_pending_goal(monkeypatch, dashboard_client):
 
 def test_dashboard_call_ivr_mode_sets_flag(monkeypatch, dashboard_client):
     """ivr_mode=True from dashboard must be stored in pending so the agent listens first."""
-    from dashboard import registry
+    from monitor import registry
 
     fake_call_sid = "CA_ivr_mode_test"
 

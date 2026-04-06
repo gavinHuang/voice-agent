@@ -4,11 +4,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SHUO_DIR="$SCRIPT_DIR/shuo"
 
 # Load .env so script-level vars (ports, URLs) are available
-if [ -f "$SHUO_DIR/.env" ]; then
-  set -a; source "$SHUO_DIR/.env"; set +a
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a; source "$SCRIPT_DIR/.env"; set +a
 fi
 
 AGENT_PORT="${PORT:-3040}"
@@ -46,7 +45,7 @@ _wait_for_port() {
 
 cmd_serve() {
   echo "▶  Agent server  (port $AGENT_PORT, ngrok auto)"
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent serve --ngrok
 }
 
@@ -56,7 +55,7 @@ cmd_ivr() {
   trap 'kill $(jobs -p) 2>/dev/null; exit 0' INT TERM
   ngrok http --url="$IVR_NGROK_URL" "$IVR_PORT" &
   sleep 2
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent ivr-serve
 }
 
@@ -70,7 +69,7 @@ cmd_all() {
   sleep 2
 
   echo "   [ivr] starting ivr-serve"
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent ivr-serve &>/tmp/voice-agent-ivr.log &
   _wait_for_port "$IVR_PORT"
 
@@ -81,7 +80,7 @@ cmd_all() {
 
 cmd_softphone() {
   echo "▶  Softphone  (port $AGENT_PORT)"
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent softphone
 }
 
@@ -90,7 +89,7 @@ cmd_call() {
   local goal="${2:-${CALL_GOAL:-}}"
   echo "▶  Calling $phone"
   [ -n "$goal" ] && echo "   Goal: $goal"
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   if [ -n "$goal" ]; then
     voice-agent call "$phone" --goal "$goal" --ngrok
   else
@@ -104,21 +103,21 @@ cmd_local_call() {
   echo "▶  Local call (no Twilio)"
   echo "   Caller: $caller_goal"
   echo "   Callee: $callee_goal"
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent local-call \
     --caller-goal "$caller_goal" \
     --callee-goal "$callee_goal"
 }
 
 cmd_bench() {
-  local dataset="${1:-${IVR_BENCH_DATASET:-$SCRIPT_DIR/scenarios/example_ivr.yaml}}"
+  local dataset="${1:-${IVR_BENCH_DATASET:-$SCRIPT_DIR/eval/scenarios/example_ivr.yaml}}"
   echo "▶  Benchmark  ($dataset)"
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent bench --dataset "$dataset"
 }
 
 cmd_config() {
-  cd "$SHUO_DIR"
+  cd "$SCRIPT_DIR"
   voice-agent config
 }
 

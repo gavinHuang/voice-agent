@@ -11,9 +11,9 @@ import os
 import pytest
 from xml.etree import ElementTree as ET
 
-from ivr.config import parse_config, IVRConfig
-from ivr.engine import TwiMLEngine
-from ivr.server import app, reload_config
+from simulator.config import parse_config, IVRConfig
+from simulator.engine import TwiMLEngine
+from simulator.server import app, reload_config
 
 
 # ── Config validation ──────────────────────────────────────────────────────
@@ -279,8 +279,8 @@ async def test_back_navigation(client_deep):
 async def test_softphone_node():
     """Softphone node should produce a <Dial><Client> response."""
     import yaml
-    from ivr.config import parse_config
-    from ivr.engine import TwiMLEngine
+    from simulator.config import parse_config
+    from simulator.engine import TwiMLEngine
 
     config = parse_config(yaml.safe_load("""
 name: Softphone Test
@@ -307,8 +307,8 @@ nodes:
 async def test_pause_node():
     """Pause node should produce a <Pause> element."""
     import yaml
-    from ivr.config import parse_config
-    from ivr.engine import TwiMLEngine
+    from simulator.config import parse_config
+    from simulator.engine import TwiMLEngine
 
     config = parse_config(yaml.safe_load("""
 name: Pause Test
