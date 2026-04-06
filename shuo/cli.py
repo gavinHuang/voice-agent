@@ -11,6 +11,7 @@ import sys
 import signal
 import threading
 import time
+from pathlib import Path
 
 # Add the project root (parent of the shuo/ package dir) to sys.path so that
 # the sibling packages dashboard/ and ivr/ are importable when running via pipx
@@ -209,8 +210,21 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_n
 
 @cli.command(name="call")
 @click.argument("phone")
-@click.option("--goal", type=str, default=None, help="Goal/instructions for the agent")
-@click.option("--identity", type=str, default=None, help="Agent identity persona")
+@click.option("--goal",             type=str,  default=None, help="Goal/instructions for the agent")
+@click.option("--context",  "context_file",
+              type=click.Path(exists=False), default=None,
+              help="YAML file providing CallContext field values")
+@click.option("--agent-name",       type=str,  default=None, help="Name the agent introduces itself with")
+@click.option("--agent-role",       type=str,  default=None, help="Role the agent describes itself as")
+@click.option("--agent-tone",       type=str,  default=None, help="Tone/style instruction for the agent")
+@click.option("--caller-name",      type=str,  default=None, help="Name of the person being called")
+@click.option("--caller-context",   type=str,  default=None, help="Known facts about the caller")
+@click.option("--constraint",       "constraints",
+              type=str, multiple=True,
+              help="Instruction the agent must follow (repeatable)")
+@click.option("--success-criteria", type=str,  default=None, help="How the agent knows the call succeeded")
+@click.option("--yes", "-y",        is_flag=True, default=False,
+              help="Skip interactive confirmation and dial immediately")
 @click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
               help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically")
 @click.pass_context
@@ -218,13 +232,22 @@ def call_cmd(
     ctx: click.Context,
     phone: str,
     goal: str | None,
-    identity: str | None,
+    context_file: str | None,
+    agent_name: str | None,
+    agent_role: str | None,
+    agent_tone: str | None,
+    caller_name: str | None,
+    caller_context: str | None,
+    constraints: tuple,
+    success_criteria: str | None,
+    yes: bool,
     use_ngrok: bool,
 ) -> None:
     """Initiate an outbound call to PHONE."""
     import uvicorn
     from shuo.web import app
     from shuo.phone import dial_out
+    from shuo.context import CallContext, load_identity_file, build_system_prompt, confirm_context
 
     if use_ngrok:
         agent_port = int(os.getenv("PORT", "3040"))
@@ -236,14 +259,110 @@ def call_cmd(
     _check_env_vars()
 
     cfg = ctx.obj["config"].get("call", {})
-    effective_goal = goal if goal is not None else cfg.get("goal", os.getenv("CALL_GOAL", ""))
-    effective_identity = identity if identity is not None else cfg.get("identity", "")
+    sources: dict = {}
 
-    # Prepend identity to goal when provided
-    if effective_identity:
-        effective_goal = f"You are {effective_identity}. {effective_goal}"
+    # ── 1. Load identity.md (lowest precedence) ──────────────────────
+    identity_fields, identity_src = load_identity_file(Path(os.getcwd()))
+    if identity_src:
+        for fname in identity_fields:
+            sources[fname] = identity_src
 
-    os.environ["CALL_GOAL"] = effective_goal
+    # ── 2. Base defaults: identity.md → config file → env ────────────
+    ctx_fields: dict = {
+        "goal":              cfg.get("goal", os.getenv("CALL_GOAL", "")),
+        "agent_name":        identity_fields.get("agent_name",       "Alex"),
+        "agent_role":        identity_fields.get("agent_role",       "a professional assistant"),
+        "agent_tone":        identity_fields.get("agent_tone",       "friendly and concise"),
+        "agent_background":  identity_fields.get("agent_background"),
+        "caller_name":       None,
+        "caller_context":    None,
+        "constraints":       [],
+        "success_criteria":  None,
+    }
+
+    # ── 3. Context YAML overrides identity / defaults ─────────────────
+    if context_file:
+        if not os.path.exists(context_file):
+            click.echo(f"Error: context file not found: {context_file}", err=True)
+            sys.exit(1)
+        try:
+            file_ctx = CallContext.from_yaml(context_file)
+        except Exception as e:
+            click.echo(f"Error: could not load context file: {e}", err=True)
+            sys.exit(1)
+        yaml_src = os.path.basename(context_file)
+        for fname in ("goal", "agent_name", "agent_role", "agent_tone",
+                      "agent_background", "caller_name", "caller_context",
+                      "constraints", "success_criteria"):
+            val = getattr(file_ctx, fname)
+            default_val = {
+                "goal": "", "agent_name": "Alex",
+                "agent_role": "a professional assistant",
+                "agent_tone": "friendly and concise",
+                "agent_background": None, "caller_name": None,
+                "caller_context": None, "constraints": [], "success_criteria": None,
+            }[fname]
+            if val != default_val:
+                ctx_fields[fname] = val
+                sources[fname] = yaml_src
+
+    # ── 4. Explicit CLI flags (highest precedence) ────────────────────
+    if goal is not None:
+        ctx_fields["goal"] = goal
+        sources.pop("goal", None)
+    if agent_name is not None:
+        ctx_fields["agent_name"] = agent_name
+        sources["agent_name"] = "CLI flag"
+    if agent_role is not None:
+        ctx_fields["agent_role"] = agent_role
+        sources["agent_role"] = "CLI flag"
+    if agent_tone is not None:
+        ctx_fields["agent_tone"] = agent_tone
+        sources["agent_tone"] = "CLI flag"
+    if caller_name is not None:
+        ctx_fields["caller_name"] = caller_name
+        sources["caller_name"] = "CLI flag"
+    if caller_context is not None:
+        ctx_fields["caller_context"] = caller_context
+        sources["caller_context"] = "CLI flag"
+    if constraints:
+        ctx_fields["constraints"] = list(constraints)
+        sources["constraints"] = "CLI flag"
+    if success_criteria is not None:
+        ctx_fields["success_criteria"] = success_criteria
+        sources["success_criteria"] = "CLI flag"
+
+    # ── 5. Build CallContext (goal may be empty — confirm_context handles it) ──
+    if ctx_fields["goal"]:
+        call_ctx = CallContext(
+            goal=ctx_fields["goal"],
+            agent_name=ctx_fields["agent_name"],
+            agent_role=ctx_fields["agent_role"],
+            agent_tone=ctx_fields["agent_tone"],
+            agent_background=ctx_fields["agent_background"],
+            caller_name=ctx_fields["caller_name"],
+            caller_context=ctx_fields["caller_context"],
+            constraints=ctx_fields["constraints"],
+            success_criteria=ctx_fields["success_criteria"],
+        )
+    else:
+        # Goal not yet known — confirm_context will prompt for it
+        call_ctx = CallContext._partial(
+            agent_name=ctx_fields["agent_name"],
+            agent_role=ctx_fields["agent_role"],
+            agent_tone=ctx_fields["agent_tone"],
+            agent_background=ctx_fields["agent_background"],
+            caller_name=ctx_fields["caller_name"],
+            caller_context=ctx_fields["caller_context"],
+            constraints=ctx_fields["constraints"],
+            success_criteria=ctx_fields["success_criteria"],
+        )
+
+    # ── 6. Pre-call confirmation ──────────────────────────────────────
+    call_ctx = confirm_context(call_ctx, yes=yes, sources=sources)
+
+    # ── 7. Store assembled context as CALL_GOAL for the server ────────
+    os.environ["CALL_GOAL"] = build_system_prompt(call_ctx)
 
     def _start_server() -> None:
         config = uvicorn.Config(app, host="0.0.0.0", port=int(os.getenv("PORT", "3040")),

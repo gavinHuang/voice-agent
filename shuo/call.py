@@ -300,6 +300,7 @@ async def run_call(
     transcriber_pool:      Optional["TranscriberPool"]                           = None,
     ivr_mode:              Optional[Callable[[], bool]]                          = None,
     on_dtmf:               Optional[Callable[[str], None]]                       = None,
+    ctx:                   Optional[object]                                      = None,
 ) -> None:
     """
     Drive a single call from connect to disconnect.
@@ -399,7 +400,8 @@ async def run_call(
 
                 goal = (
                     saved["goal"] if saved
-                    else (get_goal(event.call_sid) if get_goal else os.getenv("CALL_GOAL", ""))
+                    else (get_goal(event.call_sid) if get_goal
+                          else (ctx.goal if ctx else os.getenv("CALL_GOAL", "")))
                 )
 
                 if transcriber_pool:
@@ -427,6 +429,7 @@ async def run_call(
                     voice_pool=voice_pool,
                     tracer=tracer,
                     goal=goal,
+                    ctx=ctx if not saved else None,
                     on_token_observed=(
                         (lambda tok: observer({"type": "agent_token", "token": tok}))
                         if observer else None

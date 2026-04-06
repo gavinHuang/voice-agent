@@ -20,6 +20,7 @@ from pydantic_ai.settings import ModelSettings
 
 from .log import ServiceLogger
 from .call import TurnOutcome
+from .context import CallContext, build_system_prompt
 
 log = ServiceLogger("LLM")
 
@@ -185,6 +186,7 @@ class LanguageModel:
         on_token: Callable[[str], Awaitable[None]],
         on_done:  Callable[[], Awaitable[None]],
         goal:     str = "",
+        ctx:      Optional["CallContext"] = None,
     ):
         self._on_token = on_token
         self._on_done  = on_done
@@ -192,9 +194,14 @@ class LanguageModel:
         model = os.getenv("LLM_MODEL", "groq:llama-3.3-70b-versatile")
         self._tools_enabled = _supports_tools(model)
 
+        if ctx is not None:
+            context_suffix = "\n\n" + build_system_prompt(ctx, tools=self._tools_enabled)
+        else:
+            context_suffix = _goal_suffix(goal, self._tools_enabled)
+
         prompt = (
             (_PROMPT_WITH_TOOLS if self._tools_enabled else _PROMPT_TEXT_TAGS)
-            + _goal_suffix(goal, self._tools_enabled)
+            + context_suffix
         )
 
         settings = ModelSettings(

@@ -214,21 +214,21 @@ def test_serve_env_check_fails():
 # =============================================================================
 
 def test_call_invokes_outbound():
-    """call subcommand invokes make_outbound_call with the phone number."""
+    """call subcommand invokes dial_out with the phone number (--yes skips confirmation)."""
     fake_make_call = MagicMock(return_value="CA_FAKE_SID_123")
 
     with _ServerModuleContext(), \
          patch("shuo.phone.dial_out", fake_make_call), \
          patch.dict(os.environ, _FULL_ENV), \
-         patch("shuo.cli.threading.Thread") as mock_thread, \
+         patch("shuo.cli.threading.Thread"), \
          patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
         runner = CliRunner()
-        runner.invoke(cli, ["call", "+15551234567", "--goal", "test goal"])
+        runner.invoke(cli, ["call", "+15551234567", "--goal", "test goal", "--yes"])
         fake_make_call.assert_called_once_with("+15551234567")
 
 
-def test_call_identity_prepended_to_goal():
-    """call with --identity prepends 'You are {identity}.' to goal in CALL_GOAL."""
+def test_call_agent_name_appears_in_call_goal():
+    """call with --agent-name sets the name in the assembled CALL_GOAL prompt."""
     fake_make_call = MagicMock(return_value="SID")
 
     with _ServerModuleContext(), \
@@ -238,9 +238,9 @@ def test_call_identity_prepended_to_goal():
          patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
         runner = CliRunner()
         runner.invoke(cli, ["call", "+15551234567", "--goal", "check balance",
-                             "--identity", "John Smith"])
+                             "--agent-name", "John Smith", "--yes"])
         call_goal = os.environ.get("CALL_GOAL", "")
-        assert "You are John Smith" in call_goal
+        assert "John Smith" in call_goal
         assert "check balance" in call_goal
 
 

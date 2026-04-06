@@ -48,6 +48,7 @@ class Agent:
         voice_pool:        VoicePool,
         tracer:            Tracer,
         goal:              str = "",
+        ctx:               Optional[Any] = None,   # Optional[CallContext]
         on_token_observed: Optional[Callable[[str], None]] = None,
     ):
         self._phone            = phone
@@ -61,6 +62,7 @@ class Agent:
             on_token=self._on_llm_token,
             on_done=self._on_llm_done,
             goal=goal,
+            ctx=ctx,
         )
 
         self._tts:    Optional[object]      = None
