@@ -211,10 +211,14 @@ async def test_token_observer_nonblocking():
     mock_tts = AsyncMock()
     mock_tts.send = AsyncMock()
 
+    mock_llm = MagicMock()
+    mock_llm.is_suppressed_token = MagicMock(return_value=False)
+
     agent = Agent.__new__(Agent)
     agent._on_token_observed = slow_observer
     agent._active = True
     agent._tts = mock_tts
+    agent._llm = mock_llm
     agent._tts_had_text = False
     agent._pending_hangup = False
     agent._got_first_token = True   # skip first-token tracer path

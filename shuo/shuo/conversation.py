@@ -77,7 +77,6 @@ async def run_conversation(
     should_suppress_agent: Optional[Callable[[], bool]] = None,
     on_agent_ready: Optional[Callable[["Agent"], None]] = None,
     get_goal: Optional[Callable[[str], str]] = None,
-    on_hangup: Optional[Callable[[], None]] = None,
     get_saved_state: Optional[Callable[[str], "Awaitable[Optional[dict]]"]] = None,
     tts_pool: Optional[TTSPool] = None,
     flux_pool: Optional[FluxPool] = None,
@@ -299,8 +298,6 @@ async def run_conversation(
                 break
 
             if isinstance(event, HangupRequestEvent):
-                if on_hangup:
-                    on_hangup()  # server bookkeeping
                 await isp.hangup()  # actual hangup via ISP
                 if observer:
                     observer({"type": "stream_stop"})

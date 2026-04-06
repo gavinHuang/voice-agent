@@ -4,11 +4,14 @@ LLM service using pydantic-ai Agent with typed tool calls and iter()-based strea
 Models that support tool calling (e.g. llama-3.3-70b-versatile) use pydantic-ai tools.
 Models that don't (e.g. compound-beta) fall back to a text-tag protocol where the LLM
 emits [DTMF:1], [HOLD], [HOLD_CONTINUE], [HOLD_END], [HANGUP] tags in its text output.
-The caller (Agent) already has a regex-based fallback parser that handles both.
+
+resolve_outcome() interprets both paths — structured tool side-effects and text-tag
+fallbacks — and returns a TurnOutcome value object for the Agent to dispatch.
 """
 
 import os
 import asyncio
+import re
 from dataclasses import dataclass, field
 from typing import Optional, Callable, Awaitable, List
 
@@ -17,6 +20,8 @@ from pydantic_ai.messages import ModelMessage, PartDeltaEvent, TextPartDelta
 from pydantic_ai.settings import ModelSettings
 
 from ..log import ServiceLogger
+from ..prompts import build_system_prompt
+from ..types import TurnOutcome
 
 log = ServiceLogger("LLM")
 
@@ -25,104 +30,41 @@ _LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
 
 
 # =============================================================================
-# SYSTEM PROMPT
+# TEXT-TAG PARSING
+#
+# Two cases handled by the same regexes:
+#   1. Tool-capable models (e.g. Llama 3.3) that sometimes leak raw function-call
+#      syntax as text instead of structured tool calls.
+#   2. No-tool models (e.g. compound-beta) that use the deliberate text-tag protocol:
+#      [DTMF:1], [HOLD], [HOLD_CONTINUE], [HOLD_END], [HANGUP]
 # =============================================================================
 
-SYSTEM_PROMPT = """You are an AI agent making an outbound phone call on behalf of the caller. You are NOT an assistant to the person who picks up — you are a representative calling with a specific purpose.
-
-Keep responses concise and conversational; they will be spoken aloud. No markdown, bullet points, or formatting. Be polite, direct, and professional.
-
-When you receive [CALL_STARTED], the call just connected and the other party answered. Deliver your opening line — introduce yourself briefly and state your purpose.
-
-You have access to five tools for call control. Use them as described below:
-
-- press_dtmf(digit): Press a key on the phone keypad for IVR menu navigation. When you hear a recorded menu listing options (e.g. "press 2 for support"), call press_dtmf("2") with NO accompanying text — do not speak, just send the digit.
-- signal_hold(): Call this when you detect hold music or an automated hold message has started.
-- signal_hold_continue(): Call this when you are still on hold and hear continued hold music. Do NOT produce any text when calling this tool — a pure tool call with no text is the correct response.
-- signal_hold_end(): Call this when a real person has returned from hold and is speaking.
-- signal_hangup(): Call this to end the call. This is a two-step process — first confirm with the other party, then call this tool in your NEXT response after they confirm.
-
-When you successfully verify a caller's identity or credentials, always explicitly confirm it using the word "verified" — for example: "I've verified your identity" or "Your account has been verified." Then immediately proceed to complete the actual requested task.
-
-When you complete any action, state it in PAST TENSE using a confirmation that MUST include the exact action word. Required patterns by action type:
-- Cancellation (cancel/remove item/reservation): MUST say "successfully cancelled" AND MUST say "reservation" when cancelling travel — e.g., "Your reservation has been successfully cancelled." Never say only "Your flight/booking has been cancelled" — always use "reservation" for travel cancellations.
-- Flight change (changing to a different flight): MUST explicitly say "successfully cancelled" AND "reservation" — e.g., "Your original flight has been successfully cancelled. Your reservation has been updated with the new flight details." Both phrases must appear even for a change (not just outright cancellation).
-- Order/reservation modification or update: MUST say "Your reservation/order has been successfully updated" — always use "successfully updated" (not just "updated"). Also say "confirmed" — e.g., "Your reservation has been successfully updated and confirmed."
-- Return: MUST say "return" AND "refund" — e.g., "Your return has been processed. A refund will be issued to your payment method."
-- Exchange: MUST say "exchange" AND "order" — e.g., "Your exchange has been confirmed. Your new order will ship shortly."
-- Address update: MUST say "address" AND "updated" — e.g., "Your address has been updated."
-- Payment update: MUST say "payment" AND "order" — e.g., "Your payment method for your order has been updated."
-- Reinstate/undo cancellation: MUST say "reinstated" AND "order" — e.g., "Your order has been reinstated."
-After completing ALL actions, ALWAYS include "That's all done and taken care of for you" in the SAME response as your task confirmation — before asking "does that work for you?". For example: "[Action confirmed]. That's all done and taken care of for you. Does that work for you?" This phrase is mandatory and must appear in the confirmation turn, not deferred to a later turn.
-
-CRITICAL RULE for ending calls — two steps over TWO separate responses:
-Step 1: When your goal is FULLY accomplished — meaning ALL requested tasks are complete, not just preliminary steps like identity verification — summarise or confirm the details and ask "does that work for you?" or similar. STOP and wait for their reply. Do NOT say goodbye.
-Step 2: Only in your NEXT response, after confirmation, say a single short closing sentence (e.g. "Great, thank you. Goodbye!") and call signal_hangup().
-NEVER combine step 1 and step 2 in the same response.
-
-When you receive a [HOLD_CHECK] message, you are currently on hold:
-- If the transcription is hold music or automated waiting — call signal_hold_continue() with NO spoken text.
-- If a real person has started speaking — call signal_hold_end() and then respond normally.
-
-Pure tool-call turns (no text) are valid and expected for DTMF navigation and hold_continue."""
+_FC_SUPPRESS_RE = re.compile(
+    r'press_dtmf|signal_hold|signal_hangup|function_calls|<function|function>|invoke>'
+    r'|\[DTMF:[0-9*#]\]|\[HOLD(?:_CONTINUE|_END)?\]|\[HANGUP\]',
+    re.IGNORECASE,
+)
+_DTMF_TOOL_RE = re.compile(
+    r'press_dtmf\s*\(\s*["\']?([0-9*#])["\']?\s*\)',
+    re.IGNORECASE,
+)
+_DTMF_TAG_RE = re.compile(r'\[DTMF:([0-9*#])\]', re.IGNORECASE)
 
 
-# System prompt variant for models that do not support tool calling.
-# Actions are expressed as inline tags that the caller parses from text output.
-SYSTEM_PROMPT_NO_TOOLS = """You are an AI agent making an outbound phone call on behalf of the caller. You are NOT an assistant to the person who picks up — you are a representative calling with a specific purpose.
-
-Keep responses concise and conversational; they will be spoken aloud. No markdown, bullet points, or formatting. Be polite, direct, and professional.
-
-When you receive [CALL_STARTED], the call just connected and the other party answered. Deliver your opening line — introduce yourself briefly and state your purpose.
-
-You control the call using action tags embedded in your response. Emit ONLY the tag (no surrounding text) for silent actions:
-
-- To press a DTMF key:        [DTMF:1]  (replace 1 with the digit, e.g. [DTMF:2] for option 2)
-- To signal hold music:       [HOLD]
-- To continue waiting on hold:[HOLD_CONTINUE]
-- To signal hold has ended:   [HOLD_END]
-- To hang up after goodbye:   [HANGUP]
-
-IVR NAVIGATION RULE: When you hear a recorded menu (e.g. "Press 1 for sales"), respond with ONLY the tag and nothing else. For example: [DTMF:1]
-
-When you successfully verify a caller's identity or credentials, always explicitly confirm it using the word "verified" — for example: "I've verified your identity." Then immediately proceed to complete the actual requested task.
-
-CRITICAL RULE for ending calls — two steps over TWO separate responses:
-Step 1: When your goal is FULLY accomplished — all requested tasks complete, not just preliminary steps like identity verification — confirm the details and ask "does that work for you?". STOP and wait.
-Step 2: Say a short goodbye then emit [HANGUP] on its own line.
-
-When you receive a [HOLD_CHECK] message:
-- If still on hold: respond with only [HOLD_CONTINUE]
-- If a person is speaking: respond with [HOLD_END] then reply normally."""
+def _dtmf_findall(text: str) -> list:
+    return _DTMF_TOOL_RE.findall(text) or _DTMF_TAG_RE.findall(text)
 
 
-def _model_supports_tools(model_string: str) -> bool:
-    """Return False for models known not to support tool/function calling."""
-    no_tool_models = ("compound",)
-    m = model_string.lower()
-    return not any(name in m for name in no_tool_models)
+_FAREWELL_PHRASES = (
+    "goodbye", "good bye", "bye bye", "bye-bye", "farewell",
+    "have a good", "have a great", "have a nice", "take care",
+    "talk soon", "speak soon", "all the best", "best of luck",
+)
 
 
-def _build_goal_suffix(goal: str, tools_enabled: bool) -> str:
-    """Build the goal-specific system prompt suffix. Returns '' when goal is empty."""
-    if not goal:
-        return ""
-    if tools_enabled:
-        return (
-            f"\n\nYour goal for this call: {goal}\n"
-            "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-            "Once accomplished, confirm details and STOP — wait for their reply. "
-            "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
-            "IVR NAVIGATION RULE: When you hear a recorded menu listing options, "
-            "call press_dtmf() with ONLY the digit — no words, no explanation."
-        )
-    return (
-        f"\n\nYour goal for this call: {goal}\n"
-        "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-        "Once accomplished, confirm details and STOP — wait for their reply. "
-        "Only after they confirm, say goodbye and emit [HANGUP].\n"
-        "IVR NAVIGATION RULE: When you hear a recorded menu, emit ONLY the [DTMF:X] tag."
-    )
+def _looks_like_farewell(text: str) -> bool:
+    t = text.lower()
+    return any(phrase in t for phrase in _FAREWELL_PHRASES)
 
 
 # =============================================================================
@@ -135,9 +77,6 @@ class LLMTurnContext:
 
     Tools mutate this object directly. LLMService reads it after the run
     to determine what events to fire.
-
-    Note: goal_suffix was removed — it is a per-instance constant baked into
-    the system prompt at LLMService.__init__ time, not a per-turn side effect.
     """
     dtmf_queue: List[str] = field(default_factory=list)
     hold_start: bool = False
@@ -160,7 +99,7 @@ class LLMService:
 
     For models that don't support tool calling (e.g. compound-beta), tools are
     omitted and the model uses text tags ([DTMF:X], [HANGUP], etc.) instead.
-    The Agent layer parses these via its existing text-fallback regexes.
+    resolve_outcome() handles both paths via regex fallback.
     """
 
     def __init__(
@@ -173,14 +112,10 @@ class LLMService:
         self._on_done = on_done
 
         _model_string = os.getenv("LLM_MODEL", "groq:llama-3.3-70b-versatile")
-        self._tools_enabled = _model_supports_tools(_model_string)
 
-        base_prompt = SYSTEM_PROMPT if self._tools_enabled else SYSTEM_PROMPT_NO_TOOLS
-
-        # Bake the full system prompt (base + goal suffix) at construction time.
-        # Goal is a per-instance constant — it does not belong in LLMTurnContext
-        # which is a per-turn side-effect container.
-        _full_system_prompt = base_prompt + _build_goal_suffix(goal, self._tools_enabled)
+        # Build full system prompt and discover tool support in one call.
+        # Goal is a per-instance constant — baked here, not injected per turn.
+        _full_system_prompt, self._tools_enabled = build_system_prompt(goal, _model_string)
 
         _model_settings = ModelSettings(
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "500")),
@@ -193,12 +128,10 @@ class LLMService:
             model_settings=_model_settings,
         )
 
-        # Register static system prompt (goal suffix already included)
         @self._agent.system_prompt
         def _system_prompt(ctx: RunContext[LLMTurnContext]) -> str:
             return _full_system_prompt
 
-        # Register tools only for models that support them
         if self._tools_enabled:
             @self._agent.tool
             async def press_dtmf(ctx: RunContext[LLMTurnContext], digit: str) -> str:
@@ -259,6 +192,80 @@ class LLMService:
     def set_history(self, messages: List[ModelMessage]) -> None:
         """Replace conversation history (used for resuming after take-over)."""
         self._history = list(messages)
+
+    def is_suppressed_token(self, token: str) -> bool:
+        """True if this token should NOT be forwarded to TTS.
+
+        Detects raw function-call syntax that Llama 3.3 sometimes leaks as
+        plain text — e.g. "<function>press_dtmf...</function>". These are
+        accumulated in turn_text for fallback parsing but must not be spoken.
+        """
+        return bool(_FC_SUPPRESS_RE.search(token))
+
+    def resolve_outcome(self, turn_text: str, tts_had_text: bool) -> TurnOutcome:
+        """
+        Interpret this turn's side-effects into a TurnOutcome routing decision.
+
+        Reads tool results from the completed turn_context, then applies regex
+        fallback parsing for function-call leakage (Llama 3.3) and the
+        deliberate text-tag protocol used by no-tool models (compound-beta).
+
+        Priority order:
+          1. hold_continue  → silent done (skip TTS)
+          2. dtmf_digits    → send digit, suppress speech
+          3. has_speech     → flush TTS
+          4. (else)         → empty turn, silent done
+        """
+        ctx = self._turn_ctx
+
+        dtmf_list = list(ctx.dtmf_queue)
+        hold_continue = ctx.hold_continue
+        hold_start = ctx.hold_start
+        hold_end = ctx.hold_end
+        hangup = ctx.hangup_pending
+
+        # Fallback: parse text tags when raw function-call syntax was detected.
+        if _FC_SUPPRESS_RE.search(turn_text):
+            t = turn_text.lower()
+            if not dtmf_list:
+                text_dtmf = _dtmf_findall(turn_text)
+                if text_dtmf:
+                    log.info(f"Fallback DTMF parsed from text: {text_dtmf}")
+                    dtmf_list = text_dtmf
+            if not dtmf_list:
+                if not hold_continue and ('signal_hold_continue' in t or '[hold_continue]' in t):
+                    log.info("Fallback hold_continue detected in text")
+                    hold_continue = True
+                if not hold_start and (
+                    'signal_hold(' in t or
+                    ('[hold]' in t and '[hold_continue]' not in t and '[hold_end]' not in t)
+                ):
+                    log.info("Fallback hold_start detected in text")
+                    hold_start = True
+                if not hold_end and ('signal_hold_end' in t or '[hold_end]' in t):
+                    log.info("Fallback hold_end detected in text")
+                    hold_end = True
+            if not hangup and ('signal_hangup' in t or '[hangup]' in t):
+                log.info("Fallback hangup detected in text")
+                hangup = True
+
+        dtmf_digits = "".join(dtmf_list) if dtmf_list else None
+
+        # Farewell fallback — LLM said goodbye but forgot to call signal_hangup().
+        if not hangup and dtmf_digits is None and _looks_like_farewell(turn_text):
+            log.info("Farewell detected without signal_hangup() — auto-hanging up after audio")
+            hangup = True
+
+        has_speech = tts_had_text and not hold_continue and dtmf_digits is None
+
+        return TurnOutcome(
+            dtmf_digits=dtmf_digits,
+            hold_continue=hold_continue,
+            emit_hold_start=hold_start,
+            emit_hold_end=hold_end,
+            hangup=hangup,
+            has_speech=has_speech,
+        )
 
     async def start(self, user_message: str) -> None:
         """Start generating a response."""
