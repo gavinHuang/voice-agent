@@ -10,11 +10,16 @@ The agent listens with Deepgram Flux, replies with Groq LLaMA 3.3, and speaks wi
 
 ```
 voice-agent/
-  shuo/               # Core voice agent framework + FastAPI server
-  dashboard/          # Supervisor dashboard (UI, call registry, event bus)
-  ivr/                # IVR mock server (config-driven, YAML call flows)
-  softphone/          # Browser softphone (static, no server required)
-  client/             # Alternate browser softphone for testing
+  shuo/               # Core voice agent framework (Python package)
+  monitor/            # Supervisor dashboard (UI, call registry, event bus)
+  simulator/          # IVR mock server (config-driven, YAML call flows)
+  ui/                 # Browser softphone (static, no server required)
+  eval/               # Benchmark datasets, scenarios, and reports
+  tests/              # Test suite (133 tests)
+  scripts/            # Analysis and visualization scripts
+  docs/               # Project documentation
+  specs/              # API and design specs
+  assets/             # Architecture diagrams
   run.sh              # Dev shortcuts — see Quick Reference below
   make_call.py        # One-shot outbound call script
   hangup_all.py       # Utility to terminate all active Twilio calls
@@ -27,7 +32,7 @@ voice-agent/
 ### Install
 
 ```bash
-pipx install -e ./shuo   # installs voice-agent globally (editable)
+pipx install -e .   # installs voice-agent globally (editable)
 ```
 
 ### `run.sh` — common workflows
@@ -40,7 +45,7 @@ pipx install -e ./shuo   # installs voice-agent globally (editable)
 ./run.sh call +61400000000           # outbound call (uses CALL_GOAL from .env)
 ./run.sh call +61400000000 "Book an appointment for Monday"
 ./run.sh local-call                  # two LLM agents talk locally — no Twilio
-./run.sh bench                       # run IVR benchmark (scenarios/example_ivr.yaml)
+./run.sh bench                       # run IVR benchmark (eval/scenarios/example_ivr.yaml)
 ./run.sh config                      # show all config (API keys masked)
 ./run.sh stop                        # kill agent + IVR servers by port
 ./run.sh logs                        # tail agent log
@@ -55,7 +60,7 @@ voice-agent call <phone> [--goal "..."] [--identity "..."] [--ngrok]
 voice-agent ivr-serve [--port N] [--ngrok] [--ivr-config flows/my.yaml]
 voice-agent softphone [--ngrok] [--no-browser]
 voice-agent local-call [--caller-goal "..."] [--callee-goal "..."]
-voice-agent bench --dataset scenarios/example_ivr.yaml
+voice-agent bench --dataset eval/scenarios/example_ivr.yaml
 voice-agent config
 ```
 
@@ -92,10 +97,10 @@ Twilio webhook for IVR phone number → `https://jessi-foxlike-brielle.ngrok-fre
 
 ```bash
 # Install the CLI globally
-pipx install -e ./shuo
+pipx install -e .
 
 # Copy and fill in your keys
-cp shuo/.env.example shuo/.env
+cp .env.example .env
 
 # Verify config
 ./run.sh config
@@ -107,7 +112,7 @@ The `--ngrok` flag (or `run.sh serve/ivr/all`) starts ngrok automatically and se
 
 ## Configuration
 
-All config lives in `shuo/.env`:
+All config lives in `.env`:
 
 | Variable | Required | Description |
 |---|---|---|
@@ -169,7 +174,7 @@ Twilio ── WebSocket (μ-law 8kHz audio) ──► FastAPI /ws
                                             Caller hears
 ```
 
-Everything streams end-to-end. LLM tokens feed TTS immediately; TTS audio feeds Twilio immediately. Barge-in cancels the agent pipeline instantly. When the agent emits `[HANGUP]` after completing its goal, the call is terminated via the Twilio REST API.
+Everything streams end-to-end. LLM tokens feed TTS immediately; TTS audio feeds Twilio immediately. Barge-in cancels the agent pipeline instantly. When the agent's tool call signals hangup after completing its goal, the call is terminated via the Twilio REST API.
 
 See [shuo/README.md](shuo/README.md) for the framework internals — state machine, architecture diagram, and project structure.
 
@@ -177,7 +182,7 @@ See [shuo/README.md](shuo/README.md) for the framework internals — state machi
 
 ## Dashboard
 
-The supervisor dashboard lives at `GET /dashboard` and is served by the `dashboard/` module.
+The supervisor dashboard lives at `GET /dashboard` and is served by the `monitor/` module.
 
 ### Placing a call
 
@@ -234,15 +239,15 @@ The agent can navigate automated phone menus (IVR / interactive voice response) 
 ### How it works
 
 1. Set **IVR Mode** in the dashboard when placing a call — suppresses the opening greeting so the agent listens first
-2. The LLM hears the menu prompt and replies with a marker only, e.g. `[DTMF:2]`
+2. The LLM calls the `press_dtmf` tool with the digit to press
 3. The server redirects the call to `/twiml/ivr-dtmf?digit=2`, which sends the real DTMF tone to the remote party via `<Play digits="2"/>`
 4. The stream reconnects, the agent's conversation history is preserved, and it continues listening for the next menu level
 
 This uses the Twilio REST redirect mechanism rather than in-band audio, so the DTMF reliably reaches the IVR's `<Gather>` element regardless of codec or audio path.
 
-### IVR mock server (`ivr/`)
+### IVR mock server (`simulator/`)
 
-The `ivr/` module is a standalone FastAPI server that simulates a configurable IVR system. Use it for local testing without needing a real phone system.
+The `simulator/` module is a standalone FastAPI server that simulates a configurable IVR system. Use it for local testing without needing a real phone system.
 
 #### End-to-end setup
 
@@ -286,9 +291,7 @@ curl -X POST http://localhost:3040/dashboard/call \
   }'
 ```
 
-The agent will call the IVR number, listen to the menu, press the right keys with `[DTMF:N]`, and navigate to the answer.
-
-**Configuration — `ivr/flows/example.yaml`:**
+**Configuration — `simulator/flows/example.yaml`:**
 
 ```yaml
 name: My IVR
@@ -364,7 +367,7 @@ nodes:
 **Tests:**
 
 ```bash
-python -m pytest ivr/tests/ -v
+python -m pytest simulator/tests/ -v
 ```
 
 24 tests covering config parsing, TwiML rendering, routing logic, and full call flow simulation. All run without network access.
@@ -373,7 +376,7 @@ python -m pytest ivr/tests/ -v
 
 ## Browser softphone
 
-`softphone/phone.html` is a static HTML page that registers as a Twilio WebRTC client. Use it to answer calls from the agent (for testing) or to act as an IVR operator.
+`ui/phone.html` is a static HTML page that registers as a Twilio WebRTC client. Use it to answer calls from the agent (for testing) or to act as an IVR operator.
 
 - Fetches a Twilio Access Token from `/token` (shuo server) or `/ivr/token` (IVR server)
 - Requires HTTPS — ngrok provides this automatically
@@ -383,50 +386,40 @@ Open it at `https://your-ngrok-url/phone`.
 
 ---
 
-## Agent markers
+## Agent tool calls
 
-The LLM can embed control markers in its response. The `MarkerScanner` strips them before TTS so they are never spoken aloud.
+The LLM uses pydantic-ai typed tool calls to control call flow. No text markers are embedded in speech.
 
-| Marker | Trigger | Effect |
-|---|---|---|
-| `[DTMF:N]` | LLM output | Send DTMF digit N via Twilio REST API |
-| `[HOLD]` | LLM output | Enter hold mode (suppress barge-in) |
-| `[HOLD_CONTINUE]` | LLM output | Still on hold — skip TTS, end turn silently |
-| `[HOLD_END]` | LLM output | Exit hold mode, resume normal conversation |
-| `[HANGUP]` | LLM output | After playback completes, terminate the call |
+| Tool | Effect |
+|---|---|
+| `press_dtmf(digit)` | Send DTMF digit N via Twilio REST API |
+| `go_on_hold()` | Enter hold mode (suppress barge-in) |
+| `signal_hangup()` | After playback completes, terminate the call |
 
-Hold detection is automatic: when the agent is placed on hold by the callee, Deepgram continues transcribing the hold music / automated messages. The agent receives `[HOLD_CHECK]` prompts and responds with `[HOLD_CONTINUE]` until a real person returns.
+Hold detection is automatic: when the agent is placed on hold by the callee, Deepgram continues transcribing the hold music / automated messages. The agent detects this via `go_on_hold()` and stays silent until a real person returns.
 
 ---
 
 ## Shuo framework internals
 
-The `shuo/` module is the core framework. See [shuo/README.md](shuo/README.md) for a full architecture diagram.
+The `shuo/` package is the core framework. See [shuo/README.md](shuo/README.md) for a full architecture diagram.
 
-### Key files
+### Key modules
 
 ```
-shuo/shuo/
-  types.py              # Immutable state, events, actions
-  state.py              # Pure state machine — process_event() ~30 lines
-  conversation.py       # Main event loop (receive → update → dispatch)
-  agent.py              # LLM → TTS → Player pipeline; owns history
-  log.py                # Colored terminal logging
-  tracer.py             # Per-turn latency tracing (saves JSON to /tmp/shuo/)
-  server.py             # FastAPI server — all HTTP/WS endpoints
-
-  services/
-    flux.py             # Deepgram Flux (always-on STT + turn detection)
-    flux_pool.py        # Pre-warmed Deepgram connection pool
-    llm.py              # Groq LLaMA streaming with conversation history
-    tts.py              # TTS provider factory (elevenlabs / kokoro / fish)
-    tts_elevenlabs.py   # ElevenLabs WebSocket streaming TTS
-    tts_kokoro.py       # Local Kokoro-82M TTS (zero API cost)
-    tts_fish.py         # Fish Audio S2 self-hosted TTS
-    tts_pool.py         # Pre-warmed TTS connection pool
-    player.py           # Async audio player → Twilio WebSocket
-    dtmf.py             # DTMF tone generator (μ-law 8kHz)
-    twilio_client.py    # Outbound call + WebSocket message parsing
+shuo/
+  call.py             # Events, actions, state (CallState), step(), run_call()
+  agent.py            # LLM → TTS → Player pipeline; owns conversation history
+  language.py         # LanguageModel (Groq streaming, pydantic-ai tools)
+  speech.py           # Transcriber + TranscriberPool (Deepgram Flux)
+  voice.py            # VoicePool + AudioPlayer + dtmf_tone()
+  voice_elevenlabs.py # ElevenLabs WebSocket streaming TTS
+  voice_kokoro.py     # Local Kokoro-82M TTS (zero API cost)
+  voice_fish.py       # Fish Audio S2 self-hosted TTS
+  phone.py            # TwilioPhone + LocalPhone + dial_out()
+  web.py              # FastAPI server — all HTTP/WS endpoints
+  log.py              # Colored terminal logging
+  tracer.py           # Per-turn latency tracing (saves JSON to /tmp/shuo/)
 ```
 
 ### TTS providers
@@ -489,11 +482,25 @@ python make_call.py +61400000000
 
 ### `restart.sh`
 
-Kills whatever is running on port 3040 and restarts `shuo/main.py` with the Kokoro venv. Useful during local development.
+Kills whatever is running on port 3040 and restarts `main.py` with the Kokoro venv. Useful during local development.
 
 ```bash
 bash restart.sh
 ```
+
+---
+
+## Tests
+
+```bash
+# Core tests (pure, no I/O, ~0.03s)
+python -m pytest tests/ -v
+
+# Simulator integration tests (no network, ~1s)
+python -m pytest simulator/tests/ -v
+```
+
+133/133 tests pass.
 
 ---
 
@@ -509,22 +516,10 @@ bash restart.sh
 
 ## Deployment (Railway)
 
-The `shuo/Procfile` is already configured:
+The `Procfile` is already configured:
 
 ```
-web: uvicorn shuo.server:app --host 0.0.0.0 --port $PORT
+web: python main.py
 ```
 
 Set all environment variables in Railway's dashboard. Set `TWILIO_PUBLIC_URL` to your Railway deployment URL. No ngrok needed in production.
-
----
-
-## Development
-
-```bash
-# Unit tests (shuo core — pure, no I/O, ~0.03s)
-cd shuo && python -m pytest tests/ -v
-
-# IVR integration tests (no network, ~1s)
-python -m pytest ivr/tests/ -v
-```

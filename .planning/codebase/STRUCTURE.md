@@ -1,45 +1,35 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-03-18
+**Analysis Date:** 2026-04-06 (updated after greenfield module refactor + directory restructure)
 
 ## Directory Layout
 
 ```
 voice-agent/
-├── shuo/                    # Core voice agent framework + FastAPI server
-│   ├── shuo/                # Main package
-│   │   ├── __init__.py
-│   │   ├── types.py         # Immutable event/action/state definitions
-│   │   ├── state.py         # Pure state machine (30 lines, (S,E) -> (S,A))
-│   │   ├── conversation.py  # Main per-call event loop
-│   │   ├── agent.py         # LLM→TTS→Player pipeline; owns history
-│   │   ├── server.py        # FastAPI app, endpoints, pool warmup
-│   │   ├── log.py           # Colored logging
-│   │   ├── tracer.py        # Per-turn latency instrumentation
-│   │   └── services/        # Pluggable I/O services
-│   │       ├── __init__.py
-│   │       ├── llm.py       # Groq LLM with streaming & history
-│   │       ├── flux.py      # Deepgram Flux STT + turn detection
-│   │       ├── flux_pool.py # Pre-warmed Deepgram pool
-│   │       ├── tts.py       # TTS provider factory (dispatch layer)
-│   │       ├── tts_elevenlabs.py   # Cloud TTS (best quality)
-│   │       ├── tts_kokoro.py       # Local Kokoro-82M TTS
-│   │       ├── tts_fish.py         # Fish Audio S2 self-hosted
-│   │       ├── tts_pool.py  # Pre-warmed TTS pool (any provider)
-│   │       ├── player.py    # Audio frame → Twilio WebSocket
-│   │       ├── dtmf.py      # DTMF μ-law tone generator
-│   │       └── twilio_client.py    # Outbound calls + message parsing
-│   ├── main.py              # Entry point: CLI to make calls
-│   ├── requirements.txt      # Python dependencies
-│   ├── Procfile             # Railway deployment config
-│   └── README.md            # Shuo framework docs
-├── dashboard/               # Supervisor monitoring + call control
+├── shuo/                    # Core voice agent framework (Python package)
+│   ├── __init__.py
+│   ├── call.py              # Events, actions, CallState, step(), run_call()
+│   ├── agent.py             # LLM→TTS→Player pipeline; owns history
+│   ├── language.py          # LanguageModel (Groq streaming + pydantic-ai tools)
+│   ├── speech.py            # Transcriber + TranscriberPool (Deepgram Flux)
+│   ├── voice.py             # VoicePool + AudioPlayer + dtmf_tone()
+│   ├── voice_elevenlabs.py  # ElevenLabs WebSocket streaming TTS
+│   ├── voice_kokoro.py      # Local Kokoro-82M TTS
+│   ├── voice_fish.py        # Fish Audio S2 self-hosted TTS
+│   ├── phone.py             # TwilioPhone + LocalPhone + dial_out()
+│   ├── web.py               # FastAPI app, endpoints, pool warmup
+│   ├── cli.py               # Click CLI (serve, call, bench, local-call, …)
+│   ├── bench.py             # IVR benchmark runner
+│   ├── tracer.py            # Per-turn latency instrumentation
+│   ├── log.py               # Colored logging
+│   └── ttft.py              # TTFT benchmark endpoint
+├── monitor/                 # Supervisor monitoring + call control
 │   ├── __init__.py
 │   ├── server.py            # FastAPI router (all /dashboard/* routes)
 │   ├── registry.py          # Active call store (call_id → metadata)
 │   ├── bus.py               # Event bus (per-call + global queues)
 │   └── app.html             # Supervisor UI (served from /dashboard)
-├── ivr/                     # YAML-driven mock phone system (test server)
+├── simulator/               # YAML-driven mock phone system (test server)
 │   ├── __init__.py
 │   ├── main.py              # Uvicorn entry point
 │   ├── server.py            # FastAPI app, TwiML endpoints
@@ -51,13 +41,34 @@ voice-agent/
 │       ├── __init__.py
 │       ├── conftest.py      # Pytest fixtures
 │       └── test_ivr.py      # Config, routing, TwiML generation tests
-├── softphone/               # Static browser softphone
+├── ui/                      # Browser softphone (static)
 │   └── phone.html           # WebRTC client for Twilio SDK
-├── client/                  # Alternate browser softphone
-│   └── (testing client for softphone)
+├── eval/                    # Benchmark data, scenarios, and reports
+│   ├── data/                # Benchmark datasets (ABCD, MultiWOZ, TauBench)
+│   ├── scenarios/           # YAML scenario files for voice-agent bench
+│   └── reports/             # Benchmark run results
+├── tests/                   # Core test suite (133 tests)
+│   ├── __init__.py
+│   ├── conftest.py          # Adds project root to sys.path
+│   ├── test_update.py       # State machine and event handling tests
+│   ├── test_agent.py        # Agent pipeline tests
+│   ├── test_bench.py        # Benchmark runner tests
+│   ├── test_bug_fixes.py    # Race condition and watchdog tests
+│   ├── test_cli.py          # CLI command tests
+│   ├── test_dashboard_auth.py  # Dashboard auth + rate limiting tests
+│   ├── test_isp.py          # Phone abstraction tests
+│   ├── test_ivr_barge_in.py # IVR barge-in suppression tests
+│   ├── test_regression.py   # End-to-end regression tests
+│   └── test_webhook_security.py  # Twilio signature + trace rotation tests
+├── docs/                    # Project documentation
+├── specs/                   # API and design specs (openspec format)
+├── assets/                  # Architecture diagrams
+├── scripts/                 # Analysis and visualization scripts
 ├── .planning/               # GSD planning documents
 │   └── codebase/            # Architecture, structure, conventions, testing docs
-├── README.md                # Main project overview
+├── main.py                  # Entry point: start server, optional outbound call
+├── pyproject.toml           # Package config + CLI entry point
+├── .env.example             # Environment variable template
 ├── make_call.py             # One-shot CLI script: dial number
 ├── hangup_all.py            # Utility: terminate all Twilio calls
 └── restart.sh               # Dev script: kill :3040 and restart
@@ -65,30 +76,36 @@ voice-agent/
 
 ## Directory Purposes
 
-**shuo/shuo/:**
-- Purpose: Core voice agent framework—all logic for handling calls, STT, LLM, TTS, state management
+**shuo/:**
+- Purpose: Core voice agent framework — all logic for handling calls, STT, LLM, TTS, state management
 - Contains: Pure state machine, streaming I/O services, conversation loop, agent pipeline
-- Key files: `types.py`, `state.py`, `conversation.py`, `agent.py`, `server.py`
+- Key files: `call.py` (state machine + event loop), `agent.py` (response pipeline), `web.py` (HTTP/WS server)
 
-**shuo/shuo/services/:**
-- Purpose: Pluggable I/O abstractions for Deepgram, Groq, TTS providers, Twilio
-- Contains: One service module per external API/local process
-- Pattern: Each service is a class with `async start()`, callbacks, lifecycle management
-
-**dashboard/:**
+**monitor/:**
 - Purpose: Real-time supervisor interface for monitoring and controlling live calls
 - Contains: FastAPI router, event broadcasting, call registry, HTML UI
 - Key files: `server.py` (endpoints), `registry.py` (state), `bus.py` (event pub/sub), `app.html` (UI)
 
-**ivr/:**
+**simulator/:**
 - Purpose: Test/mock server simulating an automated phone system (IVR) via TwiML
 - Contains: Config loader (YAML), TwiML engine, node type handlers, browser softphone token generation
 - Used for: Local testing of agent's DTMF navigation before integrating with real IVRs
 
-**softphone/, client/:**
-- Purpose: Browser-based Twilio WebRTC clients for answering calls and supervisor takeover
+**ui/:**
+- Purpose: Browser-based Twilio WebRTC client for answering calls and supervisor takeover
 - Contains: Static HTML + JavaScript using Twilio SDK
 - Pattern: Fetch access token from server (`/token` or `/ivr/token`), register with Twilio, handle calls
+
+**tests/:**
+- Purpose: Core unit and integration tests for the shuo package
+- Contains: 133 tests covering state machine, agent pipeline, CLI, security, benchmarks
+- Run with: `python -m pytest tests/ -v`
+
+**eval/:**
+- Purpose: Benchmark infrastructure — datasets, scenario YAML files, and run reports
+- data/: Raw benchmark datasets (ABCD, MultiWOZ, TauBench airline/retail)
+- scenarios/: YAML files consumed by `voice-agent bench`
+- reports/: JSON + Markdown reports from benchmark runs
 
 **.planning/codebase/:**
 - Purpose: GSD codebase mapping documents (generated by `/gsd:map-codebase`)
@@ -98,110 +115,103 @@ voice-agent/
 ## Key File Locations
 
 **Entry Points:**
-- `shuo/main.py`: CLI script to make a single outbound call
-- `shuo/shuo/server.py`: FastAPI app (started by uvicorn in production or main.py)
-- `ivr/main.py`: IVR mock server entry point
+- `main.py`: Start server; optionally make outbound call (CLI or direct)
+- `shuo/web.py`: FastAPI app (started by uvicorn in production or main.py)
+- `simulator/main.py`: IVR mock server entry point
 - `make_call.py`: One-off Twilio REST call (no shuo server needed)
 
 **Configuration:**
 - `.env`: Environment variables (Twilio keys, Deepgram key, Groq key, ElevenLabs key, etc.)
-- `shuo/requirements.txt`: Python package dependencies
-- `ivr/flows/example.yaml`: IVR flow definition (nodes, routing, prompts)
+- `pyproject.toml`: Python package config + `voice-agent` CLI entry point
+- `simulator/flows/example.yaml`: IVR flow definition (nodes, routing, prompts)
 
 **Core Logic:**
-- `shuo/shuo/state.py`: Pure state machine (Listening/Responding/HangingUp transitions)
-- `shuo/shuo/conversation.py`: Event loop per call (receive → process → dispatch)
-- `shuo/shuo/agent.py`: Agent response pipeline (LLM + TTS + audio streaming)
+- `shuo/call.py`: Pure state machine `step()` + event loop `run_call()` (LISTENING/RESPONDING/ENDING)
+- `shuo/agent.py`: Agent response pipeline (LanguageModel + VoicePool + AudioPlayer)
+- `shuo/language.py`: LanguageModel with pydantic-ai tools (DTMF, hold, hangup)
 
 **Testing:**
-- `shuo/tests/`: Unit tests for state machine, types
-- `ivr/tests/`: Integration tests for IVR engine (no network access)
+- `tests/`: Unit tests for state machine, agent, CLI, security, benchmarks
+- `simulator/tests/`: Integration tests for IVR simulator (no network access)
 
 **Tracing & Debugging:**
-- `shuo/shuo/tracer.py`: Per-call latency instrumentation
-- `shuo/shuo/log.py`: Centralized logging with colors
+- `shuo/tracer.py`: Per-call latency instrumentation
+- `shuo/log.py`: Centralized logging with colors
 - Output: `/tmp/shuo/{stream_sid}.json` (latency trace), console (colored logs)
 
 ## Naming Conventions
 
 **Files:**
-- Snake_case: `flux_pool.py`, `tts_elevenlabs.py`, `twilio_client.py`
-- Suffixes: `_pool.py` for connection pools, `_service.py` for long-lived services
-- Test files: `test_*.py` or `*_test.py` (pytest convention)
+- Snake_case: `voice_elevenlabs.py`, `voice_kokoro.py`
+- Domain-named modules at top of package: `call.py`, `speech.py`, `voice.py`, `phone.py`
+- Test files: `test_*.py` (pytest convention)
 
 **Directories:**
-- Lowercase plural/purpose: `services/`, `flows/`, `tests/`
-- Package roots: `shuo/`, `dashboard/`, `ivr/` (main functional domains)
+- Lowercase domain names: `monitor/`, `simulator/`, `ui/`, `eval/`
+- No `services/` subfolder — all modules are flat in `shuo/`
 
 **Classes:**
-- PascalCase: `AppState`, `Agent`, `MarkerScanner`, `FluxService`, `LLMService`, `TwiMLEngine`
+- PascalCase: `CallState`, `Agent`, `LanguageModel`, `Transcriber`, `VoicePool`, `TwilioPhone`, `LocalPhone`
 - Enums: `Phase`, `CallMode` (singular names for state/mode)
 
 **Functions & Methods:**
-- Lowercase with underscores: `process_event()`, `start_agent_turn()`, `render_node()`, `parse_twilio_message()`
-- Private (internal): `_ms_since()`, `_render_say()`, `_get_engine()`
-- Async: `async def on_end_of_turn()`, `async def start()`, `async def read_twilio()`
-
-**Variables:**
-- Lowercase: `event_queue`, `stream_sid`, `agent_ready`
-- Prefixes: `_private_var` (module-level private), `on_* ` (callbacks), `get_*` (accessors)
-- Globals: ALL_CAPS: `SYSTEM_PROMPT`, `MAX_BUF`, `KNOWN` (marker names)
+- Lowercase with underscores: `step()`, `run_call()`, `dial_out()`, `render_node()`
+- Private (internal): `_ms_since()`, `_evict_stale()`, `_on_llm_token()`
+- Async: `async def run_call()`, `async def start()`
 
 **Constants:**
-- ALL_CAPS: `TWILIO_ACCOUNT_SID`, `DEEPGRAM_API_KEY`, `LLM_MODEL`, `PORT`, `DRAIN_TIMEOUT`
-- Enum variants: `Phase.LISTENING`, `Phase.RESPONDING`, `CallMode.AGENT`, `CallMode.TAKEOVER`
+- ALL_CAPS: `CALL_INACTIVITY_TIMEOUT`, `DRAIN_TIMEOUT`
+- Enum variants: `Phase.LISTENING`, `Phase.RESPONDING`, `Phase.ENDING`
 
 ## Where to Add New Code
 
 **New Feature (E2E):**
-- Framework changes: `shuo/shuo/` (types, state machine, conversation loop, agent)
-- New I/O service: `shuo/shuo/services/{service_name}.py` + update factory in `services/tts.py` or `services/__init__.py`
-- Dashboard feature: `dashboard/server.py` (new endpoint) + `dashboard/app.html` (UI)
-- Tests: `shuo/tests/test_{feature}.py` or `ivr/tests/test_{feature}.py`
+- Framework changes: `shuo/call.py` (new events/actions), `shuo/agent.py`, `shuo/web.py`
+- New TTS provider: `shuo/voice_{name}.py` + update `_create_tts()` factory in `shuo/voice.py`
+- Monitor feature: `monitor/server.py` (new endpoint) + `monitor/app.html` (UI)
+- Tests: `tests/test_{feature}.py` or `simulator/tests/test_{feature}.py`
 
 **New Streaming Provider (TTS/STT):**
-- Location: `shuo/shuo/services/tts_*.py` (for TTS) or extend `flux.py` (for STT)
-- Pattern: Class with `async start()`, `async stop()`, callbacks for results
-- Registration: Update `create_tts()` factory in `shuo/shuo/services/tts.py`
-- Test: Add unit test to `shuo/tests/`
+- TTS: `shuo/voice_{name}.py` + register in `shuo/voice.py:_create_tts()`
+- STT: Extend `shuo/speech.py`
+- Test: Add unit test to `tests/`
 
 **New IVR Node Type:**
-- Location: `ivr/config.py` (add node class), `ivr/engine.py` (add render method)
-- Tests: Add case to `ivr/tests/test_ivr.py`
+- Location: `simulator/config.py` (add node class), `simulator/engine.py` (add render method)
+- Tests: Add case to `simulator/tests/test_ivr.py`
 
-**Dashboard Control (e.g., new button):**
-- Endpoint: `dashboard/server.py` new `@router.post("/calls/{id}/new_action")`
-- Event: Broadcast via `dashboard_bus.publish_global(event)` in conversation loop
-- UI: Edit `dashboard/app.html` to add button and WebSocket handler
+**Monitor Control (e.g., new button):**
+- Endpoint: `monitor/server.py` new `@router.post("/calls/{id}/new_action")`
+- Event: Broadcast via `dashboard_bus.publish_global(event)` in call loop
+- UI: Edit `monitor/app.html` to add button and WebSocket handler
 
 **New Utility/Script:**
-- Location: Root level (e.g., `script_name.py`)
-- Pattern: Minimal deps, single CLI argument, uses existing services (Twilio SDK, etc.)
-- Examples: `make_call.py`, `hangup_all.py`, `restart.sh`
+- Location: `scripts/` (analysis scripts) or root level (one-off utilities)
+- Examples: `make_call.py`, `hangup_all.py`, `scripts/visualize.py`
 
 ## Special Directories
 
-**shuo/shuo/__pycache__/, ivr/__pycache__/, dashboard/__pycache__/:**
+**shuo/__pycache__/, monitor/__pycache__/, simulator/__pycache__/:**
 - Purpose: Python bytecode caches
 - Generated: Yes (automatically by Python)
 - Committed: No (listed in .gitignore)
 
 **shuo/.venv/, shuo/.venv-kokoro/:**
-- Purpose: Python virtual environments for dependencies
-- Generated: Yes (by `python -m venv`)
-- Committed: No (listed in .gitignore)
+- Purpose: Python virtual environments (pipx-managed and Kokoro-specific)
+- Generated: Yes
+- Committed: No
 
 **.pytest_cache/:**
 - Purpose: Pytest cache and test artifact storage
-- Generated: Yes (automatically by pytest)
-- Committed: No (listed in .gitignore)
+- Generated: Yes
+- Committed: No
 
-**/tmp/shuo/:
-- Purpose: Runtime latency traces (JSON files)
+**/tmp/shuo/:**
+- Purpose: Runtime latency traces (JSON files per call)
 - Generated: Yes (by Tracer during calls)
 - Location: System temp directory; persists across restarts
-- Purged: Manually or on system cleanup
+- Rotation: Automatic via `cleanup_traces()` on server startup
 
 ---
 
-*Structure analysis: 2026-03-18*
+*Structure analysis updated: 2026-04-06*

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-21T22:54:22.526Z"
-last_activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
+status: complete
+stopped_at: Greenfield refactor + directory restructure (2026-04-06)
+last_updated: "2026-04-06T00:00:00.000Z"
+last_activity: 2026-04-06 — Greenfield module refactor + full directory restructure; 133/133 tests pass
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 14
   completed_plans: 14
-  percent: 5
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** An LLM agent can call any phone number, navigate IVR menus autonomously, and be monitored/taken over by a human supervisor — without writing telephony code.
-**Current focus:** Phase 1 — ISP Abstraction
+**Current focus:** Post-roadmap refactoring — all 6 phases complete
 
 ## Current Position
 
-Phase: 1 of 6 (ISP Abstraction)
-Plan: 1 of TBD in current phase
-Status: In Progress
-Last activity: 2026-03-21 — Plan 01-01 complete (ISP Protocol + LocalISP)
+Phase: 6 of 6 (complete) + post-roadmap greenfield refactor
+Status: Complete
+Last activity: 2026-04-06 — Greenfield module refactor + directory restructure
 
-Progress: [█░░░░░░░░░] 5%
+Post-roadmap changes (2026-04-06):
+- Collapsed `services/` subfolder into 12 flat domain-named modules in `shuo/`
+- Removed `types.py`, `state.py`, `conversation.py`, `server.py`, `prompts.py`
+- Renamed `dashboard/` → `monitor/`, `ivr/` → `simulator/`, `client/softphone/` → `ui/`
+- Consolidated `datasets/scenarios/reports/` → `eval/`, `documents/` → `docs/`, etc.
+- Eliminated `shuo/shuo/` double-nesting — package is now flat at `shuo/`
+- All codebase docs updated to reflect current structure
+
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
