@@ -28,4 +28,4 @@ dependencies = [
 voice-agent = "shuo.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["shuo*"]
+include = ["shuo*", "monitor*", "simulator*"]

@@ -15,7 +15,7 @@ import time
 # Add the project root (parent of the shuo/ package dir) to sys.path so that
 # the sibling packages dashboard/ and ivr/ are importable when running via pipx
 # or any other environment that only installed the shuo package.
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
