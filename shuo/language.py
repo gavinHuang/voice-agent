@@ -142,8 +142,6 @@ _DTMF_TAG_RE  = re.compile(r'\[DTMF:([0-9*#])\]',                           re.I
 
 _FAREWELL_PHRASES = (
     "goodbye", "good bye", "bye bye", "bye-bye", "farewell",
-    "have a good", "have a great", "have a nice", "take care",
-    "talk soon", "speak soon", "all the best", "best of luck",
 )
 
 

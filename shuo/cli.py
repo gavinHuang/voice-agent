@@ -429,11 +429,24 @@ def call_cmd(
     call_sid = dial_out(phone)
     Logger.call_initiated(call_sid)
 
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        Logger.shutdown()
+    import shuo.web as _web_module
+
+    # Wait for call to connect (up to 60s)
+    deadline = time.monotonic() + 60
+    while _web_module._active_calls == 0 and time.monotonic() < deadline:
+        time.sleep(0.5)
+
+    if _web_module._active_calls == 0:
+        click.echo("Warning: call did not connect within 60 seconds", err=True)
+    else:
+        # Wait for call to end
+        try:
+            while _web_module._active_calls > 0:
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
+
+    Logger.shutdown()
 
 
 @cli.command()
