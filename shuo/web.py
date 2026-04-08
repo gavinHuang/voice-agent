@@ -62,7 +62,9 @@ async def verify_twilio_signature(
     Twilio signs against the query-string URL alone (empty params dict).
     """
     auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+    logger.info(f"[BP1] Signature check: auth_token present={bool(auth_token)}, sig={x_twilio_signature!r}")
     if not auth_token:
+        logger.info("[BP1] No auth token — skipping signature validation")
         return  # Skip validation in dev when no auth token configured
 
     if not x_twilio_signature:
@@ -334,6 +336,7 @@ async def twiml(request: Request):
     public_url = os.getenv("TWILIO_PUBLIC_URL", "")
     ws_url = public_url.replace("https://", "wss://").replace("http://", "ws://")
     ws_url = f"{ws_url}/ws"
+    logger.info(f"[BP2] WebSocket URL for Twilio: {ws_url!r} (TWILIO_PUBLIC_URL={public_url!r})")
 
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -546,7 +549,7 @@ async def websocket_endpoint(websocket: WebSocket):
     def on_agent_ready(agent) -> None:
         dashboard_registry.update(ctx.call_id, agent=agent)
 
-    logger.info(f"Call connected  (active: {_active_calls})")
+    logger.info(f"[BP3] WebSocket accepted — call_id={ctx.call_id} (active: {_active_calls})")
 
     def get_goal(call_sid: str) -> str:
         # Pop the pending phone+goal and store both in the registry so the

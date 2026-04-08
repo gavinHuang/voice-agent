@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Install (editable):**
 ```bash
-pipx install -e .
+uv sync                  # create/update .venv
+pipx install -e .        # expose voice-agent CLI globally
 ```
 
 **Run tests:**

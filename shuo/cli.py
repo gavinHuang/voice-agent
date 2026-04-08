@@ -242,8 +242,8 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_n
 @click.option("--success-criteria", type=str,  default=None, help="How the agent knows the call succeeded")
 @click.option("--yes", "-y",        is_flag=True, default=False,
               help="Skip interactive confirmation and dial immediately")
-@click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
-              help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically")
+@click.option("--ngrok/--no-ngrok", "use_ngrok", default=True,
+              help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically (default: on)")
 @click.pass_context
 def call_cmd(
     ctx: click.Context,
@@ -276,7 +276,7 @@ def call_cmd(
     _check_env_vars()
 
     cfg = ctx.obj["config"].get("call", {})
-    sources: dict
+    sources: dict = {}
     # ── 1. Load identity.md (lowest precedence) ──────────────────────
     identity_fields, identity_src = load_identity_file(Path(os.getcwd()))
     if identity_src:

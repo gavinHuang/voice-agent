@@ -417,10 +417,14 @@ async def run_call(
                         on_start_of_turn=on_speech_started,
                         on_dead=on_transcriber_dead,
                     )
+                    logger.info("[BP4] Starting transcriber...")
                     await transcriber.start()
+                    logger.info("[BP4] Transcriber started OK")
 
                 if _own_voice_pool:
+                    logger.info("[BP4] Starting voice pool...")
                     await voice_pool.start()
+                    logger.info("[BP4] Voice pool started OK")
 
                 agent = Agent(
                     phone=phone,
