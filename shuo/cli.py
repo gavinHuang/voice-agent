@@ -13,6 +13,39 @@ import threading
 import time
 from pathlib import Path
 
+# Re-exec with the kokoro venv Python when TTS_PROVIDER=kokoro and kokoro isn't
+# available in the current interpreter (e.g. main venv is Python 3.14 which is
+# incompatible with kokoro's spacy/blis dependency).
+def _maybe_reexec_for_kokoro() -> None:
+    # Determine TTS_PROVIDER without dotenv (may not be installed in kokoro venv).
+    tts_provider = os.getenv("TTS_PROVIDER")
+    if tts_provider is None:
+        env_file = Path(os.getcwd()) / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("TTS_PROVIDER="):
+                    tts_provider = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    if (tts_provider or "kokoro") != "kokoro":
+        return
+    try:
+        import importlib.util
+        if importlib.util.find_spec("kokoro") is not None:
+            return  # already importable — nothing to do
+    except Exception:
+        pass
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    kokoro_python = os.path.join(project_root, ".venv-kokoro", "bin", "python3")
+    if not os.path.exists(kokoro_python):
+        return  # no kokoro venv — let it fail with a clear error later
+    # Ensure the project root is importable in the new interpreter.
+    existing = os.environ.get("PYTHONPATH", "")
+    os.environ["PYTHONPATH"] = f"{project_root}:{existing}" if existing else project_root
+    os.execv(kokoro_python, [kokoro_python] + sys.argv)
+
+_maybe_reexec_for_kokoro()
+
 # Add the project root (parent of the shuo/ package dir) to sys.path so that
 # the sibling packages dashboard/ and ivr/ are importable when running via pipx
 # or any other environment that only installed the shuo package.
@@ -91,6 +124,22 @@ def _check_softphone_env_vars() -> None:
     if missing:
         click.echo(f"Missing required environment variables: {', '.join(missing)}", err=True)
         sys.exit(1)
+
+
+def _wait_for_ready(port: int, timeout: int = 120) -> None:
+    """Poll /ready until warmup completes (TTS model + voice pool loaded)."""
+    import urllib.request
+    import urllib.error
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://localhost:{port}/ready", timeout=2) as r:
+                if r.status == 200:
+                    return
+        except Exception:
+            pass
+        time.sleep(0.5)
+    click.echo("Warning: server warmup timed out — proceeding anyway", err=True)
 
 
 def _start_ngrok(port: int, env_var: str = "TWILIO_PUBLIC_URL") -> str:
@@ -198,7 +247,7 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_n
     Logger.server_starting(effective_port)
     server_thread = threading.Thread(target=_start_server, daemon=True)
     server_thread.start()
-    time.sleep(2)
+    _wait_for_ready(effective_port)
     Logger.server_ready(os.getenv("TWILIO_PUBLIC_URL", ""))
 
     try:
@@ -373,7 +422,7 @@ def call_cmd(
     Logger.server_starting(int(os.getenv("PORT", "3040")))
     server_thread = threading.Thread(target=_start_server, daemon=True)
     server_thread.start()
-    time.sleep(2)
+    _wait_for_ready(int(os.getenv("PORT", "3040")))
     Logger.server_ready(os.getenv("TWILIO_PUBLIC_URL", ""))
 
     Logger.call_initiating(phone)
@@ -928,6 +977,69 @@ def diagnose(ctx: click.Context, skip_connectivity: bool) -> None:
                 any_fail = True
         elif skip_connectivity:
             _check_result("ElevenLabs API key valid", True, "skipped", warn=False)
+    click.echo()
+
+    # ── Application ───────────────────────────────────────────────────
+    click.echo(_section("Application"))
+
+    # TWILIO_PUBLIC_URL: must be HTTPS and not localhost
+    public_url = e("TWILIO_PUBLIC_URL") or ""
+    if not public_url:
+        _check_result("TWILIO_PUBLIC_URL is HTTPS", False, "not set")
+        any_fail = True
+    elif not public_url.startswith("https://"):
+        _check_result("TWILIO_PUBLIC_URL is HTTPS", False, f"got: {public_url[:30]}")
+        any_fail = True
+    elif "localhost" in public_url or "127.0.0.1" in public_url:
+        _check_result("TWILIO_PUBLIC_URL is HTTPS", False, "localhost not reachable by Twilio")
+        any_fail = True
+    else:
+        _check_result("TWILIO_PUBLIC_URL is HTTPS", True, public_url[:50])
+
+    # TWILIO_PHONE_NUMBER: E.164 format
+    phone_num = e("TWILIO_PHONE_NUMBER") or ""
+    if phone_num and not phone_num.startswith("+"):
+        _check_result("TWILIO_PHONE_NUMBER E.164 format", False, "must start with +")
+        any_fail = True
+    elif phone_num:
+        _check_result("TWILIO_PHONE_NUMBER E.164 format", True)
+
+    # TTS provider importable
+    tts = e("TTS_PROVIDER") or "kokoro"
+    if tts == "kokoro":
+        # Kokoro requires Python <3.13 and lives in a separate .venv-kokoro.
+        # Check that the venv exists; importability in the current venv is not expected.
+        kokoro_venv = Path(os.getcwd()) / ".venv-kokoro"
+        if kokoro_venv.exists():
+            _check_result("TTS provider (kokoro) .venv-kokoro", True)
+        else:
+            _check_result("TTS provider (kokoro) .venv-kokoro", False,
+                          "run: python3.12 -m venv .venv-kokoro && .venv-kokoro/bin/pip install kokoro")
+            any_fail = True
+    elif tts == "fish":
+        fish_url = e("FISH_API_URL") or e("FISH_SPEECH_API_URL")
+        if not fish_url:
+            _check_result("TTS provider (fish) FISH_API_URL set", False, "missing")
+            any_fail = True
+        else:
+            _check_result("TTS provider (fish) FISH_API_URL set", True)
+    elif tts == "elevenlabs":
+        _check_result("TTS provider (elevenlabs) configured", e("ELEVENLABS_API_KEY") is not None,
+                      "" if e("ELEVENLABS_API_KEY") else "ELEVENLABS_API_KEY missing")
+
+    # Port available
+    import socket
+    server_port = int(e("PORT") or "3040")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("0.0.0.0", server_port))
+        _check_result(f"Port {server_port} available", True)
+    except OSError:
+        _check_result(f"Port {server_port} available", False,
+                      "already in use — stop existing server first", warn=False)
+        any_fail = True
+
     click.echo()
 
     # ── Summary ───────────────────────────────────────────────────────

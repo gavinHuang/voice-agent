@@ -68,14 +68,24 @@ async def verify_twilio_signature(
     if not x_twilio_signature:
         raise HTTPException(status_code=403, detail="Invalid Twilio signature")
 
-    # Reconstruct the URL as Twilio sees it using the public base URL.
-    public_url = os.getenv("TWILIO_PUBLIC_URL", "")
-    if public_url:
-        url = public_url.rstrip("/") + str(request.url.path)
+    # Reconstruct the URL as Twilio sees it.
+    # Prefer the incoming Host header (ngrok forwards it as the public domain),
+    # so validation works even when TWILIO_PUBLIC_URL is stale or a new ngrok
+    # tunnel is started while an existing server is already running on this port.
+    host = request.headers.get("host", "")
+    proto = request.headers.get("x-forwarded-proto", "https")
+    if host and not host.startswith("localhost") and not host.startswith("127."):
+        url = f"{proto}://{host}{request.url.path}"
         if request.url.query:
             url += "?" + str(request.url.query)
     else:
-        url = str(request.url)
+        public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+        if public_url:
+            url = public_url.rstrip("/") + str(request.url.path)
+            if request.url.query:
+                url += "?" + str(request.url.query)
+        else:
+            url = str(request.url)
 
     # For POST requests, Twilio signs against the form parameters.
     # We must pass the actual form dict; an empty dict will cause 403 for
@@ -88,7 +98,9 @@ async def verify_twilio_signature(
 
     validator = RequestValidator(auth_token)
     if not validator.validate(url, params, x_twilio_signature):
+        logger.error(f"Twilio signature validation FAILED — url={url!r} params={list(params.keys())} sig={x_twilio_signature[:12]}...")
         raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+    logger.debug(f"Twilio signature valid — {request.method} {url}")
 
 
 app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
@@ -144,8 +156,11 @@ async def startup_warmup() -> None:
     asyncio.create_task(_warmup())
 
 
+_warmup_done: bool = False
+
+
 async def _warmup() -> None:
-    global _voice_pool
+    global _voice_pool, _warmup_done
 
     # Pre-load TTS model so the first call doesn't pay model-load latency.
     provider = os.getenv("TTS_PROVIDER", "kokoro").lower()
@@ -161,6 +176,7 @@ async def _warmup() -> None:
     _voice_pool = VoicePool(pool_size=2, ttl=120.0)
     await _voice_pool.start()
     logger.info("Global voice pool started")
+    _warmup_done = True
 
     # Trace file cleanup — remove old/excess traces at startup
     from .tracer import cleanup_traces
@@ -184,6 +200,15 @@ async def shutdown_pools() -> None:
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    """Returns 200 once warmup (TTS model + voice pool) is complete, 503 while still loading."""
+    if _warmup_done:
+        return {"status": "ready"}
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"status": "warming_up"}, status_code=503)
 
 
 @app.get("/token")
@@ -279,6 +304,7 @@ async def twiml(request: Request):
     During graceful shutdown, rejects new calls so they don't get cut off.
     When AMD is enabled, Twilio passes AnsweredBy so we can hang up on voicemail.
     """
+    logger.info(f"Twilio webhook received: {request.method} /twiml")
     if _draining:
         logger.info("Draining — rejecting new inbound call")
         reject_twiml = """<?xml version="1.0" encoding="UTF-8"?>

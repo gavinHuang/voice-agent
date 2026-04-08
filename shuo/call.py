@@ -479,7 +479,7 @@ async def run_call(
             # ── DTMF ─────────────────────────────────────────────────
             if isinstance(event, DTMFEvent):
                 if on_dtmf:
-                    on_dtmf(event.digits)
+                    await on_dtmf(event.digits)
                 await phone.send_dtmf(event.digits)
 
             # ── GREETING / HANDBACK ──────────────────────────────────
