@@ -366,7 +366,8 @@ async def run_call(
         elif isinstance(action, CancelTurnAction):
             # In IVR mode the remote party is automated — suppress barge-in so
             # background audio doesn't cancel the agent's response mid-flight.
-            if agent and not (ivr_mode and ivr_mode()):
+            # Also suppress if hangup is already decided — let goodbye play out.
+            if agent and not (ivr_mode and ivr_mode()) and not agent.hangup_decided:
                 await agent.cancel_turn()
 
     # ── Boot ────────────────────────────────────────────────────────

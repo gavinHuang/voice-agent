@@ -238,6 +238,7 @@ async def test_normal_mode_barge_in_still_works():
         with patch("shuo.agent.Agent") as MockAgent:
             agent_instance = MagicMock()
             agent_instance.is_turn_active = False
+            agent_instance.hangup_decided = False
             agent_instance.cancel_turn = AsyncMock(side_effect=lambda: cancel_turn_calls.append("cancelled"))
             agent_instance.start_turn = AsyncMock()
             agent_instance.cleanup = AsyncMock()

@@ -224,25 +224,25 @@ class LanguageModel:
                 ctx.deps.dtmf_queue.append(digit)
                 return f"Sending digit {digit!r}"
 
-            @self._agent.tool
+            @self._agent.tool(retries=0)
             async def signal_hold(ctx: RunContext[_TurnCtx]) -> str:
                 """Signal that hold music has been detected."""
                 ctx.deps.hold_start = True
                 return "Hold mode activated"
 
-            @self._agent.tool
+            @self._agent.tool(retries=0)
             async def signal_hold_continue(ctx: RunContext[_TurnCtx]) -> str:
                 """Signal that hold music is still playing. Do NOT produce any text with this tool call."""
                 ctx.deps.hold_continue = True
                 return "Still on hold"
 
-            @self._agent.tool
+            @self._agent.tool(retries=0)
             async def signal_hold_end(ctx: RunContext[_TurnCtx]) -> str:
                 """Signal that a real person has returned from hold."""
                 ctx.deps.hold_end = True
                 return "Person returned"
 
-            @self._agent.tool
+            @self._agent.tool(retries=0)
             async def signal_hangup(ctx: RunContext[_TurnCtx]) -> str:
                 """Signal that the call should be hung up after this response completes."""
                 ctx.deps.hangup_pending = True
@@ -252,11 +252,12 @@ class LanguageModel:
         else:
             log.info(f"Tools disabled for {model} — using text-tag protocol")
 
-        self._task:    Optional[asyncio.Task] = None
-        self._running: bool                   = False
-        self._history: List[ModelMessage]     = []
-        self._pending: str                    = ""
-        self._ctx:     _TurnCtx               = _TurnCtx()
+        self._task:           Optional[asyncio.Task] = None
+        self._running:        bool                   = False
+        self._history:        List[ModelMessage]     = []
+        self._pending:        str                    = ""
+        self._ctx:            _TurnCtx               = _TurnCtx()
+        self._tokens_emitted: bool                   = False
 
     # ── Public API ──────────────────────────────────────────────────
 
@@ -357,6 +358,7 @@ class LanguageModel:
 
     async def _generate(self) -> None:
         attempt = 0
+        self._tokens_emitted = False
         while attempt <= _LLM_MAX_RETRIES:
             try:
                 await asyncio.wait_for(self._generate_once(), timeout=_LLM_TIMEOUT)
@@ -365,14 +367,14 @@ class LanguageModel:
                 raise
             except asyncio.TimeoutError:
                 log.warning(f"LLM timed out after {_LLM_TIMEOUT}s (attempt {attempt + 1})")
-                if attempt < _LLM_MAX_RETRIES:
+                if attempt < _LLM_MAX_RETRIES and not self._tokens_emitted:
                     attempt += 1
                     continue
                 log.error("LLM timed out — ending turn without response")
                 break
             except Exception as e:
                 log.error(f"Generation failed (attempt {attempt + 1})", e)
-                if attempt < _LLM_MAX_RETRIES:
+                if attempt < _LLM_MAX_RETRIES and not self._tokens_emitted:
                     attempt += 1
                     continue
                 break
@@ -401,6 +403,7 @@ class LanguageModel:
                                 and isinstance(event.delta, TextPartDelta)
                                 and event.delta.content_delta
                             ):
+                                self._tokens_emitted = True
                                 await self._on_token(event.delta.content_delta)
                 elif Agent.is_call_tools_node(node):
                     async with node.stream(run.ctx) as stream:

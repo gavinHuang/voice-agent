@@ -83,9 +83,16 @@ class Agent:
         self._current_turn_text: str        = ""
         self._dtmf_queue:        List[str]  = []
 
+        # Set when LLM decides to hang up — blocks new turns and barge-in cancellation
+        self._hangup_decided:    bool       = False
+
     @property
     def is_turn_active(self) -> bool:
         return self._active
+
+    @property
+    def hangup_decided(self) -> bool:
+        return self._hangup_decided
 
     @property
     def history(self) -> list:
@@ -112,6 +119,9 @@ class Agent:
     # ── Turn lifecycle ──────────────────────────────────────────────
 
     async def start_turn(self, transcript: str, hold_check: bool = False) -> None:
+        if self._hangup_decided:
+            log.info("start_turn blocked: hangup already in progress")
+            return
         if self._active:
             await self.cancel_turn()
 
@@ -218,6 +228,7 @@ class Agent:
             self._emit(HoldEndEvent())
 
         if outcome.hangup:
+            self._hangup_decided = True
             self._pending_hangup = True
             self._emit(HangupPendingEvent())
 
