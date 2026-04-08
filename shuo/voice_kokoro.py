@@ -1,7 +1,7 @@
 """
 Kokoro-82M TTS via the kokoro Python package (direct inference).
 
-Requires Python <3.13 — run the server with .venv-kokoro/bin/python3.
+Requires kokoro to be installed: uv add kokoro (Python <3.13 only).
 
 Env vars:
     KOKORO_VOICE     — voice name (default af_heart)

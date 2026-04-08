@@ -13,38 +13,6 @@ import threading
 import time
 from pathlib import Path
 
-# Re-exec with the kokoro venv Python when TTS_PROVIDER=kokoro and kokoro isn't
-# available in the current interpreter (e.g. main venv is Python 3.14 which is
-# incompatible with kokoro's spacy/blis dependency).
-def _maybe_reexec_for_kokoro() -> None:
-    # Determine TTS_PROVIDER without dotenv (may not be installed in kokoro venv).
-    tts_provider = os.getenv("TTS_PROVIDER")
-    if tts_provider is None:
-        env_file = Path(os.getcwd()) / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                line = line.strip()
-                if line.startswith("TTS_PROVIDER="):
-                    tts_provider = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    break
-    if (tts_provider or "kokoro") != "kokoro":
-        return
-    try:
-        import importlib.util
-        if importlib.util.find_spec("kokoro") is not None:
-            return  # already importable — nothing to do
-    except Exception:
-        pass
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    kokoro_python = os.path.join(project_root, ".venv-kokoro", "bin", "python3")
-    if not os.path.exists(kokoro_python):
-        return  # no kokoro venv — let it fail with a clear error later
-    # Ensure the project root is importable in the new interpreter.
-    existing = os.environ.get("PYTHONPATH", "")
-    os.environ["PYTHONPATH"] = f"{project_root}:{existing}" if existing else project_root
-    os.execv(kokoro_python, [kokoro_python] + sys.argv)
-
-_maybe_reexec_for_kokoro()
 
 # Add the project root (parent of the shuo/ package dir) to sys.path so that
 # the sibling packages dashboard/ and ivr/ are importable when running via pipx
@@ -308,8 +276,7 @@ def call_cmd(
     _check_env_vars()
 
     cfg = ctx.obj["config"].get("call", {})
-    sources: dict = {}
-
+    sources: dict
     # ── 1. Load identity.md (lowest precedence) ──────────────────────
     identity_fields, identity_src = load_identity_file(Path(os.getcwd()))
     if identity_src:
@@ -1020,14 +987,16 @@ def diagnose(ctx: click.Context, skip_connectivity: bool) -> None:
     # TTS provider importable
     tts = e("TTS_PROVIDER") or "kokoro"
     if tts == "kokoro":
-        # Kokoro requires Python <3.13 and lives in a separate .venv-kokoro.
-        # Check that the venv exists; importability in the current venv is not expected.
-        kokoro_venv = Path(os.getcwd()) / ".venv-kokoro"
-        if kokoro_venv.exists():
-            _check_result("TTS provider (kokoro) .venv-kokoro", True)
+        try:
+            import importlib.util
+            ok = importlib.util.find_spec("kokoro") is not None
+        except Exception:
+            ok = False
+        if ok:
+            _check_result("TTS provider (kokoro) importable", True)
         else:
-            _check_result("TTS provider (kokoro) .venv-kokoro", False,
-                          "run: python3.12 -m venv .venv-kokoro && .venv-kokoro/bin/pip install kokoro")
+            _check_result("TTS provider (kokoro) importable", False,
+                          "run: uv add kokoro")
             any_fail = True
     elif tts == "fish":
         fish_url = e("FISH_API_URL") or e("FISH_SPEECH_API_URL")
