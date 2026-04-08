@@ -224,6 +224,7 @@ async def test_token_observer_nonblocking():
     agent._got_first_token = True   # skip first-token tracer path
     agent._dtmf_queue = []
     agent._tracer = MagicMock()
+    agent._telemetry = None
     agent._turn = 0
     agent._t0 = time.monotonic()
     agent._current_turn_text = ""

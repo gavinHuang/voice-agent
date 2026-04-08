@@ -18,6 +18,7 @@ from typing import Optional, Callable, List, Any
 from .language import LanguageModel
 from .voice import VoicePool, AudioPlayer, dtmf_tone
 from .tracer import Tracer
+from .telemetry import CallTelemetry, CP
 from .log import ServiceLogger
 from .call import (
     TurnOutcome,
@@ -50,12 +51,14 @@ class Agent:
         goal:              str = "",
         ctx:               Optional[Any] = None,   # Optional[CallContext]
         on_token_observed: Optional[Callable[[str], None]] = None,
+        telemetry:         Optional[CallTelemetry] = None,
     ):
         self._phone            = phone
         self._stream_sid       = stream_sid
         self._emit             = emit
         self._voice_pool       = voice_pool
         self._tracer           = tracer
+        self._telemetry        = telemetry
         self._on_token_observed = on_token_observed
 
         self._llm = LanguageModel(
@@ -63,6 +66,7 @@ class Agent:
             on_done=self._on_llm_done,
             goal=goal,
             ctx=ctx,
+            telemetry=telemetry,
         )
 
         self._tts:    Optional[object]      = None
@@ -201,6 +205,9 @@ class Agent:
             log.info(f"LLM first token  +{_ms(self._t0)}ms")
 
         if token:
+            if not self._tts_had_text and self._telemetry:
+                self._telemetry.checkpoint(CP.TTS_SYNTHESIS_START)
+                self._telemetry.increment("tts_segments")
             self._tts_had_text = True
             await self._tts.send(token)
             if self._on_token_observed:
@@ -259,6 +266,8 @@ class Agent:
             self._t_first_audio   = time.monotonic()
             self._tracer.mark(self._turn, "tts_first_audio")
             self._tracer.begin(self._turn, "player")
+            if self._telemetry:
+                self._telemetry.checkpoint(CP.TTS_FIRST_CHUNK)
             since_token = int((self._t_first_audio - self._t_first_token) * 1000) if self._got_first_token else 0
             log.info(f"TTS first audio  +{_ms(self._t0)}ms  (TTS latency {since_token}ms)")
         await self._player.send_chunk(audio_base64)
@@ -276,6 +285,8 @@ class Agent:
         if not self._active:
             return
         self._tracer.end(self._turn, "player")
+        if self._telemetry:
+            self._telemetry.checkpoint(CP.TTS_PLAYBACK_DONE)
         log.info(f"Turn complete    +{_ms(self._t0)}ms total")
         self._active = False
         self._tts    = None

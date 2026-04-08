@@ -29,6 +29,7 @@ from enum import Enum, auto
 from typing import Optional, Union, List, Callable, Awaitable, Tuple
 
 from .tracer import Tracer
+from .telemetry import CallTelemetry, CP
 from .log import Logger, get_logger
 
 logger = get_logger("shuo.call")
@@ -315,6 +316,8 @@ async def run_call(
     event_log = Logger(verbose=False)
     queue: asyncio.Queue[Event] = asyncio.Queue()
     tracer = Tracer()
+    telemetry = CallTelemetry()
+    telemetry.checkpoint(CP.CALL_DIAL)  # approximate: dial was initiated just before run_call()
 
     agent: Optional[Agent] = None
     transcriber = None
@@ -325,7 +328,13 @@ async def run_call(
 
     # ── Transcription callbacks ──────────────────────────────────────
 
+    _stt_first_result_recorded = False
+
     async def on_transcript(transcript: str) -> None:
+        nonlocal _stt_first_result_recorded
+        if transcript and not _stt_first_result_recorded:
+            _stt_first_result_recorded = True
+            telemetry.checkpoint(CP.STT_FIRST_RESULT)
         await queue.put(UserSpokeEvent(transcript=transcript))
 
     async def on_speech_started() -> None:
@@ -397,6 +406,7 @@ async def run_call(
             # ── INIT on call start ───────────────────────────────────
             if isinstance(event, CallStartedEvent):
                 stream_sid = event.stream_sid
+                telemetry.checkpoint(CP.CALL_CONNECTED)
                 saved = (await get_saved_state(event.call_sid)) if get_saved_state else None
 
                 goal = (
@@ -421,18 +431,21 @@ async def run_call(
                     logger.info("[BP4] Starting transcriber...")
                     await transcriber.start()
                     logger.info("[BP4] Transcriber started OK")
+                telemetry.checkpoint(CP.STT_READY)
 
                 if _own_voice_pool:
                     logger.info("[BP4] Starting voice pool...")
                     await voice_pool.start()
                     logger.info("[BP4] Voice pool started OK")
 
+                telemetry.checkpoint(CP.SCRIPT_GENERATION_START)
                 agent = Agent(
                     phone=phone,
                     stream_sid=event.stream_sid,
                     emit=lambda e: queue.put_nowait(e),
                     voice_pool=voice_pool,
                     tracer=tracer,
+                    telemetry=telemetry,
                     goal=goal,
                     ctx=ctx if not saved else None,
                     on_token_observed=(
@@ -440,6 +453,7 @@ async def run_call(
                         if observer else None
                     ),
                 )
+                telemetry.checkpoint(CP.SCRIPT_GENERATION_END)
 
                 if saved:
                     _handback_prompt = agent.restore_history(
@@ -544,5 +558,8 @@ async def run_call(
         if transcriber:
             await transcriber.stop()
 
-        tracer.save(stream_sid or "unknown")
+        telemetry.checkpoint(CP.HANGUP)
+        call_summary = telemetry.summary()
+        logger.info(f"Call telemetry summary: {call_summary}")
+        tracer.save(stream_sid or "unknown", call_summary=call_summary)
         Logger.websocket_disconnected()

@@ -17,7 +17,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field, asdict
 
 from .log import get_logger
@@ -114,15 +114,21 @@ class Tracer:
             if span.end_ms is None:
                 span.end_ms = ms
 
-    def save(self, call_id: str) -> Optional[Path]:
-        """Write trace data to /tmp/shuo/<call_id>.json."""
+    def save(self, call_id: str, call_summary: Optional[dict] = None) -> Optional[Path]:
+        """Write trace data to /tmp/shuo/<call_id>.json.
+
+        Args:
+            call_id: Identifier for this call (used as filename).
+            call_summary: Optional telemetry summary dict to include as
+                ``"call_summary"`` in the output JSON.
+        """
         if not self._turns:
             return None
 
         TRACE_DIR.mkdir(parents=True, exist_ok=True)
         path = TRACE_DIR / f"{call_id}.json"
 
-        data = {
+        data: Dict = {
             "call_id": call_id,
             "turns": [
                 {
@@ -135,6 +141,9 @@ class Tracer:
                 for t in sorted(self._turns.values(), key=lambda x: x.turn_number)
             ],
         }
+
+        if call_summary is not None:
+            data["call_summary"] = call_summary
 
         path.write_text(json.dumps(data, indent=2))
         logger.info(f"Trace saved to {path}")

@@ -21,6 +21,7 @@ from pydantic_ai.settings import ModelSettings
 from .log import ServiceLogger
 from .call import TurnOutcome
 from .context import CallContext, build_system_prompt
+from .telemetry import CallTelemetry, CP
 
 log = ServiceLogger("LLM")
 
@@ -181,13 +182,15 @@ class LanguageModel:
 
     def __init__(
         self,
-        on_token: Callable[[str], Awaitable[None]],
-        on_done:  Callable[[], Awaitable[None]],
-        goal:     str = "",
-        ctx:      Optional["CallContext"] = None,
+        on_token:  Callable[[str], Awaitable[None]],
+        on_done:   Callable[[], Awaitable[None]],
+        goal:      str = "",
+        ctx:       Optional["CallContext"] = None,
+        telemetry: Optional[CallTelemetry] = None,
     ):
-        self._on_token = on_token
-        self._on_done  = on_done
+        self._on_token  = on_token
+        self._on_done   = on_done
+        self._telemetry = telemetry
 
         model = os.getenv("LLM_MODEL", "groq:llama-3.3-70b-versatile")
         self._tools_enabled = _supports_tools(model)
@@ -386,6 +389,11 @@ class LanguageModel:
 
     async def _generate_once(self) -> None:
         self._ctx = _TurnCtx()
+        _first_token_recorded = False
+
+        if self._telemetry:
+            self._telemetry.checkpoint(CP.LLM_START)
+            self._telemetry.increment("llm_turns")
 
         async with self._agent.iter(
             self._pending,
@@ -404,11 +412,17 @@ class LanguageModel:
                                 and event.delta.content_delta
                             ):
                                 self._tokens_emitted = True
+                                if self._telemetry and not _first_token_recorded:
+                                    _first_token_recorded = True
+                                    self._telemetry.checkpoint(CP.LLM_FIRST_TOKEN)
                                 await self._on_token(event.delta.content_delta)
                 elif Agent.is_call_tools_node(node):
                     async with node.stream(run.ctx) as stream:
                         async for _ in stream:
                             pass  # tools mutate self._ctx
+
+        if self._telemetry:
+            self._telemetry.checkpoint(CP.LLM_END)
 
         if self._running:
             self._history = list(run.result.all_messages())
