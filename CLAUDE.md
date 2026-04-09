@@ -97,10 +97,9 @@ The state machine in `shuo/call.py` is the center of gravity — a pure function
 
 | Directory | Role |
 |-----------|------|
-| `shuo/` | Python package — core runtime |
+| `shuo/` | Python package — core runtime (includes `phone.html` browser softphone) |
 | `monitor/` | Supervisor UI: call registry, real-time event bus, human takeover |
 | `simulator/` | YAML-driven call flow simulator for benchmarking |
-| `ui/` | Browser WebRTC softphone |
 | `tests/` | Test suite (133 tests) |
 | `eval/` | Benchmark datasets, scenarios, and reports |
 | `specs/` | API and design specs |

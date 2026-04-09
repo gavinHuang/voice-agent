@@ -224,7 +224,7 @@ async def get_token():
     return {"token": token.to_jwt()}
 
 
-_SOFTPHONE_DIR = Path(__file__).parent.parent / "ui"
+_SOFTPHONE_DIR = Path(__file__).parent
 
 
 @app.get("/phone")
