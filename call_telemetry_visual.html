@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Call Telemetry — 08:45:36</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0f1117;
+    color: #e2e8f0;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    padding: 32px;
+    min-width: 900px;
+  }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f8fafc;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: #64748b;
+    font-size: 12px;
+    margin-bottom: 28px;
+  }
+
+  /* ── Top KPI cards ── */
+  .kpi-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .kpi {
+    background: #1e2535;
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    padding: 14px 20px;
+    flex: 1;
+  }
+  .kpi-label {
+    color: #64748b;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .kpi-unit {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-left: 2px;
+  }
+  .kpi-sub {
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  /* ── Waterfall timeline ── */
+  .section-title {
+    color: #94a3b8;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #1e2535;
+  }
+
+  .chart-wrap {
+    background: #1e2535;
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+
+  .timeline-area {
+    position: relative;
+  }
+
+  /* tick marks */
+  .tick-row {
+    display: flex;
+    position: relative;
+    margin-bottom: 8px;
+    margin-left: 160px;
+    height: 18px;
+  }
+  .tick {
+    position: absolute;
+    color: #475569;
+    font-size: 10px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  /* lane rows */
+  .lane {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    margin-bottom: 4px;
+  }
+  .lane-label {
+    width: 160px;
+    min-width: 160px;
+    color: #94a3b8;
+    font-size: 11px;
+    padding-right: 12px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .lane-track {
+    position: relative;
+    flex: 1;
+    height: 100%;
+  }
+  .bar {
+    position: absolute;
+    height: 18px;
+    top: 5px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    font-weight: 600;
+  }
+  .dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    top: 10px;
+    transform: translateX(-4px);
+  }
+  .dot-label {
+    position: absolute;
+    font-size: 9px;
+    color: #64748b;
+    top: 20px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  /* divider lines */
+  .tick-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #2d3748;
+    pointer-events: none;
+  }
+
+  /* ── Durations table ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0 8px 8px;
+    border-bottom: 1px solid #2d3748;
+  }
+  td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #1a2030;
+    font-size: 12px;
+    vertical-align: middle;
+  }
+  td:last-child {
+    text-align: right;
+    font-weight: 600;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .pill-good  { background: #052e16; color: #4ade80; }
+  .pill-warn  { background: #431407; color: #fb923c; }
+  .pill-info  { background: #0c1a2e; color: #60a5fa; }
+  .pill-muted { background: #1e2535; color: #64748b; }
+
+  /* phase annotation bar */
+  .phase-bar {
+    display: flex;
+    margin-left: 160px;
+    height: 6px;
+    border-radius: 3px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .phase-seg {
+    height: 100%;
+  }
+
+  /* counter row */
+  .counter-row {
+    display: flex;
+    gap: 10px;
+  }
+  .counter-chip {
+    background: #0c1a2e;
+    border: 1px solid #1e3a5f;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #60a5fa;
+  }
+  .counter-chip span {
+    color: #93c5fd;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Call Telemetry</h1>
+<div class="subtitle">08:45:36.112 &nbsp;·&nbsp; 61.1s total &nbsp;·&nbsp; 5 LLM turns &nbsp;·&nbsp; 4 TTS segments</div>
+
+<!-- ── KPI Row ── -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="kpi-label">Total Call</div>
+    <div class="kpi-value" style="color:#60a5fa">61.1<span class="kpi-unit">s</span></div>
+    <div class="kpi-sub">dial → hangup</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">LLM TTFT</div>
+    <div class="kpi-value" style="color:#4ade80">211<span class="kpi-unit">ms</span></div>
+    <div class="kpi-sub">first token from LLM start</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">TTS Latency</div>
+    <div class="kpi-value" style="color:#fb923c">1710<span class="kpi-unit">ms</span></div>
+    <div class="kpi-sub">synthesis → first audio chunk</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Init Overhead</div>
+    <div class="kpi-value" style="color:#a78bfa">894<span class="kpi-unit">ms</span></div>
+    <div class="kpi-sub">connect → STT ready</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Script Gen</div>
+    <div class="kpi-value" style="color:#34d399">42<span class="kpi-unit">ms</span></div>
+    <div class="kpi-sub">system prompt build</div>
+  </div>
+</div>
+
+<!-- ── Waterfall (zoomed: 0–15s) ── -->
+<div class="chart-wrap">
+  <div class="section-title">Timeline — First 15 seconds (connect → first user word)</div>
+  <div class="timeline-area" id="chart-early"></div>
+</div>
+
+<!-- ── Full call timeline ── -->
+<div class="chart-wrap">
+  <div class="section-title">Full Call Timeline (61s)</div>
+  <div class="timeline-area" id="chart-full"></div>
+</div>
+
+<!-- ── Stats ── -->
+<div class="two-col">
+  <div class="chart-wrap" style="margin-bottom:0">
+    <div class="section-title">Key Durations</div>
+    <table>
+      <tr><th>Segment</th><th>ms</th></tr>
+      <tr>
+        <td>Dial → Connected</td>
+        <td>233 ms<span class="pill pill-info">network</span></td>
+      </tr>
+      <tr>
+        <td>Connected → STT Ready</td>
+        <td>894 ms<span class="pill pill-warn">init</span></td>
+      </tr>
+      <tr>
+        <td>Script Generation</td>
+        <td>43 ms<span class="pill pill-good">fast</span></td>
+      </tr>
+      <tr>
+        <td>LLM TTFT</td>
+        <td>211 ms<span class="pill pill-good">good</span></td>
+      </tr>
+      <tr>
+        <td>TTS Synthesis → Audio</td>
+        <td>1710 ms<span class="pill pill-warn">slow</span></td>
+      </tr>
+      <tr>
+        <td>TTS Playback Duration</td>
+        <td>8526 ms<span class="pill pill-muted">~8.5s</span></td>
+      </tr>
+      <tr>
+        <td>Connect → First User Word</td>
+        <td>15172 ms<span class="pill pill-info">15.2s</span></td>
+      </tr>
+      <tr>
+        <td>Total Call</td>
+        <td>61123 ms<span class="pill pill-info">61.1s</span></td>
+      </tr>
+    </table>
+  </div>
+  <div class="chart-wrap" style="margin-bottom:0">
+    <div class="section-title">Checkpoints (ms from connected)</div>
+    <table>
+      <tr><th>Event</th><th>Offset</th></tr>
+      <tr><td>📞 Dial initiated</td><td style="color:#94a3b8">−233 ms</td></tr>
+      <tr><td>✅ Call connected</td><td style="color:#60a5fa">0 ms</td></tr>
+      <tr><td>🎙 STT ready</td><td style="color:#a78bfa">894 ms</td></tr>
+      <tr><td>📝 Script gen start</td><td style="color:#a78bfa">894 ms</td></tr>
+      <tr><td>📝 Script gen end</td><td style="color:#34d399">937 ms</td></tr>
+      <tr><td>🤖 LLM start</td><td style="color:#facc15">938 ms</td></tr>
+      <tr><td>⚡ LLM first token</td><td style="color:#4ade80">1149 ms</td></tr>
+      <tr><td>🔊 TTS synthesis start</td><td style="color:#fb923c">1149 ms</td></tr>
+      <tr><td>✓ LLM done</td><td style="color:#4ade80">1285 ms</td></tr>
+      <tr><td>🔉 TTS first chunk</td><td style="color:#f97316">2859 ms</td></tr>
+      <tr><td>⏹ TTS playback done</td><td style="color:#94a3b8">11385 ms</td></tr>
+      <tr><td>👤 First user word (STT)</td><td style="color:#60a5fa">15172 ms</td></tr>
+      <tr><td>☎ Hangup</td><td style="color:#f43f5e">61123 ms</td></tr>
+    </table>
+    <div style="margin-top:16px">
+      <div class="section-title" style="margin-bottom:10px">Counters</div>
+      <div class="counter-row">
+        <div class="counter-chip"><span>5</span>LLM turns</div>
+        <div class="counter-chip"><span>4</span>TTS segments</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── shared helpers ──────────────────────────────────────────────────────────
+function px(ms, total, width) {
+  return Math.max(0, (ms / total) * width);
+}
+
+function buildChart(containerId, checkpoints, totalMs, labelMap, bars, dots) {
+  const container = document.getElementById(containerId);
+  const W = container.clientWidth - 160 - 24; // account for labels and padding
+
+  // Tick marks
+  const tickRow = document.createElement('div');
+  tickRow.className = 'tick-row';
+  const tickCount = 8;
+  for (let i = 0; i <= tickCount; i++) {
+    const ms = (totalMs / tickCount) * i;
+    const t = document.createElement('div');
+    t.className = 'tick';
+    t.style.left = px(ms, totalMs, W) + 'px';
+    t.textContent = ms >= 1000 ? (ms/1000).toFixed(1)+'s' : Math.round(ms)+'ms';
+    tickRow.appendChild(t);
+  }
+  container.appendChild(tickRow);
+
+  // Grid lines (absolute positioned over lanes below)
+  const gridWrap = document.createElement('div');
+  gridWrap.style.position = 'relative';
+  gridWrap.style.marginLeft = '160px';
+
+  // Draw lanes
+  bars.forEach(({ label, start, end, color, opacity }) => {
+    const lane = document.createElement('div');
+    lane.className = 'lane';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'lane-label';
+    lbl.textContent = label;
+
+    const track = document.createElement('div');
+    track.className = 'lane-track';
+
+    // background tick lines
+    for (let i = 0; i <= tickCount; i++) {
+      const ms = (totalMs / tickCount) * i;
+      const line = document.createElement('div');
+      line.className = 'tick-line';
+      line.style.left = px(ms, totalMs, W) + 'px';
+      track.appendChild(line);
+    }
+
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.left = px(start, totalMs, W) + 'px';
+    bar.style.width = Math.max(px(end - start, totalMs, W), 3) + 'px';
+    bar.style.background = color;
+    bar.style.opacity = opacity || 1;
+    const durMs = end - start;
+    bar.textContent = durMs >= 1000 ? (durMs/1000).toFixed(1)+'s' : Math.round(durMs)+'ms';
+    track.appendChild(bar);
+
+    lane.appendChild(lbl);
+    lane.appendChild(track);
+    container.appendChild(lane);
+  });
+
+  // Dot lanes (point events)
+  if (dots && dots.length) {
+    const dotLane = document.createElement('div');
+    dotLane.className = 'lane';
+    dotLane.style.height = '36px';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'lane-label';
+    lbl.textContent = 'events';
+
+    const track = document.createElement('div');
+    track.className = 'lane-track';
+    track.style.position = 'relative';
+
+    // tick lines
+    for (let i = 0; i <= tickCount; i++) {
+      const ms = (totalMs / tickCount) * i;
+      const line = document.createElement('div');
+      line.className = 'tick-line';
+      line.style.left = px(ms, totalMs, W) + 'px';
+      track.appendChild(line);
+    }
+
+    dots.forEach(({ ms, label, color }) => {
+      const d = document.createElement('div');
+      d.className = 'dot';
+      d.style.left = px(ms, totalMs, W) + 'px';
+      d.style.background = color;
+      track.appendChild(d);
+
+      const dl = document.createElement('div');
+      dl.className = 'dot-label';
+      dl.style.left = px(ms, totalMs, W) + 'px';
+      dl.textContent = label;
+      track.appendChild(dl);
+    });
+
+    dotLane.appendChild(lbl);
+    dotLane.appendChild(track);
+    container.appendChild(dotLane);
+  }
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────
+const cp = {
+  call_dial:                -233.1,
+  call_connected:            0.0,
+  stt_ready:                 894.2,
+  script_generation_start:   894.2,
+  script_generation_end:     936.7,
+  llm_start:                 938.0,
+  llm_first_token:          1149.2,
+  tts_synthesis_start:      1149.4,
+  llm_end:                  1285.2,
+  tts_first_chunk:          2859.0,
+  tts_playback_done:       11385.2,
+  stt_first_result:        15172.0,
+  hangup:                  61123.3,
+};
+
+// ── Early chart: 0 → 15,500ms ──────────────────────────────────────────────
+const EARLY = 15500;
+
+const earlyBars = [
+  {
+    label: 'Network / Dial',
+    start: 0, end: 233.1,
+    color: 'linear-gradient(90deg,#1d4ed8,#3b82f6)',
+  },
+  {
+    label: 'STT Init',
+    start: 0, end: 894.2,
+    color: 'linear-gradient(90deg,#5b21b6,#8b5cf6)',
+  },
+  {
+    label: 'Script Gen',
+    start: 894.2, end: 936.7,
+    color: 'linear-gradient(90deg,#065f46,#10b981)',
+  },
+  {
+    label: 'LLM Inference',
+    start: 938.0, end: 1285.2,
+    color: 'linear-gradient(90deg,#78350f,#f59e0b)',
+  },
+  {
+    label: 'TTS Synthesis',
+    start: 1149.4, end: 2859.0,
+    color: 'linear-gradient(90deg,#7c2d12,#f97316)',
+  },
+  {
+    label: 'TTS Playback',
+    start: 2859.0, end: 11385.2,
+    color: 'linear-gradient(90deg,#7f1d1d,#ef4444)',
+    opacity: 0.75,
+  },
+];
+
+const earlyDots = [
+  { ms: 0,       label: 'connected',      color: '#60a5fa' },
+  { ms: 894.2,   label: 'STT ready',      color: '#a78bfa' },
+  { ms: 938.0,   label: 'LLM start',      color: '#facc15' },
+  { ms: 1149.2,  label: '1st token',      color: '#4ade80' },
+  { ms: 2859.0,  label: '1st audio',      color: '#fb923c' },
+  { ms: 11385.2, label: 'playback done',  color: '#94a3b8' },
+  { ms: 15172.0, label: '👤 user spoke',  color: '#60a5fa' },
+];
+
+buildChart('chart-early', cp, EARLY, {}, earlyBars, earlyDots);
+
+// ── Full chart: 0 → 62,000ms ───────────────────────────────────────────────
+const FULL = 62000;
+
+const fullBars = [
+  {
+    label: 'Dial → Connect',
+    start: 0, end: 233.1,
+    color: 'linear-gradient(90deg,#1d4ed8,#3b82f6)',
+  },
+  {
+    label: 'STT + Init',
+    start: 0, end: 894.2,
+    color: 'linear-gradient(90deg,#5b21b6,#8b5cf6)',
+  },
+  {
+    label: 'LLM (turn 1)',
+    start: 938.0, end: 1285.2,
+    color: 'linear-gradient(90deg,#78350f,#f59e0b)',
+  },
+  {
+    label: 'TTS Synthesis',
+    start: 1149.4, end: 2859.0,
+    color: 'linear-gradient(90deg,#7c2d12,#f97316)',
+  },
+  {
+    label: 'TTS Playback',
+    start: 2859.0, end: 11385.2,
+    color: 'linear-gradient(90deg,#7f1d1d,#ef4444)',
+    opacity: 0.7,
+  },
+  {
+    label: 'Conversation',
+    start: 15172.0, end: 61123.3,
+    color: 'linear-gradient(90deg,#164e63,#22d3ee)',
+    opacity: 0.45,
+  },
+];
+
+const fullDots = [
+  { ms: 0,        label: 'connected',     color: '#60a5fa' },
+  { ms: 894.2,    label: 'STT ready',     color: '#a78bfa' },
+  { ms: 2859.0,   label: '1st audio',     color: '#fb923c' },
+  { ms: 11385.2,  label: 'play done',     color: '#94a3b8' },
+  { ms: 15172.0,  label: '👤 spoke',      color: '#60a5fa' },
+  { ms: 61123.3,  label: '☎ hangup',      color: '#f43f5e' },
+];
+
+buildChart('chart-full', cp, FULL, {}, fullBars, fullDots);
+</script>
+</body>
+</html>

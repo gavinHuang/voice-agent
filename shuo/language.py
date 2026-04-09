@@ -245,7 +245,7 @@ class LanguageModel:
                 ctx.deps.hold_end = True
                 return "Person returned"
 
-            @self._agent.tool(retries=0)
+            @self._agent.tool
             async def signal_hangup(ctx: RunContext[_TurnCtx]) -> str:
                 """Signal that the call should be hung up after this response completes."""
                 ctx.deps.hangup_pending = True
@@ -364,7 +364,7 @@ class LanguageModel:
         self._tokens_emitted = False
         while attempt <= _LLM_MAX_RETRIES:
             try:
-                await asyncio.wait_for(self._generate_once(), timeout=_LLM_TIMEOUT)
+                await asyncio.wait_for(self._generate_once(first_attempt=(attempt == 0)), timeout=_LLM_TIMEOUT)
                 return
             except asyncio.CancelledError:
                 raise
@@ -387,12 +387,15 @@ class LanguageModel:
         self._running = False
         self._task = None
 
-    async def _generate_once(self) -> None:
+    async def _generate_once(self, first_attempt: bool = True) -> None:
         self._ctx = _TurnCtx()
         _first_token_recorded = False
 
         if self._telemetry:
-            self._telemetry.checkpoint(CP.LLM_START)
+            # Checkpoint only on the first attempt of the first turn (singleton).
+            # Subsequent turns/retries skip the checkpoint but always count the turn.
+            if first_attempt:
+                self._telemetry.checkpoint(CP.LLM_START)
             self._telemetry.increment("llm_turns")
 
         async with self._agent.iter(
@@ -421,7 +424,7 @@ class LanguageModel:
                         async for _ in stream:
                             pass  # tools mutate self._ctx
 
-        if self._telemetry:
+        if self._telemetry and first_attempt:
             self._telemetry.checkpoint(CP.LLM_END)
 
         if self._running:

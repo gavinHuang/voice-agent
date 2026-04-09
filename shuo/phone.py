@@ -288,6 +288,10 @@ def dial_out(to_number: str, ivr_mode: bool = False) -> str:
 
     kwargs: dict = dict(to=to_number, from_=from_number, url=twiml_url, record=True)
     if not ivr_mode:
+        # async_amd=True: Twilio connects the WebSocket immediately when the
+        # callee answers, then runs AMD in the background. Without this,
+        # AMD blocks the WebSocket for ~5–7s before our server sees the call.
         kwargs["machine_detection"] = "Enable"
+        kwargs["async_amd"] = "true"
 
     return client.calls.create(**kwargs).sid

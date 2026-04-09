@@ -310,7 +310,7 @@ async def run_call(
     All side effects happen in dispatch(); step() is kept pure.
     """
     from .agent import Agent
-    from .speech import Transcriber, TranscriberPool
+    from .speech import Transcriber
     from .voice import VoicePool
 
     event_log = Logger(verbose=False)
@@ -379,6 +379,20 @@ async def run_call(
             if agent and not (ivr_mode and ivr_mode()) and not agent.hangup_decided:
                 await agent.cancel_turn()
 
+    # ── Pre-start STT (no pool path) ─────────────────────────────────
+    # Start Deepgram connecting now — before the phone WebSocket even opens.
+    # Twilio takes ~200–500ms+ to send CallStartedEvent; the STT handshake
+    # (~900ms) runs concurrently so it's ready by the time the call connects.
+    _transcriber_start_task: Optional[asyncio.Task] = None
+    if not transcriber_pool:
+        transcriber = Transcriber(
+            on_end_of_turn=on_transcript,
+            on_start_of_turn=on_speech_started,
+            on_dead=on_transcriber_dead,
+        )
+        logger.info("[BP4] Pre-starting transcriber (concurrent with phone connect)...")
+        _transcriber_start_task = asyncio.create_task(transcriber.start())
+
     # ── Boot ────────────────────────────────────────────────────────
 
     state = CallState()
@@ -422,15 +436,10 @@ async def run_call(
                         on_dead=on_transcriber_dead,
                     )
                 else:
-                    from .speech import Transcriber
-                    transcriber = Transcriber(
-                        on_end_of_turn=on_transcript,
-                        on_start_of_turn=on_speech_started,
-                        on_dead=on_transcriber_dead,
-                    )
-                    logger.info("[BP4] Starting transcriber...")
-                    await transcriber.start()
-                    logger.info("[BP4] Transcriber started OK")
+                    # Pre-started above — just wait for it (usually already done)
+                    if _transcriber_start_task is not None:
+                        await _transcriber_start_task
+                        logger.info("[BP4] Transcriber ready (pre-started)")
                 telemetry.checkpoint(CP.STT_READY)
 
                 if _own_voice_pool:
