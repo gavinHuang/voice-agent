@@ -4,8 +4,14 @@ Kokoro-82M TTS via the kokoro Python package (direct inference).
 Requires kokoro to be installed: uv add kokoro (Python <3.13 only).
 
 Env vars:
-    KOKORO_VOICE     — voice name (default af_heart)
+    KOKORO_VOICE     — voice for callee's language TTS (default af_heart; e.g. zf_xiaobei for Chinese)
+    KOKORO_LANG      — Kokoro lang code for callee's language (default a=English; e.g. z for Chinese)
     KOKORO_REPO_ID   — HuggingFace repo or local path (default hexgrad/Kokoro-82M)
+
+When CALLER_LANG ≠ CALLEE_LANG (translation active), TTS speaks in CALLEE_LANG using KOKORO_LANG/KOKORO_VOICE.
+When no translation, TTS speaks the default language — KOKORO_LANG/KOKORO_VOICE are ignored and
+English defaults (a / af_heart) are used instead, preventing Chinese pipeline from mangling English text.
+Use KOKORO_LANG_CALLEE / KOKORO_VOICE_CALLEE to configure a non-English default voice.
 
 Streaming behaviour
 -------------------
@@ -37,18 +43,51 @@ TARGET_RATE = 8000
 KOKORO_SAMPLE_RATE = 24000
 
 # Flush accumulated text to Kokoro when a sentence ends.
+# Includes full-width CJK punctuation (。！？) for Chinese/Japanese text.
 # Require at least 10 chars so we don't synthesize single punctuation marks.
-_SENTENCE_END_RE = re.compile(r'[.!?]+\s*$')
+_SENTENCE_END_RE = re.compile(r'[.!?。！？]+\s*$')
 _MIN_SEGMENT_LEN = 10
 
 # Module-level pipeline — loaded once, shared across all KokoroTTS instances.
 _pipeline = None
 
 
+def _translation_active() -> bool:
+    """Return True when CALLER_LANG and CALLEE_LANG differ (translation is enabled)."""
+    caller = os.getenv("CALLER_LANG", "").strip().lower()
+    callee = os.getenv("CALLEE_LANG", "English").strip().lower()
+    return bool(caller) and caller != callee
+
+
+def _effective_lang_code() -> str:
+    """
+    Resolve the Kokoro lang_code for the current configuration.
+
+    Translation active  → use KOKORO_LANG (callee's language, e.g. 'z' for Chinese), default 'a'
+    No translation      → use KOKORO_LANG_CALLEE (default voice lang), default 'a' (English)
+    """
+    if _translation_active():
+        return os.getenv("KOKORO_LANG", "a")
+    return os.getenv("KOKORO_LANG_CALLEE", "a")
+
+
+def _effective_voice() -> str:
+    """
+    Resolve the Kokoro voice name for the current configuration.
+
+    Translation active  → use KOKORO_VOICE (callee's voice, e.g. 'zf_xiaobei' for Chinese), default af_heart
+    No translation      → use KOKORO_VOICE_CALLEE (default voice), default af_heart (English)
+    """
+    if _translation_active():
+        return os.getenv("KOKORO_VOICE", "af_heart")
+    return os.getenv("KOKORO_VOICE_CALLEE", os.getenv("KOKORO_VOICE_DEFAULT", "af_heart"))
+
+
 def _load_pipeline() -> object:
     from kokoro import KPipeline
-    repo_id = os.getenv("KOKORO_REPO_ID", "hexgrad/Kokoro-82M")
-    return KPipeline(lang_code="a", repo_id=repo_id)
+    repo_id   = os.getenv("KOKORO_REPO_ID", "hexgrad/Kokoro-82M")
+    lang_code = _effective_lang_code()
+    return KPipeline(lang_code=lang_code, repo_id=repo_id)
 
 
 async def _get_pipeline() -> object:
@@ -81,7 +120,7 @@ class KokoroTTS:
         self._on_done = on_done
 
         self._running = False
-        self._voice = os.getenv("KOKORO_VOICE", "af_heart")
+        self._voice = _effective_voice()
 
         self._text_buffer: str = ""
         self._ratecv_state: object = None

@@ -102,6 +102,10 @@ pipx install -e .
 # Copy and fill in your keys
 cp .env.example .env
 
+# Install ngrok (one-time, macOS: brew install ngrok; see https://ngrok.com/download for other platforms)
+# Then log in with your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
+ngrok config add-authtoken <your-authtoken>
+
 # Verify config
 ./run.sh config
 ```

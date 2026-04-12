@@ -151,8 +151,13 @@ def cli(ctx: click.Context, config: str | None) -> None:
               help="Seconds to wait for active calls before forced shutdown")
 @click.option("--ngrok", "use_ngrok", is_flag=True, default=False,
               help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically")
+@click.option("--caller-lang", type=str, default=None,
+              help="Language the caller speaks (e.g. 'Spanish')")
+@click.option("--callee-lang", type=str, default=None,
+              help="Language the agent/callee operates in (e.g. 'English')")
 @click.pass_context
-def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_ngrok: bool) -> None:
+def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_ngrok: bool,
+          caller_lang: str | None, callee_lang: str | None) -> None:
     """Start the FastAPI server and wait for inbound calls."""
     import uvicorn
     from shuo.web import app
@@ -167,6 +172,11 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_n
         if not os.getenv("IVR_BASE_URL"):
             os.environ["IVR_BASE_URL"] = f"{ngrok_url}/ivr-mock"
             click.echo(f"IVR_BASE_URL (auto): {os.environ['IVR_BASE_URL']}")
+
+    if caller_lang:
+        os.environ["CALLER_LANG"] = caller_lang
+    if callee_lang:
+        os.environ["CALLEE_LANG"] = callee_lang
 
     _check_env_vars()
     effective_drain = (
@@ -244,6 +254,10 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_n
               help="Skip interactive confirmation and dial immediately")
 @click.option("--ngrok/--no-ngrok", "use_ngrok", default=True,
               help="Start an ngrok tunnel and set TWILIO_PUBLIC_URL automatically (default: on)")
+@click.option("--caller-lang", type=str, default=None,
+              help="Language the caller speaks (e.g. 'Spanish')")
+@click.option("--callee-lang", type=str, default=None,
+              help="Language the agent/callee operates in (e.g. 'English')")
 @click.pass_context
 def call_cmd(
     ctx: click.Context,
@@ -259,6 +273,8 @@ def call_cmd(
     success_criteria: str | None,
     yes: bool,
     use_ngrok: bool,
+    caller_lang: str | None,
+    callee_lang: str | None,
 ) -> None:
     """Initiate an outbound call to PHONE."""
     import uvicorn
@@ -272,6 +288,11 @@ def call_cmd(
         if not os.getenv("IVR_BASE_URL"):
             os.environ["IVR_BASE_URL"] = f"{ngrok_url}/ivr-mock"
             click.echo(f"IVR_BASE_URL (auto): {os.environ['IVR_BASE_URL']}")
+
+    if caller_lang:
+        os.environ["CALLER_LANG"] = caller_lang
+    if callee_lang:
+        os.environ["CALLEE_LANG"] = callee_lang
 
     _check_env_vars()
 

@@ -24,11 +24,24 @@ log = ServiceLogger("Speech")
 _MAX_RECONNECTS      = int(os.getenv("FLUX_MAX_RECONNECTS",       "3"))
 _RECONNECT_BASE_DELAY = float(os.getenv("FLUX_RECONNECT_BASE_DELAY", "1.0"))
 
+_DEEPGRAM_MODEL    = os.getenv("DEEPGRAM_MODEL",    "flux-general-en")
+_DEEPGRAM_LANGUAGE = os.getenv("DEEPGRAM_LANGUAGE", "").strip()
+# flux-general-en → V2 client (no language param).
+# nova-2 / nova-3  → V1 client (supports language param for multilingual STT).
+_USE_V1 = _DEEPGRAM_MODEL != "flux-general-en"
+
+_DEEPGRAM_REGION = os.getenv("DEEPGRAM_REGION", "us").lower()  # "us" or "eu"
+
 _DEEPGRAM_EU = DeepgramClientEnvironment(
     base="wss://api.eu.deepgram.com",
     production="wss://api.eu.deepgram.com",
     agent="wss://agent.eu.deepgram.com",
 )
+
+
+def _deepgram_env() -> DeepgramClientEnvironment | None:
+    """Return the DeepgramClientEnvironment for the configured region, or None for US default."""
+    return _DEEPGRAM_EU if _DEEPGRAM_REGION == "eu" else None
 
 
 # =============================================================================
@@ -63,6 +76,9 @@ class Transcriber:
         self._running:       bool            = False
         self._reconnect_count: int           = 0
         self._reconnect_task: Optional[asyncio.Task] = None
+        # V1 (nova-2) turn-detection state — accumulate is_final segments until speech_final
+        self._v1_buf:          str           = ""
+        self._v1_turn_started: bool          = False
 
     @property
     def is_active(self) -> bool:
@@ -80,20 +96,23 @@ class Transcriber:
         self._on_start_of_turn = on_start_of_turn
         self._on_interim       = on_interim
         self._on_dead          = on_dead
+        self._v1_buf           = ""
+        self._v1_turn_started  = False
 
     async def start(self) -> None:
         if self._running:
             return
         try:
+            env = _deepgram_env()
             self._client = AsyncDeepgramClient(
                 api_key=self._api_key,
-                environment=_DEEPGRAM_EU,
+                **({'environment': env} if env else {}),
             )
-            self._cm = self._client.listen.v2.connect(
-                model="flux-general-en",
-                encoding="mulaw",
-                sample_rate=8000,
-            )
+            connect_kwargs = dict(model=_DEEPGRAM_MODEL, encoding="mulaw", sample_rate=8000)
+            if _USE_V1 and _DEEPGRAM_LANGUAGE:
+                connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+            listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
+            self._cm = listener.connect(**connect_kwargs)
             self._connection = await self._cm.__aenter__()
             self._connection.on("message", self._on_message)
             self._connection.on("error",   self._on_error)
@@ -148,22 +167,49 @@ class Transcriber:
 
     async def _on_message(self, message, *args, **kwargs) -> None:
         try:
-            if getattr(message, "type", None) == "TurnInfo":
+            msg_type = getattr(message, "type", None)
+
+            if msg_type == "TurnInfo":
+                # V2 (Flux) — turn boundaries are explicit
                 event = getattr(message, "event", None)
                 if event == "EndOfTurn":
                     transcript = (getattr(message, "transcript", "") or "").strip()
                     await self._on_end_of_turn(transcript)
                 elif event == "StartOfTurn":
                     await self._on_start_of_turn()
-            elif getattr(message, "type", None) == "Results" and self._on_interim:
+
+            elif msg_type == "Results":
+                # Extract transcript from channel alternatives
                 ch = getattr(message, "channel", None)
+                text = ""
                 if ch:
                     alts = getattr(ch, "alternatives", None)
                     if alts:
                         alt = alts[0] if isinstance(alts, list) else alts
-                        t = getattr(alt, "transcript", "")
-                        if t:
-                            await self._on_interim(t.strip())
+                        text = (getattr(alt, "transcript", "") or "").strip()
+
+                if _USE_V1:
+                    # V1 (nova-2): use is_final + speech_final for turn detection
+                    is_final    = getattr(message, "is_final",    False)
+                    speech_final = getattr(message, "speech_final", False)
+                    if text and not is_final and not self._v1_turn_started:
+                        # First interim result → start of turn
+                        self._v1_turn_started = True
+                        await self._on_start_of_turn()
+                    if is_final and text:
+                        self._v1_buf = (self._v1_buf + " " + text).strip()
+                    if speech_final:
+                        full = self._v1_buf.strip()
+                        self._v1_buf = ""
+                        self._v1_turn_started = False
+                        if full:
+                            await self._on_end_of_turn(full)
+                    elif self._on_interim and text and not is_final:
+                        await self._on_interim(text)
+                else:
+                    # V2: Results only used for interim display
+                    if self._on_interim and text:
+                        await self._on_interim(text)
         except Exception as e:
             log.error("Message handling failed", e)
 
@@ -189,10 +235,16 @@ class Transcriber:
                 return
             try:
                 await self._cleanup()
-                self._client = AsyncDeepgramClient(api_key=self._api_key, environment=_DEEPGRAM_EU)
-                self._cm = self._client.listen.v2.connect(
-                    model="flux-general-en", encoding="mulaw", sample_rate=8000,
+                env = _deepgram_env()
+                self._client = AsyncDeepgramClient(
+                    api_key=self._api_key,
+                    **({'environment': env} if env else {}),
                 )
+                connect_kwargs = dict(model=_DEEPGRAM_MODEL, encoding="mulaw", sample_rate=8000)
+                if _USE_V1 and _DEEPGRAM_LANGUAGE:
+                    connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+                listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
+                self._cm = listener.connect(**connect_kwargs)
                 self._connection = await self._cm.__aenter__()
                 self._connection.on("message", self._on_message)
                 self._connection.on("error",   self._on_error)

@@ -86,7 +86,8 @@ The state machine in `shuo/call.py` is the center of gravity — a pure function
 | `voice.py` | TTS: `VoicePool` + `AudioPlayer` + dtmf_tone() |
 | `voice_elevenlabs.py` / `voice_kokoro.py` / `voice_fish.py` | TTS providers |
 | `phone.py` | Phone protocol + `TwilioPhone` + `LocalPhone` + `dial_out()` |
-| `agent.py` | LLM→TTS→Player pipeline per turn |
+| `agent.py` | LLM→TTS→Player pipeline per turn; translation injected here |
+| `translation.py` | Bidirectional translation: `Translator` ABC, `LLMTranslator`, `DeepLTranslator`, `get_translator()` |
 | `web.py` | FastAPI server (HTTP routes + WebSocket call handler) |
 | `cli.py` | Click CLI |
 | `bench.py` | Benchmark runner |
@@ -127,6 +128,8 @@ ELEVENLABS_API_KEY
 ```
 
 Optional: `ELEVENLABS_VOICE_ID`, `LLM_MODEL`, `TTS_PROVIDER` (`elevenlabs`|`kokoro`|`fish`), `PORT` (default 3040).
+
+**Translation (optional):** Set both `CALLER_LANG` (language the caller speaks, e.g. `Spanish`) and `CALLEE_LANG` (agent's operating language, e.g. `English`) to enable bidirectional translation. Also set `DEEPGRAM_LANGUAGE` to the caller's language code for accurate STT, and configure TTS for the caller's language (TTS speaks back in `CALLER_LANG`). `TRANSLATION_PROVIDER` selects `llm` (default, uses Groq) or `deepl` (requires `DEEPL_API_KEY`). Per-call overrides: `--caller-lang` / `--callee-lang` CLI flags.
 
 ## Key Server Endpoints
 

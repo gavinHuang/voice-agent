@@ -106,12 +106,19 @@ def _supports_tools(model: str) -> bool:
 def _goal_suffix(goal: str, tools: bool) -> str:
     if not goal:
         return ""
+    _strict_scope = (
+        "CRITICAL — STRICT SCOPE RULE: Only ask for information that is EXPLICITLY required "
+        "to accomplish the stated goal. Do NOT ask for account numbers, IDs, names, verification "
+        "details, or any other information unless the goal specifically mentions it. "
+        "Do NOT assume verification or identification steps are needed — skip them if not in the goal.\n"
+    )
     if tools:
         return (
             f"\n\nYour goal for this call: {goal}\n"
             "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
             "Once accomplished, confirm details and STOP — wait for their reply. "
             "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
+            + _strict_scope +
             "IVR NAVIGATION RULE: When you hear a recorded menu listing options, "
             "call press_dtmf() with ONLY the digit — no words, no explanation."
         )
@@ -120,6 +127,7 @@ def _goal_suffix(goal: str, tools: bool) -> str:
         "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
         "Once accomplished, confirm details and STOP — wait for their reply. "
         "Only after they confirm, say goodbye and emit [HANGUP].\n"
+        + _strict_scope +
         "IVR NAVIGATION RULE: When you hear a recorded menu, emit ONLY the [DTMF:X] tag."
     )
 
@@ -182,11 +190,12 @@ class LanguageModel:
 
     def __init__(
         self,
-        on_token:  Callable[[str], Awaitable[None]],
-        on_done:   Callable[[], Awaitable[None]],
-        goal:      str = "",
-        ctx:       Optional["CallContext"] = None,
-        telemetry: Optional[CallTelemetry] = None,
+        on_token:   Callable[[str], Awaitable[None]],
+        on_done:    Callable[[], Awaitable[None]],
+        goal:       str = "",
+        ctx:        Optional["CallContext"] = None,
+        telemetry:  Optional[CallTelemetry] = None,
+        callee_lang: str = "English",
     ):
         self._on_token  = on_token
         self._on_done   = on_done
@@ -200,9 +209,15 @@ class LanguageModel:
         else:
             context_suffix = _goal_suffix(goal, self._tools_enabled)
 
+        lang_suffix = (
+            f"\n\nIMPORTANT: Always respond in {callee_lang}, regardless of the language of incoming messages."
+            if callee_lang.lower() != "english"
+            else ""
+        )
         prompt = (
             (_PROMPT_WITH_TOOLS if self._tools_enabled else _PROMPT_TEXT_TAGS)
             + context_suffix
+            + lang_suffix
         )
 
         settings = ModelSettings(

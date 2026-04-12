@@ -210,6 +210,13 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
             "Only after they confirm, say goodbye and emit [HANGUP]."
         )
     )
+    lines.append(
+        "\nCRITICAL — STRICT SCOPE RULE: Only ask for information that is EXPLICITLY required "
+        "to accomplish the stated goal. Do NOT ask for account numbers, IDs, names, verification "
+        "details, or any other information unless the goal or context specifically mentions it. "
+        "Do NOT assume that verification or identification steps are needed — if they are not "
+        "part of the goal, skip them entirely."
+    )
 
     if ctx.caller_name:
         lines.append(f"\nYou are calling {ctx.caller_name}.")

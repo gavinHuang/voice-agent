@@ -25,6 +25,7 @@ from .call import (
     AgentDoneEvent, HoldStartEvent, HoldEndEvent,
     HangupPendingEvent, HangupEvent, DTMFEvent,
 )
+from .translation import Translator, extract_speech_text
 
 log = ServiceLogger("Agent")
 
@@ -41,6 +42,11 @@ class Agent:
     A fresh AudioPlayer is created per turn; TTS comes from VoicePool.
     """
 
+    # Class-level defaults so tests using Agent.__new__() don't get AttributeError
+    _translator:  Optional[Any] = None
+    _caller_lang: str = "English"
+    _callee_lang: str = "English"
+
     def __init__(
         self,
         phone,
@@ -52,6 +58,9 @@ class Agent:
         ctx:               Optional[Any] = None,   # Optional[CallContext]
         on_token_observed: Optional[Callable[[str], None]] = None,
         telemetry:         Optional[CallTelemetry] = None,
+        translator:        Optional[Translator] = None,
+        caller_lang:       str = "English",
+        callee_lang:       str = "English",
     ):
         self._phone            = phone
         self._stream_sid       = stream_sid
@@ -60,6 +69,9 @@ class Agent:
         self._tracer           = tracer
         self._telemetry        = telemetry
         self._on_token_observed = on_token_observed
+        self._translator       = translator
+        self._caller_lang      = caller_lang
+        self._callee_lang      = callee_lang
 
         self._llm = LanguageModel(
             on_token=self._on_llm_token,
@@ -67,6 +79,7 @@ class Agent:
             goal=goal,
             ctx=ctx,
             telemetry=telemetry,
+            callee_lang=caller_lang,  # LLM responds in the agent's operating language
         )
 
         self._tts:    Optional[object]      = None
@@ -149,12 +162,32 @@ class Agent:
 
         self._player = AudioPlayer(phone=self._phone, on_done=self._on_playback_done)
 
-        message = (
-            "[HOLD_CHECK] You are on hold. Transcription follows. "
-            "If automated hold message \u2192 reply [HOLD_CONTINUE] only. "
-            "If a real person is speaking \u2192 reply [HOLD_END] then respond normally.\n\n"
-            f"Transcription: {transcript}"
-        ) if hold_check else transcript
+        # Internal control signals are routing tokens, not caller speech — never translate them.
+        _is_control = transcript.startswith(("[CALL_STARTED]", "[HANDBACK]"))
+
+        if hold_check:
+            if self._translator and self._caller_lang and self._callee_lang:
+                translated_transcript = await self._translator.translate(
+                    transcript, self._callee_lang, self._caller_lang
+                )
+                log.info(f"Inbound translation (hold): {transcript!r} → {translated_transcript!r}")
+            else:
+                translated_transcript = transcript
+            message = (
+                "[HOLD_CHECK] You are on hold. Transcription follows. "
+                "If automated hold message \u2192 reply [HOLD_CONTINUE] only. "
+                "If a real person is speaking \u2192 reply [HOLD_END] then respond normally.\n\n"
+                f"Transcription: {translated_transcript}"
+            )
+        elif _is_control:
+            message = transcript
+        elif self._translator and self._caller_lang and self._callee_lang:
+            message = await self._translator.translate(
+                transcript, self._callee_lang, self._caller_lang
+            )
+            log.info(f"Inbound translation: {transcript!r} → {message!r}")
+        else:
+            message = transcript
 
         self._tracer.begin(self._turn, "llm")
         await self._llm.start(message)
@@ -201,10 +234,11 @@ class Agent:
             self._got_first_token = True
             self._t_first_token   = time.monotonic()
             self._tracer.mark(self._turn, "llm_first_token")
-            self._tracer.begin(self._turn, "tts")
+            if not self._translator:
+                self._tracer.begin(self._turn, "tts")
             log.info(f"LLM first token  +{_ms(self._t0)}ms")
 
-        if token:
+        if token and not self._translator:
             if not self._tts_had_text and self._telemetry:
                 self._telemetry.checkpoint(CP.TTS_SYNTHESIS_START)
                 self._telemetry.increment("tts_segments")
@@ -217,6 +251,26 @@ class Agent:
         if not self._active or not self._tts:
             return
         self._tracer.end(self._turn, "llm")
+
+        if self._translator and self._caller_lang and self._callee_lang:
+            # Peek at the outcome first to avoid wasting a translation call on DTMF/hold turns.
+            # Calling resolve_outcome with tts_had_text=False is safe — it only reads tool results.
+            peek = self._llm.resolve_outcome(self._current_turn_text, False)
+            speech_text = extract_speech_text(self._current_turn_text)
+            if speech_text and not peek.dtmf_digits and not peek.hold_continue:
+                translated = await self._translator.translate(
+                    speech_text, self._caller_lang, self._callee_lang
+                )
+                log.info(f"Outbound translation: {speech_text!r} → {translated!r}")
+                self._tracer.begin(self._turn, "tts")
+                if self._telemetry:
+                    self._telemetry.checkpoint(CP.TTS_SYNTHESIS_START)
+                    self._telemetry.increment("tts_segments")
+                self._tts_had_text = True
+                await self._tts.send(translated)
+                if self._on_token_observed:
+                    asyncio.get_event_loop().call_soon(self._on_token_observed, translated)
+
         outcome = self._llm.resolve_outcome(self._current_turn_text, self._tts_had_text)
         await self._dispatch_outcome(outcome)
 

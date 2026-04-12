@@ -448,6 +448,8 @@ async def run_call(
                     logger.info("[BP4] Voice pool started OK")
 
                 telemetry.checkpoint(CP.SCRIPT_GENERATION_START)
+                from .translation import get_translator
+                _translator = get_translator()
                 agent = Agent(
                     phone=phone,
                     stream_sid=event.stream_sid,
@@ -461,6 +463,9 @@ async def run_call(
                         (lambda tok: observer({"type": "agent_token", "token": tok}))
                         if observer else None
                     ),
+                    translator=_translator,
+                    caller_lang=os.getenv("CALLER_LANG", "English"),
+                    callee_lang=os.getenv("CALLEE_LANG", "English"),
                 )
                 telemetry.checkpoint(CP.SCRIPT_GENERATION_END)
 
