@@ -202,6 +202,10 @@ class LocalPhone:
         await b.start(...)
     """
 
+    # Timeout waiting for the first audio packet from the peer.
+    # Prevents hung coroutines when the remote agent crashes before connecting.
+    _CONNECTION_TIMEOUT: float = float(os.getenv("LOCAL_PHONE_TIMEOUT", "5.0"))
+
     def __init__(self) -> None:
         self._peer:    Optional["LocalPhone"] = None
         self._on_audio: Optional[Callable[[bytes], Awaitable[None]]] = None
@@ -230,10 +234,24 @@ class LocalPhone:
         await on_start(stream_sid, "local-call-sid", "local")
 
     async def _reader(self) -> None:
+        _first_received = False
         while True:
-            item = await self._queue.get()
+            if not _first_received:
+                try:
+                    item = await asyncio.wait_for(
+                        self._queue.get(), timeout=self._CONNECTION_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    raise TimeoutError(
+                        f"LocalPhone: peer did not send audio within "
+                        f"{self._CONNECTION_TIMEOUT}s — check that both "
+                        "run_call() coroutines started concurrently"
+                    )
+            else:
+                item = await self._queue.get()
             if item is None:
                 break
+            _first_received = True
             if self._on_audio:
                 await self._on_audio(item)
 
@@ -267,18 +285,29 @@ class LocalPhone:
 # OUTBOUND CALL
 # =============================================================================
 
-def dial_out(to_number: str, ivr_mode: bool = False) -> str:
+def dial_out(
+    to_number: str,
+    ivr_mode: bool = False,
+    tenant_config=None,   # Optional[TenantConfig] — uses env vars if None
+) -> str:
     """
     Initiate an outbound call via Twilio REST.
 
     Returns the Twilio call SID.
     ivr_mode=True skips AMD — IVR systems are machines and would be
     incorrectly blocked by answering-machine detection.
+    tenant_config: if provided, uses its Twilio credentials instead of env vars.
     """
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token  = os.getenv("TWILIO_AUTH_TOKEN")
-    from_number = os.getenv("TWILIO_PHONE_NUMBER")
-    public_url  = os.getenv("TWILIO_PUBLIC_URL")
+    if tenant_config is not None:
+        account_sid = tenant_config.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token  = tenant_config.twilio_auth_token  or os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = tenant_config.twilio_phone_number or os.getenv("TWILIO_PHONE_NUMBER")
+    else:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token  = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+
+    public_url = os.getenv("TWILIO_PUBLIC_URL")
 
     if not all([account_sid, auth_token, from_number, public_url]):
         raise ValueError("Missing required Twilio environment variables")
@@ -295,3 +324,34 @@ def dial_out(to_number: str, ivr_mode: bool = False) -> str:
         kwargs["async_amd"] = "true"
 
     return client.calls.create(**kwargs).sid
+
+
+# =============================================================================
+# AGENT PHONE  (in-process agent-to-agent calls)
+# =============================================================================
+
+class AgentPhone:
+    """
+    Helper for setting up agent-to-agent calls using LocalPhone.pair().
+
+    Usage (both coroutines must run concurrently):
+
+        caller_phone, callee_phone = AgentPhone.pair()
+        await asyncio.gather(
+            run_call(caller_phone, ctx=caller_ctx, tenant_id="acme"),
+            run_call(callee_phone, ctx=callee_ctx, tenant_id="acme"),
+        )
+    """
+
+    @staticmethod
+    def pair(tenant_id: str = "default") -> tuple["LocalPhone", "LocalPhone"]:
+        """
+        Create two paired LocalPhone instances ready for agent-to-agent use.
+
+        Both phones share the same tenant scope.  Pass the phones to
+        separate ``run_call()`` coroutines and start them concurrently.
+        """
+        a = LocalPhone()
+        b = LocalPhone()
+        LocalPhone.pair(a, b)
+        return a, b

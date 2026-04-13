@@ -25,6 +25,7 @@ class ActiveCall:
     mode:       CallMode = CallMode.AGENT
     agent:      Any = None    # shuo Agent instance (for DTMF injection)
     started_at: float = field(default_factory=time.monotonic)
+    tenant_id:  str = "default"   # Tenant that owns this call
     # Take-over state preservation
     saved_history:       List[Dict[str, str]] = field(default_factory=list)
     takeover_transcript: List[str] = field(default_factory=list)
@@ -39,13 +40,27 @@ _calls: Dict[str, ActiveCall] = {}
 _pending: Dict[str, Dict[str, str]] = {}
 
 
-def set_pending(call_sid: str, phone: str, goal: str, ivr_mode: bool = False) -> None:
-    _pending[call_sid] = {"phone": phone, "goal": goal, "ivr_mode": ivr_mode}
+def set_pending(
+    call_sid: str,
+    phone: str,
+    goal: str,
+    ivr_mode: bool = False,
+    tenant_id: str = "default",
+) -> None:
+    _pending[call_sid] = {
+        "phone": phone,
+        "goal": goal,
+        "ivr_mode": ivr_mode,
+        "tenant_id": tenant_id,
+    }
 
 
 def pop_pending(call_sid: str) -> Dict:
-    """Return {phone, goal, ivr_mode} for the call SID, or defaults if not found."""
-    return _pending.pop(call_sid, {"phone": "", "goal": "", "ivr_mode": False})
+    """Return {phone, goal, ivr_mode, tenant_id} for the call SID, or defaults."""
+    return _pending.pop(
+        call_sid,
+        {"phone": "", "goal": "", "ivr_mode": False, "tenant_id": "default"},
+    )
 
 
 def register(call: ActiveCall) -> None:
@@ -77,3 +92,8 @@ def find_by_call_sid(call_sid: str) -> Optional[ActiveCall]:
 
 def all_calls() -> List[ActiveCall]:
     return list(_calls.values())
+
+
+def calls_for_tenant(tenant_id: str) -> List[ActiveCall]:
+    """Return only calls that belong to the given tenant."""
+    return [c for c in _calls.values() if c.tenant_id == tenant_id]

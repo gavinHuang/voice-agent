@@ -1,0 +1,33 @@
+scenarios:
+  # ── Agent-to-agent: caller books an appointment ────────────────────────────
+
+  - id: two-agent-book-appointment
+    description: "Caller agent books an appointment with a scripted scheduler agent"
+    caller:
+      goal: "Call this scheduling service and book an appointment for next Tuesday at 2pm."
+      identity: "Customer"
+    answerer:
+      goal: "You are a scheduling service. Offer Tuesday at 2pm and confirm the booking."
+      opening_line: "Hello, this is the scheduling service. How can I help you today?"
+    timeout: 120
+    success_criteria:
+      transcript_contains:
+        - "appointment"
+        - "Tuesday"
+      max_turns: 10
+
+  - id: two-agent-confirm-booking
+    description: "Caller agent confirms the booking when offered a slot"
+    caller:
+      goal: >
+        You are calling to book a dental appointment. When offered Tuesday at 2pm,
+        confirm it is acceptable and then say goodbye.
+      identity: "Patient"
+    answerer:
+      goal: "You are a dental receptionist. Offer Tuesday at 2pm and confirm the booking."
+      opening_line: "Good morning, dental clinic. How can I help?"
+    timeout: 120
+    success_criteria:
+      transcript_contains:
+        - "book"
+      max_turns: 8

@@ -298,3 +298,48 @@ def test_load_identity_file_prefers_project_local(tmp_path, monkeypatch):
     fields, label = load_identity_file(tmp_path)
     assert fields["agent_name"] == "Local"
     assert label == "identity.md"
+
+
+# =============================================================================
+# 5.6  JSON round-trip serialisation (Pydantic model)
+# =============================================================================
+
+def test_callcontext_json_roundtrip():
+    """Full CallContext survives JSON serialization and back via Pydantic."""
+    from shuo.context import CallContext
+    original = CallContext(
+        goal="Confirm appointment",
+        agent_name="Jordan",
+        agent_role="account manager",
+        agent_tone="professional",
+        agent_background="Specialises in enterprise accounts",
+        caller_name="Sam",
+        caller_context="Tier 1 customer",
+        constraints=["never quote pricing"],
+        success_criteria="Appointment confirmed",
+    )
+    json_str = original.model_dump_json()
+    loaded = CallContext.model_validate_json(json_str)
+    assert loaded.goal == original.goal
+    assert loaded.agent_name == original.agent_name
+    assert loaded.constraints == original.constraints
+    assert loaded.success_criteria == original.success_criteria
+
+
+def test_callcontext_json_minimal():
+    """Minimal JSON with only goal round-trips and applies defaults."""
+    from shuo.context import CallContext
+    import json
+    json_str = json.dumps({"goal": "Book a table"})
+    ctx = CallContext.model_validate_json(json_str)
+    assert ctx.goal == "Book a table"
+    assert ctx.agent_name == "Alex"
+    assert ctx.constraints == []
+
+
+def test_callcontext_json_empty_goal_raises():
+    """JSON with empty goal raises ValueError via Pydantic validator."""
+    from shuo.context import CallContext
+    import json
+    with pytest.raises(ValueError, match="goal"):
+        CallContext.model_validate_json(json.dumps({"goal": ""}))

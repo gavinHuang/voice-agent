@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 @dataclass
 class CallBus:
     call_id: str
+    tenant_id: str = "default"
     _queues: List[asyncio.Queue] = field(default_factory=list)
 
     def subscribe(self) -> asyncio.Queue:
@@ -27,9 +28,10 @@ class CallBus:
             pass
 
     def publish(self, event: dict) -> None:
+        tagged = {**event, "tenant_id": self.tenant_id}
         for q in list(self._queues):
             try:
-                q.put_nowait(event)
+                q.put_nowait(tagged)
             except asyncio.QueueFull:
                 pass
 
@@ -41,8 +43,8 @@ _buses: Dict[str, CallBus] = {}
 _global_queues: List[asyncio.Queue] = []
 
 
-def create(call_id: str) -> CallBus:
-    bus = CallBus(call_id=call_id)
+def create(call_id: str, tenant_id: str = "default") -> CallBus:
+    bus = CallBus(call_id=call_id, tenant_id=tenant_id)
     _buses[call_id] = bus
     return bus
 

@@ -36,8 +36,10 @@ from twilio.jwt.access_token import AccessToken
 from twilio.jwt.access_token.grants import VoiceGrant
 
 from .call import run_call
+from .context import CallContext
 from .phone import TwilioPhone, dial_out
 from .speech import Transcriber
+from .tenant import TenantConfig, default_tenant_store, resolve_tenant
 from .voice import VoicePool
 from .log import get_logger
 from .ttft import router as ttft_router
@@ -45,6 +47,17 @@ from monitor.server import router as dashboard_router
 from monitor import bus as dashboard_bus, registry as dashboard_registry
 
 logger = get_logger("shuo.web")
+
+# ── Tenant store (initialised at startup) ────────────────────────────────────
+_tenant_store = None  # set in startup_warmup from TENANTS_YAML env var
+
+
+class _OutboundCallBody(CallContext):
+    """
+    POST /call/{phone} request body — full CallContext plus optional tenant_id.
+    Inherits all CallContext fields and validation.
+    """
+    tenant_id: str = "default"
 
 
 async def verify_twilio_signature(
@@ -144,6 +157,7 @@ class CallSession:
     """
     call_id: str
     ivr_mode: bool = False
+    tenant_id: str = "default"   # resolved from pending when call starts
 
 
 @app.on_event("startup")
@@ -162,7 +176,7 @@ _warmup_done: bool = False
 
 
 async def _warmup() -> None:
-    global _voice_pool, _warmup_done
+    global _voice_pool, _warmup_done, _tenant_store
 
     # Pre-load TTS model so the first call doesn't pay model-load latency.
     provider = os.getenv("TTS_PROVIDER", "kokoro").lower()
@@ -185,6 +199,20 @@ async def _warmup() -> None:
     deleted = cleanup_traces()
     if deleted:
         logger.info(f"Startup trace cleanup: removed {deleted} file(s)")
+
+    # ── Tenant store ─────────────────────────────────────────────────
+    tenants_yaml = os.getenv("TENANTS_YAML", "")
+    if tenants_yaml:
+        from .tenant import YamlTenantStore
+        try:
+            _tenant_store = YamlTenantStore(tenants_yaml)
+            logger.info(f"Tenant store loaded from {tenants_yaml} ({len(_tenant_store.list_all())} tenants)")
+        except Exception as e:
+            logger.error(f"Failed to load tenant store from {tenants_yaml}: {e}")
+            _tenant_store = default_tenant_store()
+    else:
+        _tenant_store = default_tenant_store()
+        logger.info("Tenant store: single 'default' tenant from environment variables")
 
     # NOTE: Deepgram connections are NOT pooled.
     # Reusing an idle connection causes the turn detector to fire prematurely
@@ -321,6 +349,29 @@ async def twiml(request: Request):
     if request.method == "POST":
         form = await request.form()
         params.update(dict(form))
+
+    # ── Tenant resolution ────────────────────────────────────────────
+    _store = _tenant_store or default_tenant_store()
+    tenant_cfg = resolve_tenant(params, _store)
+    if tenant_cfg is None:
+        _unknown_sid = params.get("AccountSid", "unknown")
+        logger.warning(f"Rejected call: no tenant matched AccountSid={_unknown_sid!r} To={params.get('To', '')!r}")
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response>'
+                    '<Say>This number is not in service.</Say><Hangup/></Response>',
+            media_type="application/xml",
+        )
+    logger.info(f"Tenant resolved: {tenant_cfg.tenant_id}")
+
+    # Store tenant_id in pending so the WebSocket handler can retrieve it
+    call_sid = params.get("CallSid", "")
+    if call_sid:
+        _effective_goal = (
+            tenant_cfg.default_goal or os.getenv("CALL_GOAL", "")
+        )
+        dashboard_registry.set_pending(
+            call_sid, "", _effective_goal, tenant_id=tenant_cfg.tenant_id
+        )
     answered_by = params.get("AnsweredBy", "")
     logger.info(f"AMD AnsweredBy={answered_by!r} (all params: {list(params.keys())})")
     # Hang up only on confirmed machine/voicemail. "unknown" means AMD couldn't
@@ -367,12 +418,12 @@ async def twiml_ivr_dtmf(digit: str = Query(..., description="DTMF digit(s) to p
 
 @app.get("/trace/latest")
 async def latest_trace():
-    """Return the most recent call trace as JSON."""
+    """Return the most recent call trace as JSON (searches all tenant subdirs)."""
     trace_dir = Path("/tmp/shuo")
     if not trace_dir.exists():
         return JSONResponse({"error": "No traces found"}, status_code=404)
 
-    traces = sorted(trace_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    traces = sorted(trace_dir.glob("**/*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not traces:
         return JSONResponse({"error": "No traces found"}, status_code=404)
 
@@ -380,10 +431,40 @@ async def latest_trace():
     return JSONResponse(data)
 
 
+@app.post("/call/{phone_number:path}")
+async def trigger_call_post(phone_number: str, body: _OutboundCallBody):
+    """
+    Initiate an outbound call with full CallContext as JSON body.
+
+    Usage:
+        curl -X POST https://your-server/call/+1234567890 \\
+             -H 'Content-Type: application/json' \\
+             -d '{"goal": "Book an appointment", "tenant_id": "acme"}'
+    """
+    if not phone_number.startswith("+"):
+        phone_number = f"+{phone_number}"
+
+    _store = _tenant_store or default_tenant_store()
+    tenant_cfg = _store.get(body.tenant_id)
+    if tenant_cfg is None:
+        return JSONResponse({"error": f"tenant not found: {body.tenant_id}"}, status_code=404)
+
+    try:
+        call_sid = dial_out(phone_number, tenant_config=tenant_cfg)
+        call_id = uuid.uuid4().hex[:8]
+        dashboard_registry.set_pending(
+            call_sid, phone_number, body.goal,
+            tenant_id=tenant_cfg.tenant_id,
+        )
+        return {"status": "calling", "to": phone_number, "call_sid": call_sid, "call_id": call_id, "goal": body.goal}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/call/{phone_number:path}")
 async def trigger_call(phone_number: str, goal: Optional[str] = Query(None)):
     """
-    Initiate an outbound call.
+    Initiate an outbound call (legacy GET endpoint — preserved for backward compatibility).
 
     Usage:
         curl https://your-server/call/+1234567890
@@ -533,8 +614,11 @@ async def websocket_endpoint(websocket: WebSocket):
     dashboard_bus.create(ctx.call_id)
     dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx.call_id))
 
+    # Mutable tenant_id reference — updated by get_goal when CallSid is known
+    _tenant_id_ref: list = ["default"]
+
     def observer(event: dict) -> None:
-        tagged = {**event, "call_id": ctx.call_id}
+        tagged = {**event, "call_id": ctx.call_id, "tenant_id": ctx.tenant_id}
         # On stream_start: embed phone and goal into the broadcast so the
         # dashboard panel is created with both values in a single event.
         if event.get("type") == "stream_start":
@@ -558,7 +642,11 @@ async def websocket_endpoint(websocket: WebSocket):
         goal = pending["goal"] or os.getenv("CALL_GOAL", "")
         phone = pending["phone"]
         ctx.ivr_mode = pending.get("ivr_mode", False)
-        dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid)
+        # Propagate tenant_id from pending into the session + mutable ref
+        tid = pending.get("tenant_id", "default")
+        ctx.tenant_id = tid
+        _tenant_id_ref[0] = tid
+        dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid, tenant_id=tid)
         return goal
 
     async def on_dtmf(digits: str) -> None:
@@ -642,6 +730,7 @@ async def websocket_endpoint(websocket: WebSocket):
             get_saved_state=get_saved_state,
             voice_pool=_voice_pool,
             ivr_mode=lambda: ctx.ivr_mode,
+            tenant_id=_tenant_id_ref,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")

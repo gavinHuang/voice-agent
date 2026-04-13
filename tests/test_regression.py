@@ -100,7 +100,10 @@ def test_registry_pop_pending_missing_returns_defaults():
     """pop_pending on an unknown call_sid returns empty defaults (not KeyError)."""
     from monitor import registry
     result = registry.pop_pending("CA_nonexistent_sid")
-    assert result == {"phone": "", "goal": "", "ivr_mode": False}
+    assert result["phone"] == ""
+    assert result["goal"] == ""
+    assert result["ivr_mode"] is False
+    assert result.get("tenant_id", "default") == "default"
 
 
 def test_registry_pop_pending_removes_entry():
@@ -342,3 +345,74 @@ def test_dashboard_call_ivr_mode_sets_flag(monkeypatch, dashboard_client):
     assert resp.status_code == 200
     pending = registry.pop_pending(fake_call_sid)
     assert pending["ivr_mode"] is True
+
+
+# =============================================================================
+# POST /call — goal-directed outbound call API
+# =============================================================================
+
+@pytest.fixture
+def call_api_client(monkeypatch):
+    monkeypatch.delenv("TWILIO_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("TWILIO_PUBLIC_URL", "https://example.ngrok.io")
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "ACtest")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "toktest")
+    monkeypatch.setenv("TWILIO_PHONE_NUMBER", "+15550000000")
+    from fastapi.testclient import TestClient
+    from shuo.web import app
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_post_call_endpoint_returns_call_info(monkeypatch, call_api_client):
+    """POST /call/{phone} with full CallContext body returns call_sid and call_id."""
+    from monitor import registry
+
+    fake_call_sid = "CA_post_test_001"
+
+    with patch("shuo.web.dial_out", return_value=fake_call_sid):
+        resp = call_api_client.post(
+            "/call/+61400000099",
+            json={"goal": "Book a dental appointment", "agent_name": "Sam"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["call_sid"] == fake_call_sid
+    assert "call_id" in data
+    assert data["goal"] == "Book a dental appointment"
+
+    # Goal must be registered in pending for the running server to find
+    pending = registry.pop_pending(fake_call_sid)
+    assert pending["goal"] == "Book a dental appointment"
+
+
+def test_post_call_endpoint_missing_goal_returns_422(call_api_client):
+    """POST /call without goal returns HTTP 422 validation error."""
+    resp = call_api_client.post(
+        "/call/+61400000099",
+        json={"agent_name": "Sam"},  # no goal
+    )
+    assert resp.status_code == 422
+
+
+def test_post_call_endpoint_unknown_tenant_returns_404(call_api_client):
+    """POST /call with unknown tenant_id returns HTTP 404."""
+    resp = call_api_client.post(
+        "/call/+61400000099",
+        json={"goal": "Test", "tenant_id": "no-such-tenant"},
+    )
+    assert resp.status_code == 404
+    assert "tenant not found" in resp.json().get("error", "")
+
+
+def test_get_call_endpoint_still_works(call_api_client):
+    """Legacy GET /call?goal= endpoint still works after adding POST variant."""
+    fake_call_sid = "CA_get_test_001"
+
+    with patch("shuo.web.dial_out", return_value=fake_call_sid):
+        resp = call_api_client.get("/call/+61400000099?goal=Check+status")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "calling"
+    assert data["goal"] == "Check status"

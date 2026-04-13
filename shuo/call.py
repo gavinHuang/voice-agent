@@ -302,6 +302,7 @@ async def run_call(
     ivr_mode:              Optional[Callable[[], bool]]                          = None,
     on_dtmf:               Optional[Callable[[str], None]]                       = None,
     ctx:                   Optional[object]                                      = None,
+    tenant_id                                                                    = "default",
 ) -> None:
     """
     Drive a single call from connect to disconnect.
@@ -309,9 +310,25 @@ async def run_call(
     Wires callbacks → event queue → step() → dispatch().
     All side effects happen in dispatch(); step() is kept pure.
     """
+    import warnings
     from .agent import Agent
     from .speech import Transcriber
     from .voice import VoicePool
+
+    # tenant_id may be a list[str] (mutable ref) for dynamic resolution
+    # from web.py's get_goal callback, or a plain str for known tenants.
+    if tenant_id is None:
+        warnings.warn(
+            "run_call() called with tenant_id=None; using 'default'. "
+            "Pass tenant_id explicitly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        _tenant_id_ref: list = ["default"]
+    elif isinstance(tenant_id, list):
+        _tenant_id_ref = tenant_id
+    else:
+        _tenant_id_ref = [str(tenant_id)]
 
     event_log = Logger(verbose=False)
     queue: asyncio.Queue[Event] = asyncio.Queue()
@@ -575,5 +592,5 @@ async def run_call(
         telemetry.checkpoint(CP.HANGUP)
         call_summary = telemetry.summary()
         logger.info(f"Call telemetry summary: {call_summary}")
-        tracer.save(stream_sid or "unknown", call_summary=call_summary)
+        tracer.save(stream_sid or "unknown", call_summary=call_summary, tenant_id=_tenant_id_ref[0])
         Logger.websocket_disconnected()

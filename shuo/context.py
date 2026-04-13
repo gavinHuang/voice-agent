@@ -2,7 +2,7 @@
 context.py — CallContext: typed call parameters and pre-call confirmation.
 
 Provides:
-  CallContext           — dataclass of all agent/call fields
+  CallContext           — Pydantic model of all agent/call fields
   load_identity_file()  — discover and parse ~/identity.md or <cwd>/identity.md
   build_system_prompt() — assemble the goal/persona portion of the system prompt
   confirm_context()     — interactive pre-call confirmation gate
@@ -12,24 +12,26 @@ from __future__ import annotations
 
 import re
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 import yaml
+from pydantic import BaseModel, Field, model_validator
 
 
 # =============================================================================
 # CALL CONTEXT
 # =============================================================================
 
-@dataclass
-class CallContext:
+class CallContext(BaseModel):
     """
     Typed parameters for a single outbound call.
 
     Required: goal (must be a non-empty string — raises ValueError if empty/None)
     Optional: all others (defaults reflect the built-in "Alex" persona)
+
+    Being a Pydantic model means it is JSON-serializable and can be used
+    directly as a FastAPI request body.
     """
     goal: str
     agent_name: str = "Alex"
@@ -38,20 +40,21 @@ class CallContext:
     agent_background: Optional[str] = None   # free-text from identity.md body
     caller_name: Optional[str] = None
     caller_context: Optional[str] = None
-    constraints: List[str] = field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
     success_criteria: Optional[str] = None
 
-    def __post_init__(self):
+    @model_validator(mode="after")
+    def _validate_goal_required(self) -> "CallContext":
         if not self.goal:
             raise ValueError("CallContext: 'goal' is required and cannot be empty")
+        return self
 
     @classmethod
     def _partial(cls, **kwargs) -> "CallContext":
         """
-        Construct a CallContext bypassing __post_init__ validation.
+        Construct a CallContext bypassing validation.
         Used by the CLI when goal is not yet known (will be filled by confirm_context).
         """
-        obj = object.__new__(cls)
         defaults = {
             "goal": "",
             "agent_name": "Alex",
@@ -64,8 +67,7 @@ class CallContext:
             "success_criteria": None,
         }
         defaults.update(kwargs)
-        obj.__dict__.update(defaults)
-        return obj
+        return cls.model_construct(**defaults)
 
     # ── Serialization ────────────────────────────────────────────────
 
@@ -322,7 +324,6 @@ def _build_choices(ctx: CallContext) -> list:
 
 def _edit_field(ctx: CallContext, fname: str, sources: dict) -> CallContext:
     import questionary
-    from dataclasses import replace
 
     label, _, is_list = next(f for f in _EDITABLE_FIELDS if f[1] == fname)
     current = getattr(ctx, fname)
@@ -337,7 +338,7 @@ def _edit_field(ctx: CallContext, fname: str, sources: dict) -> CallContext:
             return ctx
         new_val = [s.strip() for s in new_str.split(",") if s.strip()]
         sources.pop(fname, None)
-        return replace(ctx, **{fname: new_val})
+        return ctx.model_copy(update={fname: new_val})
     else:
         new_val = questionary.text(
             f"{label}:",
@@ -351,7 +352,7 @@ def _edit_field(ctx: CallContext, fname: str, sources: dict) -> CallContext:
             return ctx
         sources.pop(fname, None)
         result = new_val if new_val else None
-        return replace(ctx, **{fname: new_val if fname == "goal" else result})
+        return ctx.model_copy(update={fname: new_val if fname == "goal" else result})
 
 
 def confirm_context(
@@ -374,7 +375,6 @@ def confirm_context(
     Exits the process if the operator declines or if --yes is set with no goal.
     """
     import click
-    from dataclasses import replace
 
     sources = sources or {}
 
@@ -387,7 +387,7 @@ def confirm_context(
         if not goal_input:
             click.echo("Error: goal cannot be empty.", err=True)
             sys.exit(1)
-        ctx = replace(ctx, goal=goal_input)
+        ctx = ctx.model_copy(update={"goal": goal_input})
 
     # ── Skip confirmation ────────────────────────────────────────────
     if yes:

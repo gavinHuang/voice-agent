@@ -221,6 +221,7 @@ def test_call_invokes_outbound():
          patch("shuo.phone.dial_out", fake_make_call), \
          patch.dict(os.environ, _FULL_ENV), \
          patch("shuo.cli.threading.Thread"), \
+         patch("shuo.cli._wait_for_ready"), \
          patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
         runner = CliRunner()
         runner.invoke(cli, ["call", "+15551234567", "--goal", "test goal", "--yes"])
@@ -235,6 +236,7 @@ def test_call_agent_name_appears_in_call_goal():
          patch("shuo.phone.dial_out", fake_make_call), \
          patch.dict(os.environ, _FULL_ENV), \
          patch("shuo.cli.threading.Thread"), \
+         patch("shuo.cli._wait_for_ready"), \
          patch("shuo.cli.time.sleep", side_effect=[None, None, KeyboardInterrupt]):
         runner = CliRunner()
         runner.invoke(cli, ["call", "+15551234567", "--goal", "check balance",

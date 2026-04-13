@@ -114,22 +114,31 @@ class Tracer:
             if span.end_ms is None:
                 span.end_ms = ms
 
-    def save(self, call_id: str, call_summary: Optional[dict] = None) -> Optional[Path]:
-        """Write trace data to /tmp/shuo/<call_id>.json.
+    def save(
+        self,
+        call_id: str,
+        call_summary: Optional[dict] = None,
+        tenant_id: str = "default",
+    ) -> Optional[Path]:
+        """Write trace data to /tmp/shuo/<tenant_id>/<call_id>.json.
 
         Args:
             call_id: Identifier for this call (used as filename).
             call_summary: Optional telemetry summary dict to include as
                 ``"call_summary"`` in the output JSON.
+            tenant_id: Tenant identifier used as a sub-directory so traces
+                from different tenants never collide.
         """
         if not self._turns:
             return None
 
-        TRACE_DIR.mkdir(parents=True, exist_ok=True)
-        path = TRACE_DIR / f"{call_id}.json"
+        trace_dir = TRACE_DIR / tenant_id
+        trace_dir.mkdir(parents=True, exist_ok=True)
+        path = trace_dir / f"{call_id}.json"
 
         data: Dict = {
             "call_id": call_id,
+            "tenant_id": tenant_id,
             "turns": [
                 {
                     "turn": t.turn_number,
@@ -176,8 +185,8 @@ def cleanup_traces(
     now = time.time()
     cutoff = now - (max_age_hours * 3600)
 
-    # Phase 1: Delete files older than max_age_hours
-    traces = list(TRACE_DIR.glob("*.json"))
+    # Phase 1: Delete files older than max_age_hours (search all tenant subdirs)
+    traces = list(TRACE_DIR.glob("**/*.json"))
     for p in traces:
         try:
             if p.stat().st_mtime < cutoff:
@@ -187,7 +196,7 @@ def cleanup_traces(
             pass
 
     # Phase 2: If still over max_files, delete oldest first
-    remaining = sorted(TRACE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    remaining = sorted(TRACE_DIR.glob("**/*.json"), key=lambda p: p.stat().st_mtime)
     over = len(remaining) - max_files
     if over > 0:
         for p in remaining[:over]:
