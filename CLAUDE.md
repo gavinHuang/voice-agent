@@ -84,7 +84,7 @@ The state machine in `shuo/call.py` is the center of gravity — a pure function
 | `language.py` | LLM: `LanguageModel` class (Groq streaming + pydantic-ai tools) |
 | `speech.py` | STT: `Transcriber` + `TranscriberPool` (Deepgram Flux) |
 | `voice.py` | TTS: `VoicePool` + `AudioPlayer` + dtmf_tone() |
-| `voice_elevenlabs.py` / `voice_kokoro.py` / `voice_fish.py` | TTS providers |
+| `voice_elevenlabs.py` / `voice_kokoro.py` / `voice_fish.py` / `voice_vibevoice.py` | TTS providers (ElevenLabs, Kokoro, Fish Audio, VibeVoice local) |
 | `phone.py` | Phone protocol + `TwilioPhone` + `LocalPhone` + `dial_out()` |
 | `agent.py` | LLM→TTS→Player pipeline per turn; translation injected here |
 | `translation.py` | Bidirectional translation: `Translator` ABC, `LLMTranslator`, `DeepLTranslator`, `get_translator()` |
@@ -127,9 +127,29 @@ GROQ_API_KEY
 ELEVENLABS_API_KEY
 ```
 
-Optional: `ELEVENLABS_VOICE_ID`, `LLM_MODEL`, `TTS_PROVIDER` (`elevenlabs`|`kokoro`|`fish`), `PORT` (default 3040).
+Optional: `ELEVENLABS_VOICE_ID`, `LLM_MODEL`, `TTS_PROVIDER` (`elevenlabs`|`kokoro`|`fish`|`vibevoice`), `PORT` (default 3040).
 
 **Translation (optional):** Set both `CALLER_LANG` (language the caller speaks, e.g. `Spanish`) and `CALLEE_LANG` (agent's operating language, e.g. `English`) to enable bidirectional translation. Also set `DEEPGRAM_LANGUAGE` to the caller's language code for accurate STT, and configure TTS for the caller's language (TTS speaks back in `CALLER_LANG`). `TRANSLATION_PROVIDER` selects `llm` (default, uses Groq) or `deepl` (requires `DEEPL_API_KEY`). Per-call overrides: `--caller-lang` / `--callee-lang` CLI flags.
+
+## VibeVoice Setup
+
+VibeVoice-Realtime-0.5B is a self-hostable TTS model (~1 GB, MIT license, no API key required).
+
+**Install:**
+```bash
+pip install 'vibevoice[streamingtts] @ git+https://github.com/microsoft/VibeVoice.git'
+# or via uv extras:
+uv sync --extra vibevoice
+```
+
+**Configure `.env`:**
+```
+TTS_PROVIDER=vibevoice
+VIBEVOICE_MODEL=microsoft/VibeVoice-Realtime-0.5B   # or a local path
+VIBEVOICE_DEVICE=cuda                                # cpu | cuda | mps (CPU works for dev)
+```
+
+**Limitations:** English primary, single speaker, ~200ms first-audio latency on GPU (higher on CPU). For non-English callers, use another TTS provider with `CALLER_LANG`/`CALLEE_LANG` translation instead.
 
 ## Key Server Endpoints
 

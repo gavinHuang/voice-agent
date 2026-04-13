@@ -35,6 +35,11 @@ dependencies = [
 [project.scripts]
 voice-agent = "shuo.cli:main"
 
+[project.optional-dependencies]
+vibevoice = [
+    "vibevoice[streamingtts] @ git+https://github.com/microsoft/VibeVoice.git",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 

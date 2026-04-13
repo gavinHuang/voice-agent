@@ -785,6 +785,8 @@ def show_config(ctx: click.Context) -> None:
             ("FISH_AUDIO_REFERENCE_ID", e("FISH_AUDIO_REFERENCE_ID"), None),
             ("KOKORO_REPO_ID",          e("KOKORO_REPO_ID"),          "hexgrad/Kokoro-82M"),
             ("KOKORO_VOICE",            e("KOKORO_VOICE"),            "af_heart"),
+            ("VIBEVOICE_MODEL",         e("VIBEVOICE_MODEL"),         "microsoft/VibeVoice-Realtime-0.5B"),
+            ("VIBEVOICE_DEVICE",        e("VIBEVOICE_DEVICE"),        "cpu"),
         ]),
         (_section("STT"), [
             ("DEEPGRAM_API_KEY", e("DEEPGRAM_API_KEY"), None),
@@ -1029,6 +1031,19 @@ def diagnose(ctx: click.Context, skip_connectivity: bool) -> None:
     elif tts == "elevenlabs":
         _check_result("TTS provider (elevenlabs) configured", e("ELEVENLABS_API_KEY") is not None,
                       "" if e("ELEVENLABS_API_KEY") else "ELEVENLABS_API_KEY missing")
+    elif tts == "vibevoice":
+        try:
+            import importlib.util
+            ok = importlib.util.find_spec("vibevoice") is not None
+        except Exception:
+            ok = False
+        if ok:
+            _check_result("TTS provider (vibevoice) importable", True)
+        else:
+            _check_result("TTS provider (vibevoice) importable", False,
+                          "run: pip install 'vibevoice[streamingtts] @ "
+                          "git+https://github.com/microsoft/VibeVoice.git'")
+            any_fail = True
 
     # Port available
     import socket

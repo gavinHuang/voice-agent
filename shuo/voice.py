@@ -76,6 +76,9 @@ def _create_tts(
     elif provider == "elevenlabs":
         from .voice_elevenlabs import ElevenLabsTTS
         return ElevenLabsTTS(on_audio, on_done)
+    elif provider == "vibevoice":
+        from .voice_vibevoice import VibeVoiceTTS
+        return VibeVoiceTTS(on_audio, on_done)
     else:
         raise ValueError(f"Unknown TTS_PROVIDER: {provider!r}")
 

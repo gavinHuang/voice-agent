@@ -187,11 +187,26 @@ async def _warmup() -> None:
             logger.info("Kokoro model pre-loaded")
         except Exception as e:
             logger.warning(f"Kokoro pre-load failed: {e}")
+    elif provider == "vibevoice":
+        try:
+            from .voice_vibevoice import _load_model
+            await asyncio.get_event_loop().run_in_executor(None, _load_model)
+            logger.info("VibeVoice model pre-loaded")
+        except Exception as e:
+            logger.warning(f"VibeVoice pre-load failed: {e}")
 
     # Global voice pool — pre-warms connections so the first call gets one immediately.
     _voice_pool = VoicePool(pool_size=2, ttl=120.0)
     await _voice_pool.start()
     logger.info("Global voice pool started")
+
+    # For local model providers (e.g. VibeVoice), wait until the pool has at
+    # least one warm instance before marking ready — avoids dialling before TTS is up.
+    if provider in ("vibevoice", "kokoro"):
+        deadline = asyncio.get_event_loop().time() + 60.0
+        while _voice_pool.available == 0 and asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(0.5)
+
     _warmup_done = True
 
     # Trace file cleanup — remove old/excess traces at startup
