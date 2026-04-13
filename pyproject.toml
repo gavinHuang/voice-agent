@@ -30,6 +30,7 @@ dependencies = [
     "pypinyin>=0.55.0",
     "misaki[zh]>=0.9.4",
     "cn2an>=0.5.23",
+    "sounddevice",
 ]
 
 [project.scripts]
