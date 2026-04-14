@@ -50,28 +50,32 @@ class Agent:
     def __init__(
         self,
         phone,
-        stream_sid:        str,
-        emit:              Callable[[Any], None],
-        voice_pool:        VoicePool,
-        tracer:            Tracer,
-        goal:              str = "",
-        ctx:               Optional[Any] = None,   # Optional[CallContext]
-        on_token_observed: Optional[Callable[[str], None]] = None,
-        telemetry:         Optional[CallTelemetry] = None,
-        translator:        Optional[Translator] = None,
-        caller_lang:       str = "English",
-        callee_lang:       str = "English",
+        stream_sid:           str,
+        emit:                 Callable[[Any], None],
+        voice_pool:           VoicePool,
+        tracer:               Tracer,
+        goal:                 str = "",
+        ctx:                  Optional[Any] = None,   # Optional[CallContext]
+        on_token_observed:    Optional[Callable[[str], None]] = None,
+        telemetry:            Optional[CallTelemetry] = None,
+        translator:           Optional[Translator] = None,
+        caller_lang:          str = "English",
+        callee_lang:          str = "English",
+        tts_provider_override: Optional[str] = None,
+        voice_id_override:    Optional[str] = None,
     ):
-        self._phone            = phone
-        self._stream_sid       = stream_sid
-        self._emit             = emit
-        self._voice_pool       = voice_pool
-        self._tracer           = tracer
-        self._telemetry        = telemetry
-        self._on_token_observed = on_token_observed
-        self._translator       = translator
-        self._caller_lang      = caller_lang
-        self._callee_lang      = callee_lang
+        self._phone                 = phone
+        self._stream_sid            = stream_sid
+        self._emit                  = emit
+        self._voice_pool            = voice_pool
+        self._tracer                = tracer
+        self._telemetry             = telemetry
+        self._on_token_observed     = on_token_observed
+        self._translator            = translator
+        self._caller_lang           = caller_lang
+        self._callee_lang           = callee_lang
+        self._tts_provider_override = tts_provider_override
+        self._voice_id_override     = voice_id_override
 
         self._llm = LanguageModel(
             on_token=self._on_llm_token,
@@ -157,6 +161,8 @@ class Agent:
         self._tts = await self._voice_pool.get(
             on_audio=self._on_tts_audio,
             on_done=self._on_tts_done,
+            provider_override=self._tts_provider_override,
+            voice_id_override=self._voice_id_override,
         )
         self._tracer.end(self._turn, "tts_pool")
 

@@ -62,20 +62,22 @@ def dtmf_tone(digit: str, duration_ms: int = 200) -> str:
 # =============================================================================
 
 def _create_tts(
-    on_audio: Callable[[str], Awaitable[None]],
-    on_done:  Callable[[], Awaitable[None]],
+    on_audio:  Callable[[str], Awaitable[None]],
+    on_done:   Callable[[], Awaitable[None]],
+    provider:  Optional[str] = None,
+    voice_id:  Optional[str] = None,
 ):
-    """Create a TTS service instance for the configured provider."""
-    provider = os.getenv("TTS_PROVIDER", "kokoro").lower()
+    """Create a TTS service instance for the configured (or overridden) provider."""
+    provider = (provider or os.getenv("TTS_PROVIDER", "kokoro")).lower()
     if provider == "kokoro":
         from .voice_kokoro import KokoroTTS
-        return KokoroTTS(on_audio, on_done)
+        return KokoroTTS(on_audio, on_done, voice=voice_id)
     elif provider == "fish":
         from .voice_fish import FishAudioTTS
         return FishAudioTTS(on_audio, on_done)
     elif provider == "elevenlabs":
         from .voice_elevenlabs import ElevenLabsTTS
-        return ElevenLabsTTS(on_audio, on_done)
+        return ElevenLabsTTS(on_audio, on_done, voice_id=voice_id)
     elif provider == "vibevoice":
         from .voice_vibevoice import VibeVoiceTTS
         return VibeVoiceTTS(on_audio, on_done)
@@ -224,9 +226,20 @@ class VoicePool:
 
     async def get(
         self,
-        on_audio: Callable[[str], Awaitable[None]],
-        on_done:  Callable[[], Awaitable[None]],
+        on_audio:          Callable[[str], Awaitable[None]],
+        on_done:           Callable[[], Awaitable[None]],
+        provider_override: Optional[str] = None,
+        voice_id_override: Optional[str] = None,
     ):
+        # Per-tenant overrides require a fresh, correctly-configured connection.
+        if provider_override or voice_id_override:
+            log.info(f"Creating fresh TTS for override provider={provider_override!r} voice={voice_id_override!r}")
+            tts = _create_tts(on_audio=on_audio, on_done=on_done,
+                              provider=provider_override, voice_id=voice_id_override)
+            await tts.start()
+            self._fill_event.set()
+            return tts
+
         while True:
             async with self._lock:
                 entry = self._ready.pop(0) if self._ready else None

@@ -303,6 +303,7 @@ async def run_call(
     on_dtmf:               Optional[Callable[[str], None]]                       = None,
     ctx:                   Optional[object]                                      = None,
     tenant_id                                                                    = "default",
+    tenant_config_ref:     Optional[list]                                        = None,
 ) -> None:
     """
     Drive a single call from connect to disconnect.
@@ -467,6 +468,7 @@ async def run_call(
                 telemetry.checkpoint(CP.SCRIPT_GENERATION_START)
                 from .translation import get_translator
                 _translator = get_translator()
+                _tc = tenant_config_ref[0] if tenant_config_ref else None
                 agent = Agent(
                     phone=phone,
                     stream_sid=event.stream_sid,
@@ -483,6 +485,8 @@ async def run_call(
                     translator=_translator,
                     caller_lang=os.getenv("CALLER_LANG", "English"),
                     callee_lang=os.getenv("CALLEE_LANG", "English"),
+                    tts_provider_override=_tc.tts_provider if _tc else None,
+                    voice_id_override=_tc.voice_id if _tc else None,
                 )
                 telemetry.checkpoint(CP.SCRIPT_GENERATION_END)
 

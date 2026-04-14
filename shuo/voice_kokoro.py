@@ -115,12 +115,13 @@ class KokoroTTS:
         self,
         on_audio: Callable[[str], Awaitable[None]],
         on_done: Callable[[], Awaitable[None]],
+        voice: Optional[str] = None,
     ):
         self._on_audio = on_audio
         self._on_done = on_done
 
         self._running = False
-        self._voice = _effective_voice()
+        self._voice = voice or _effective_voice()
 
         self._text_buffer: str = ""
         self._ratecv_state: object = None

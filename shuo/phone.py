@@ -344,12 +344,12 @@ class AgentPhone:
     """
 
     @staticmethod
-    def pair(tenant_id: str = "default") -> tuple["LocalPhone", "LocalPhone"]:
+    def pair() -> tuple["LocalPhone", "LocalPhone"]:
         """
         Create two paired LocalPhone instances ready for agent-to-agent use.
 
-        Both phones share the same tenant scope.  Pass the phones to
-        separate ``run_call()`` coroutines and start them concurrently.
+        Pass the phones to separate ``run_call()`` coroutines (with matching
+        ``tenant_id``) and start them concurrently.
         """
         a = LocalPhone()
         b = LocalPhone()

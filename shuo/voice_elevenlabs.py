@@ -29,6 +29,7 @@ class ElevenLabsTTS:
         self,
         on_audio: Callable[[str], Awaitable[None]],
         on_done: Callable[[], Awaitable[None]],
+        voice_id: Optional[str] = None,
     ):
         self._on_audio = on_audio
         self._on_done = on_done
@@ -38,7 +39,7 @@ class ElevenLabsTTS:
         self._running = False
 
         self._api_key = os.getenv("ELEVENLABS_API_KEY", "")
-        self._voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+        self._voice_id = voice_id or os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
         self._model_id = os.getenv("ELEVENLABS_MODEL", "eleven_flash_v2_5")
 
     @property

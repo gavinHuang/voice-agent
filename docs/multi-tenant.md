@@ -22,37 +22,35 @@ TENANTS_YAML=/etc/voice-agent/tenants.yaml
 ### Two tenants sharing one Twilio account (different phone numbers)
 
 ```yaml
-tenants:
-  - tenant_id: acme
-    twilio_account_sid: AC111aaaa...
-    twilio_auth_token: secret1
-    twilio_phone_number: "+15550001111"
-    default_goal: "You are ACME customer support. Help the caller resolve their issue."
+- tenant_id: acme
+  twilio_account_sid: AC111aaaa...
+  twilio_auth_token: secret1
+  twilio_phone_number: "+15550001111"
+  default_goal: "You are ACME customer support. Help the caller resolve their issue."
 
-  - tenant_id: globex
-    twilio_account_sid: AC111aaaa...   # same Twilio account
-    twilio_auth_token: secret1
-    twilio_phone_number: "+15550002222"  # different number → disambiguated by To
-    default_goal: "You are Globex sales. Qualify the lead and schedule a demo."
-    tts_provider: kokoro
-    voice_id: af_sky
+- tenant_id: globex
+  twilio_account_sid: AC111aaaa...   # same Twilio account
+  twilio_auth_token: secret1
+  twilio_phone_number: "+15550002222"  # different number → disambiguated by To
+  default_goal: "You are Globex sales. Qualify the lead and schedule a demo."
+  tts_provider: kokoro
+  voice_id: af_sky
 ```
 
 ### Two tenants with separate Twilio accounts
 
 ```yaml
-tenants:
-  - tenant_id: tenant-a
-    twilio_account_sid: ACaaa...
-    twilio_auth_token: token_a
-    twilio_phone_number: "+15550001111"
-    default_goal: "You are Tenant A support."
+- tenant_id: tenant-a
+  twilio_account_sid: ACaaa...
+  twilio_auth_token: token_a
+  twilio_phone_number: "+15550001111"
+  default_goal: "You are Tenant A support."
 
-  - tenant_id: tenant-b
-    twilio_account_sid: ACbbb...   # different Twilio account → disambiguated by AccountSid
-    twilio_auth_token: token_b
-    twilio_phone_number: "+15550002222"
-    default_goal: "You are Tenant B support."
+- tenant_id: tenant-b
+  twilio_account_sid: ACbbb...   # different Twilio account → disambiguated by AccountSid
+  twilio_auth_token: token_b
+  twilio_phone_number: "+15550002222"
+  default_goal: "You are Tenant B support."
 ```
 
 ## Tenant config fields

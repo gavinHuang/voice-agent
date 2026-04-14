@@ -629,8 +629,9 @@ async def websocket_endpoint(websocket: WebSocket):
     dashboard_bus.create(ctx.call_id)
     dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx.call_id))
 
-    # Mutable tenant_id reference — updated by get_goal when CallSid is known
+    # Mutable tenant references — both updated by get_goal when CallSid is known
     _tenant_id_ref: list = ["default"]
+    _tenant_config_ref: list = [None]   # Optional[TenantConfig]
 
     def observer(event: dict) -> None:
         tagged = {**event, "call_id": ctx.call_id, "tenant_id": ctx.tenant_id}
@@ -657,10 +658,11 @@ async def websocket_endpoint(websocket: WebSocket):
         goal = pending["goal"] or os.getenv("CALL_GOAL", "")
         phone = pending["phone"]
         ctx.ivr_mode = pending.get("ivr_mode", False)
-        # Propagate tenant_id from pending into the session + mutable ref
+        # Propagate tenant_id from pending into the session + mutable refs
         tid = pending.get("tenant_id", "default")
         ctx.tenant_id = tid
         _tenant_id_ref[0] = tid
+        _tenant_config_ref[0] = _tenant_store.get(tid) if _tenant_store else None
         dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid, tenant_id=tid)
         return goal
 
@@ -682,6 +684,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 "goal": c.goal,
                 "phone": c.phone,
                 "ivr_mode": True,
+                "tenant_id": ctx.tenant_id,
+                "tenant_config": _tenant_config_ref[0],
             }
 
     async def get_saved_state(call_sid: str):
@@ -693,8 +697,12 @@ async def websocket_endpoint(websocket: WebSocket):
             ctx.ivr_mode = True
             goal = saved_dtmf["goal"]
             phone = saved_dtmf["phone"]
-            dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid)
-            logger.info(f"DTMF reconnect for call_sid={call_sid} goal={goal!r}")
+            tid = saved_dtmf.get("tenant_id", "default")
+            ctx.tenant_id = tid
+            _tenant_id_ref[0] = tid
+            _tenant_config_ref[0] = saved_dtmf.get("tenant_config")
+            dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid, tenant_id=tid)
+            logger.info(f"DTMF reconnect for call_sid={call_sid} goal={goal!r} tenant={tid!r}")
             return {
                 "history": saved_dtmf["history"],
                 "takeover_transcript": [],  # Empty → no handback prompt, agent listens
@@ -746,6 +754,7 @@ async def websocket_endpoint(websocket: WebSocket):
             voice_pool=_voice_pool,
             ivr_mode=lambda: ctx.ivr_mode,
             tenant_id=_tenant_id_ref,
+            tenant_config_ref=_tenant_config_ref,
         )
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
