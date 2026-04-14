@@ -454,6 +454,19 @@ def call_cmd(
     show_default=True,
     help="Path for shared cumulative summary Markdown file (two-agent mode)",
 )
+@click.option(
+    "--synthesize",
+    "use_synthesize",
+    is_flag=True,
+    default=False,
+    help="Auto-generate synthetic edge-case scenarios and include them in the benchmark run",
+)
+@click.option(
+    "--synthesize-seed",
+    type=int,
+    default=None,
+    help="Random seed for synthesized scenarios (logged for reproducibility)",
+)
 @click.pass_context
 def bench(
     ctx: click.Context,
@@ -461,19 +474,59 @@ def bench(
     output: str | None,
     mode: str,
     summary: str,
+    use_synthesize: bool,
+    synthesize_seed: int | None,
 ) -> None:
     """Run benchmark scenarios (IVR or two-agent mode)."""
+    import tempfile as _tempfile
+
     cfg = ctx.obj["config"].get("bench", {})
     effective_dataset = dataset if dataset is not None else cfg.get("dataset")
-    if not effective_dataset:
-        click.echo("Error: --dataset required (or set bench.dataset in config)", err=True)
+
+    if not effective_dataset and not use_synthesize:
+        click.echo("Error: --dataset required (or set bench.dataset in config, or use --synthesize)", err=True)
         sys.exit(1)
+
+    if use_synthesize:
+        from simulator.synthesizer import synthesize as _synthesize
+        tmpdir = _tempfile.mkdtemp(prefix="ivr_synth_")
+        click.echo(f"Synthesizing edge-case scenarios (seed={synthesize_seed}) → {tmpdir}")
+        results = _synthesize(seed=synthesize_seed)
+        flows_dir = os.path.join(tmpdir, "flows")
+        scenarios_dir = os.path.join(tmpdir, "scenarios")
+        os.makedirs(flows_dir)
+        os.makedirs(scenarios_dir)
+        synth_scenario_files = []
+        for r in results:
+            flow_path = os.path.join(flows_dir, f"{r.pattern}.yaml")
+            scenario_path = os.path.join(scenarios_dir, f"{r.pattern}.yaml")
+            with open(flow_path, "w") as f:
+                f.write(r.flow_yaml)
+            # Inject ivr_flow into the scenario so bench runner loads the right flow
+            import yaml as _yaml
+            scenario_data = _yaml.safe_load(r.scenario_yaml)
+            for sc in scenario_data.get("scenarios", []):
+                sc["ivr_flow"] = flow_path
+            with open(scenario_path, "w") as f:
+                _yaml.dump(scenario_data, f, default_flow_style=False, allow_unicode=True)
+            synth_scenario_files.append(scenario_path)
+            click.echo(f"  synthesized: {r.pattern}")
+
+        # Merge with --dataset if provided
+        if effective_dataset:
+            datasets_to_run = [effective_dataset] + synth_scenario_files
+        else:
+            datasets_to_run = synth_scenario_files
+    else:
+        datasets_to_run = [effective_dataset]
+
     if mode == "two-agent":
         from shuo.bench import run_two_agent_benchmark
-        asyncio.run(run_two_agent_benchmark(effective_dataset, summary_path=summary))
+        asyncio.run(run_two_agent_benchmark(datasets_to_run[0], summary_path=summary))
     else:
         from shuo.bench import run_benchmark
-        asyncio.run(run_benchmark(effective_dataset, output_path=output))
+        for ds in datasets_to_run:
+            asyncio.run(run_benchmark(ds, output_path=output))
 
 
 def _make_observer(label: str):
@@ -1066,6 +1119,54 @@ def diagnose(ctx: click.Context, skip_connectivity: bool) -> None:
         sys.exit(1)
     else:
         click.echo(click.style("All checks passed.", fg="green", bold=True))
+
+
+@cli.command("ivr-synthesize")
+@click.option(
+    "--patterns",
+    multiple=True,
+    default=None,
+    help=(
+        "Edge-case pattern(s) to generate. Repeat for multiple "
+        "(e.g. --patterns out-of-hours --patterns hold-queue). "
+        "Omit to generate all patterns."
+    ),
+)
+@click.option("--output", type=click.Path(), required=True, help="Output directory for generated files")
+@click.option("--seed", type=int, default=None, help="Random seed for reproducibility")
+def ivr_synthesize(patterns: tuple[str, ...], output: str, seed: int | None) -> None:
+    """Generate synthetic IVR edge-case flows and benchmark scenarios.
+
+    Writes flow YAMLs to <output>/flows/ and scenario YAMLs to
+    <output>/scenarios/, one file per pattern.
+
+    Available patterns: out-of-hours, hold-queue, human-pickup,
+    dtmf-timeout-loop, menu-repeat-cap.
+    """
+    import os as _os
+    from simulator.synthesizer import synthesize, PATTERNS
+
+    selected = list(patterns) if patterns else None
+    if seed is not None:
+        click.echo(f"Seed: {seed}")
+
+    results = synthesize(patterns=selected, seed=seed)
+
+    flows_dir = _os.path.join(output, "flows")
+    scenarios_dir = _os.path.join(output, "scenarios")
+    _os.makedirs(flows_dir, exist_ok=True)
+    _os.makedirs(scenarios_dir, exist_ok=True)
+
+    for result in results:
+        flow_path = _os.path.join(flows_dir, f"{result.pattern}.yaml")
+        scenario_path = _os.path.join(scenarios_dir, f"{result.pattern}.yaml")
+        with open(flow_path, "w") as f:
+            f.write(result.flow_yaml)
+        with open(scenario_path, "w") as f:
+            f.write(result.scenario_yaml)
+        click.echo(f"  {result.pattern}: {flow_path}, {scenario_path}")
+
+    click.echo(f"\nGenerated {len(results)} pattern(s) → {output}/")
 
 
 def main() -> None:

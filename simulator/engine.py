@@ -40,6 +40,10 @@ class TwiMLEngine:
             return self._render_pause(node)
         elif node.type == "hangup":
             return self._render_hangup(node)
+        elif node.type == "hold":
+            return self._render_hold(node)
+        elif node.type == "out-of-hours":
+            return self._render_out_of_hours(node)
         else:
             raise ValueError(f"Unknown node type: {node.type!r}")
 
@@ -97,6 +101,25 @@ class TwiMLEngine:
 
     def _render_hangup(self, _node: Node) -> str:
         return '<?xml version="1.0"?><Response><Hangup/></Response>'
+
+    def _render_hold(self, node: Node) -> str:
+        """Unroll repeat×(Pause+Say) then redirect to next node."""
+        parts = []
+        message = _esc(node.speech) if node.speech else ""
+        for _ in range(node.repeat):
+            parts.append(f'<Pause length="{node.interval}"/>')
+            if message:
+                parts.append(f"<Say>{message}</Say>")
+        if node.next:
+            parts.append(f"<Redirect>{self._step_url(node.next)}</Redirect>")
+        else:
+            parts.append("<Hangup/>")
+        body = "".join(parts)
+        return f'<?xml version="1.0"?><Response>{body}</Response>'
+
+    def _render_out_of_hours(self, node: Node) -> str:
+        speech = _esc(node.speech)
+        return f'<?xml version="1.0"?><Response><Say>{speech}</Say><Hangup/></Response>'
 
     def _redirect(self, node_id: str) -> str:
         return f'<?xml version="1.0"?><Response><Redirect>{self._step_url(node_id)}</Redirect></Response>'

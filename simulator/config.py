@@ -74,6 +74,10 @@ class Node:
     # pause
     length: int = 1  # seconds
 
+    # hold
+    repeat: int = 1     # number of times to repeat the hold message
+    interval: int = 5   # seconds per hold pause
+
     @property
     def speech(self) -> str:
         """Text to speak (unified: prefer 'say', fall back to 'text')."""
@@ -122,6 +126,8 @@ def parse_config(data: Dict[str, Any]) -> IVRConfig:
             routes={str(k): v for k, v in raw.get("routes", {}).items()},
             default=raw.get("default"),
             length=raw.get("length", 1),
+            repeat=raw.get("repeat", 1),
+            interval=raw.get("interval", 5),
         )
 
     _validate(start, nodes)

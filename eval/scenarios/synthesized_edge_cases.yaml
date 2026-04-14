@@ -1,0 +1,60 @@
+scenarios:
+- agent:
+    goal: Call this IVR to reach customer support.
+    identity: Customer
+  description: Agent encounters an out-of-hours IVR that hangs up immediately
+  id: out-of-hours-closed
+  ivr_flow: simulator/flows/synthesized/out-of-hours.yaml
+  success_criteria:
+    max_turns: 5
+    transcript_contains:
+    - Our office is closed at this time
+  timeout: 30
+- agent:
+    goal: Call this IVR and reach technical support. Press 1 to enter the queue and
+      wait on hold until connected.
+    identity: Customer
+  description: Agent waits through a hold queue before reaching an agent
+  id: hold-queue-wait
+  ivr_flow: simulator/flows/synthesized/hold-queue.yaml
+  success_criteria:
+    dtmf_sequence: '1'
+    max_turns: 14
+    transcript_contains:
+    - Your call is important to us
+  timeout: 90
+- agent:
+    goal: Call this IVR to reach technical support. Press 1 to enter the queue. When
+      a human picks up, introduce yourself and state your question.
+    identity: Customer
+  description: Agent waits on hold then responds when a human picks up unexpectedly
+  id: human-pickup-after-hold
+  ivr_flow: simulator/flows/synthesized/human-pickup.yaml
+  success_criteria:
+    dtmf_sequence: '1'
+    max_turns: 14
+    transcript_contains:
+    - how can I help
+  timeout: 76
+- agent:
+    goal: Navigate this IVR. The menu loops if you do not press a key in time. Press
+      1 to escape the loop and get connected.
+    identity: Customer
+  description: Agent handles an IVR menu that loops when no input is given
+  id: dtmf-timeout-loop
+  ivr_flow: simulator/flows/synthesized/dtmf-timeout-loop.yaml
+  success_criteria:
+    dtmf_sequence: '1'
+    max_turns: 10
+  timeout: 60
+- agent:
+    goal: Call this IVR and reach support by pressing 1. If you do not press a key,
+      the IVR will hang up after 4 attempts.
+    identity: Customer
+  description: Agent must navigate before the IVR hangs up after 4 unanswered menus
+  id: menu-repeat-cap
+  ivr_flow: simulator/flows/synthesized/menu-repeat-cap.yaml
+  success_criteria:
+    dtmf_sequence: '1'
+    max_turns: 11
+  timeout: 60

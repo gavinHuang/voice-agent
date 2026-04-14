@@ -137,6 +137,107 @@ def test_gather_no_input_reprompts(simple_flow):
     assert "main_menu" in redirect.text
 
 
+# ── New node types: hold and out-of-hours ─────────────────────────────────
+
+HOLD_FLOW = """
+name: Hold Flow
+start: welcome
+
+nodes:
+  welcome:
+    type: say
+    say: "Welcome."
+    next: wait
+
+  wait:
+    type: hold
+    say: "Please hold."
+    repeat: 3
+    interval: 10
+    next: done
+
+  done:
+    type: hangup
+"""
+
+OUT_OF_HOURS_FLOW = """
+name: Out Of Hours Flow
+start: greeting
+
+nodes:
+  greeting:
+    type: out-of-hours
+    say: "We are currently closed. Please call back during business hours."
+"""
+
+
+def test_parse_hold_node():
+    import yaml
+    config = parse_config(yaml.safe_load(HOLD_FLOW))
+    node = config.nodes["wait"]
+    assert node.type == "hold"
+    assert node.repeat == 3
+    assert node.interval == 10
+    assert node.next == "done"
+    assert node.speech == "Please hold."
+
+
+def test_parse_out_of_hours_node():
+    import yaml
+    config = parse_config(yaml.safe_load(OUT_OF_HOURS_FLOW))
+    node = config.nodes["greeting"]
+    assert node.type == "out-of-hours"
+    assert "closed" in node.speech
+
+
+def test_render_hold_node():
+    engine = _engine(HOLD_FLOW)
+    xml = engine.render_node("wait")
+    root = _parse(xml)
+    pauses = root.findall("Pause")
+    assert len(pauses) == 3
+    assert pauses[0].attrib["length"] == "10"
+    says = root.findall("Say")
+    assert len(says) == 3
+    redirect = root.find("Redirect")
+    assert redirect is not None
+    assert "done" in redirect.text
+
+
+def test_render_hold_node_no_speech():
+    import yaml
+    flow = """
+name: Silent Hold
+start: wait
+nodes:
+  wait:
+    type: hold
+    repeat: 2
+    interval: 5
+    next: end
+  end:
+    type: hangup
+"""
+    engine = _engine(flow)
+    xml = engine.render_node("wait")
+    root = _parse(xml)
+    pauses = root.findall("Pause")
+    assert len(pauses) == 2
+    # no Say elements when speech is empty
+    assert root.findall("Say") == []
+
+
+def test_render_out_of_hours_node():
+    engine = _engine(OUT_OF_HOURS_FLOW)
+    xml = engine.render_node("greeting")
+    root = _parse(xml)
+    say = root.find("Say")
+    assert say is not None
+    assert "closed" in say.text
+    assert root.find("Hangup") is not None
+    assert root.find("Redirect") is None
+
+
 # ── FastAPI endpoint tests ─────────────────────────────────────────────────
 
 

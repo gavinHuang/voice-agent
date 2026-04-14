@@ -514,13 +514,21 @@ async def run_benchmark(
     port = _find_free_port()
     base_url = f"http://127.0.0.1:{port}"
 
-    # Determine flow path from first scenario (all scenarios share the server for now)
+    # Start the IVR server with the first scenario's flow (or default)
     flow_path = scenarios[0].ivr_flow if scenarios else None
     _start_ivr_server(port, flow_path)
     await _wait_for_ivr_ready(base_url)
 
+    import simulator.server as _ivr_server_mod
+
     results: list[ScenarioResult] = []
+    current_flow: Optional[str] = flow_path
     for scenario in scenarios:
+        # Reload the IVR flow if this scenario uses a different one
+        if scenario.ivr_flow and scenario.ivr_flow != current_flow:
+            with open(scenario.ivr_flow) as _f:
+                _ivr_server_mod.reload_config(_f.read())
+            current_flow = scenario.ivr_flow
         result = await run_scenario(scenario, base_url)
         results.append(result)
 
