@@ -46,7 +46,18 @@ def set_pending(
     goal: str,
     ivr_mode: bool = False,
     tenant_id: str = "default",
+    preserve_existing_goal: bool = False,
 ) -> None:
+    """Register pending call data keyed by call_sid.
+
+    If preserve_existing_goal=True and an entry with a non-empty goal already
+    exists (e.g. registered by IVRNavigator before the /twiml webhook fires),
+    the existing goal and ivr_mode are kept and only tenant_id is updated.
+    """
+    existing = _pending.get(call_sid)
+    if preserve_existing_goal and existing and existing.get("goal"):
+        existing["tenant_id"] = tenant_id
+        return
     _pending[call_sid] = {
         "phone": phone,
         "goal": goal,

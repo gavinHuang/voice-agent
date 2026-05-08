@@ -6,6 +6,7 @@ Config: loads voice-agent.yaml from cwd automatically; --config overrides.
 """
 
 import asyncio
+import json
 import os
 import sys
 import signal
@@ -1167,6 +1168,99 @@ def ivr_synthesize(patterns: tuple[str, ...], output: str, seed: int | None) -> 
         click.echo(f"  {result.pattern}: {flow_path}, {scenario_path}")
 
     click.echo(f"\nGenerated {len(results)} pattern(s) → {output}/")
+
+
+@cli.command("ivr-navigate")
+@click.argument("phone")
+@click.option("--max-depth",   type=int, default=5,  show_default=True,
+              help="Maximum menu depth to explore")
+@click.option("--max-calls",   type=int, default=30, show_default=True,
+              help="Maximum number of probe calls to make")
+@click.option("--call-timeout", type=int, default=90, show_default=True,
+              help="Seconds to wait for each probe call")
+@click.option("--output", type=click.Choice(["tree", "json"]), default="tree",
+              show_default=True, help="Output format")
+@click.option("--save", type=click.Path(), default=None,
+              help="Save result to this file (format inferred from --output)")
+@click.option("--ngrok/--no-ngrok", "use_ngrok", default=True,
+              help="Start an ngrok tunnel (default: on)")
+@click.pass_context
+def ivr_navigate(
+    ctx: click.Context,
+    phone: str,
+    max_depth: int,
+    max_calls: int,
+    call_timeout: int,
+    output: str,
+    save: str | None,
+    use_ngrok: bool,
+) -> None:
+    """Explore the full IVR menu tree of a phone number.
+
+    Makes repeated calls to PHONE, systematically navigating each branch.
+    Outputs a hierarchical menu tree showing all discovered options.
+    """
+    import uvicorn
+    from shuo.web import app
+    from shuo.ivr_navigator import IVRNavigator, format_tree
+
+    if use_ngrok:
+        agent_port = int(os.getenv("PORT", "3040"))
+        ngrok_url = _start_ngrok(agent_port)
+        if not os.getenv("IVR_BASE_URL"):
+            os.environ["IVR_BASE_URL"] = f"{ngrok_url}/ivr-mock"
+
+    _check_env_vars()
+
+    def _start_server() -> None:
+        config = uvicorn.Config(app, host="0.0.0.0",
+                                port=int(os.getenv("PORT", "3040")), log_level="warning")
+        server = uvicorn.Server(config)
+        server.run()
+
+    Logger.server_starting(int(os.getenv("PORT", "3040")))
+    server_thread = threading.Thread(target=_start_server, daemon=True)
+    server_thread.start()
+    _wait_for_ready(int(os.getenv("PORT", "3040")))
+    Logger.server_ready(os.getenv("TWILIO_PUBLIC_URL", ""))
+
+    # Probe turns only need to emit a tool call — raise token budget so the
+    # LLM never hits the 500-token default limit before finishing a tool call.
+    os.environ.setdefault("LLM_MAX_TOKENS", "1500")
+
+    click.echo(f"\nStarting IVR navigation of {phone}")
+    click.echo(f"  max_depth={max_depth}  max_calls={max_calls}  timeout={call_timeout}s\n")
+
+    async def _run() -> None:
+        navigator = IVRNavigator(
+            phone_number=phone,
+            max_depth=max_depth,
+            max_calls=max_calls,
+            call_timeout=call_timeout,
+        )
+        tree = await navigator.explore()
+
+        if output == "json":
+            result_str = json.dumps(tree.to_dict(), indent=2)
+        else:
+            result_str = format_tree(tree, phone=phone)
+
+        click.echo(result_str)
+
+        if save:
+            with open(save, "w") as f:
+                f.write(result_str)
+            click.echo(f"\nSaved to: {save}", err=True)
+
+        click.echo(
+            f"\nExploration complete: {navigator._calls_made} call(s) made.",
+            err=True,
+        )
+
+    try:
+        asyncio.run(_run())
+    except KeyboardInterrupt:
+        Logger.shutdown()
 
 
 def main() -> None:

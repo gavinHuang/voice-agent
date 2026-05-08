@@ -141,6 +141,11 @@ _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
 _dtmf_pending: dict = {}   # call_sid -> {history, goal, phone, ivr_mode}
 _dtmf_lock: asyncio.Lock = asyncio.Lock()  # Protects concurrent access to _dtmf_pending
 
+# ── IVR Navigator per-call observers (keyed by Twilio call_sid) ──────
+# Populated by IVRNavigator._probe_path() before dial_out(); consumed
+# by websocket_endpoint() when the stream connects.
+_navigator_observers: dict = {}  # call_sid -> Callable[[dict], None]
+
 # ── Task store (keyed by Twilio call_sid) ─────────────────────────────
 # Holds every outbound call attempt so status callbacks can generate
 # a report even when the call never connects (busy / no-answer / failed).
@@ -389,8 +394,11 @@ async def twiml(request: Request):
         _effective_goal = (
             tenant_cfg.default_goal or os.getenv("CALL_GOAL", "")
         )
+        # preserve_existing_goal=True so that IVRNavigator probe goals registered
+        # before this webhook fires are not overwritten by the default CALL_GOAL.
         dashboard_registry.set_pending(
-            call_sid, "", _effective_goal, tenant_id=tenant_cfg.tenant_id
+            call_sid, "", _effective_goal, tenant_id=tenant_cfg.tenant_id,
+            preserve_existing_goal=True,
         )
     answered_by = params.get("AnsweredBy", "")
     logger.info(f"AMD AnsweredBy={answered_by!r} (all params: {list(params.keys())})")
@@ -729,6 +737,9 @@ async def websocket_endpoint(websocket: WebSocket):
     _tenant_id_ref: list = ["default"]
     _tenant_config_ref: list = [None]   # Optional[TenantConfig]
 
+    # IVR Navigator observer — set when a navigator probe registers for this call
+    _nav_observer_ref: list = [None]   # [Callable[[dict], None] | None]
+
     def observer(event: dict) -> None:
         tagged = {**event, "call_id": ctx.call_id, "tenant_id": ctx.tenant_id}
         # On stream_start: embed phone and goal into the broadcast so the
@@ -737,6 +748,9 @@ async def websocket_endpoint(websocket: WebSocket):
             c = dashboard_registry.get(ctx.call_id)
             tagged = {**tagged, "phone": c.phone if c else "", "goal": c.goal if c else ""}
         dashboard_bus.publish_global(tagged)
+        # Forward to IVR navigator observer if registered for this call
+        if _nav_observer_ref[0]:
+            _nav_observer_ref[0](event)
 
     def should_suppress_agent() -> bool:
         c = dashboard_registry.get(ctx.call_id)
@@ -760,6 +774,10 @@ async def websocket_endpoint(websocket: WebSocket):
         _tenant_id_ref[0] = tid
         _tenant_config_ref[0] = _tenant_store.get(tid) if _tenant_store else None
         dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid, tenant_id=tid)
+        # Attach IVR navigator observer if one was registered for this call
+        nav_obs = _navigator_observers.pop(call_sid, None)
+        if nav_obs:
+            _nav_observer_ref[0] = nav_obs
         return goal
 
     async def on_dtmf(digits: str) -> None:
@@ -782,6 +800,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "ivr_mode": True,
                 "tenant_id": ctx.tenant_id,
                 "tenant_config": _tenant_config_ref[0],
+                "nav_observer": _nav_observer_ref[0],
             }
 
     async def get_saved_state(call_sid: str):
@@ -797,6 +816,10 @@ async def websocket_endpoint(websocket: WebSocket):
             ctx.tenant_id = tid
             _tenant_id_ref[0] = tid
             _tenant_config_ref[0] = saved_dtmf.get("tenant_config")
+            # Restore IVR navigator observer across DTMF reconnect
+            nav_obs = saved_dtmf.get("nav_observer")
+            if nav_obs:
+                _nav_observer_ref[0] = nav_obs
             dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid, tenant_id=tid)
             logger.info(f"DTMF reconnect for call_sid={call_sid} goal={goal!r} tenant={tid!r}")
             return {
