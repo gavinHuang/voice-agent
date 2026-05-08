@@ -141,6 +141,11 @@ _drain_event = asyncio.Event()  # Signalled when _active_calls hits 0
 _dtmf_pending: dict = {}   # call_sid -> {history, goal, phone, ivr_mode}
 _dtmf_lock: asyncio.Lock = asyncio.Lock()  # Protects concurrent access to _dtmf_pending
 
+# ── Task store (keyed by Twilio call_sid) ─────────────────────────────
+# Holds every outbound call attempt so status callbacks can generate
+# a report even when the call never connects (busy / no-answer / failed).
+_task_store: dict = {}   # call_sid -> {call_id, goal, phone, tenant_id}
+
 
 # ── Global pre-warmed voice pool ─────────────────────────────────────
 _voice_pool: Optional[VoicePool] = None
@@ -446,6 +451,75 @@ async def latest_trace():
     return JSONResponse(data)
 
 
+@app.get("/report/latest")
+async def latest_report():
+    """Return the most recently generated call task report as JSON."""
+    from .report import load_latest_report
+    data = load_latest_report()
+    if data is None:
+        return JSONResponse({"error": "No reports found"}, status_code=404)
+    return JSONResponse(data)
+
+
+@app.get("/report/{call_id}")
+async def get_report(call_id: str, tenant_id: str = Query("default")):
+    """Return a specific call task report by call_id."""
+    from .report import load_report
+    data = load_report(call_id, tenant_id=tenant_id)
+    if data is None:
+        return JSONResponse({"error": f"Report not found: {call_id}"}, status_code=404)
+    return JSONResponse(data)
+
+
+@app.api_route("/call-status", methods=["GET", "POST"])
+async def call_status_callback(request: Request):
+    """
+    Twilio status callback — fired for every terminal call state change.
+
+    For calls that never connected (busy / no-answer / failed / cancelled)
+    we generate a disposition report immediately, since run_call() will
+    never be invoked for those calls.  Completed calls already have a
+    report written by run_call(), so we skip them here.
+    """
+    params = dict(request.query_params)
+    if request.method == "POST":
+        form = await request.form()
+        params.update(dict(form))
+
+    call_sid    = params.get("CallSid", "")
+    raw_status  = params.get("CallStatus", "")
+
+    # Normalise Twilio status → our disposition label
+    _STATUS_MAP = {
+        "busy":      "busy",
+        "no-answer": "no-answer",
+        "failed":    "failed",
+        "canceled":  "cancelled",   # Twilio spells it "canceled"
+    }
+    disposition = _STATUS_MAP.get(raw_status)
+
+    if disposition and call_sid in _task_store:
+        task = _task_store.pop(call_sid, {})
+        from .report import build_disposition_report, save_report
+        report = build_disposition_report(
+            call_id=task["call_id"],
+            tenant_id=task["tenant_id"],
+            goal=task["goal"],
+            phone_number=task["phone"],
+            disposition=disposition,
+        )
+        save_report(report, tenant_id=task["tenant_id"])
+        logger.info(
+            f"Disposition report saved: {call_sid} → {disposition} "
+            f"(call_id={task['call_id']})"
+        )
+    elif raw_status == "completed" and call_sid in _task_store:
+        # run_call() already wrote the report; just clean up the task entry.
+        _task_store.pop(call_sid, None)
+
+    return Response(content="", status_code=204)
+
+
 @app.post("/call/{phone_number:path}")
 async def trigger_call_post(phone_number: str, body: _OutboundCallBody):
     """
@@ -465,8 +539,19 @@ async def trigger_call_post(phone_number: str, body: _OutboundCallBody):
         return JSONResponse({"error": f"tenant not found: {body.tenant_id}"}, status_code=404)
 
     try:
-        call_sid = dial_out(phone_number, tenant_config=tenant_cfg)
+        public_url = os.getenv("TWILIO_PUBLIC_URL", "")
         call_id = uuid.uuid4().hex[:8]
+        call_sid = dial_out(
+            phone_number,
+            tenant_config=tenant_cfg,
+            status_callback=f"{public_url}/call-status" if public_url else "",
+        )
+        _task_store[call_sid] = {
+            "call_id":   call_id,
+            "goal":      body.goal,
+            "phone":     phone_number,
+            "tenant_id": tenant_cfg.tenant_id,
+        }
         dashboard_registry.set_pending(
             call_sid, phone_number, body.goal,
             tenant_id=tenant_cfg.tenant_id,
@@ -488,10 +573,21 @@ async def trigger_call(phone_number: str, goal: Optional[str] = Query(None)):
     if not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
     try:
-        call_sid = dial_out(phone_number)
+        public_url = os.getenv("TWILIO_PUBLIC_URL", "")
+        call_id = uuid.uuid4().hex[:8]
         effective_goal = goal or os.getenv("CALL_GOAL", "")
+        call_sid = dial_out(
+            phone_number,
+            status_callback=f"{public_url}/call-status" if public_url else "",
+        )
+        _task_store[call_sid] = {
+            "call_id":   call_id,
+            "goal":      effective_goal,
+            "phone":     phone_number,
+            "tenant_id": "default",
+        }
         dashboard_registry.set_pending(call_sid, phone_number, effective_goal)
-        return {"status": "calling", "to": phone_number, "call_sid": call_sid, "goal": effective_goal}
+        return {"status": "calling", "to": phone_number, "call_sid": call_sid, "call_id": call_id, "goal": effective_goal}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

@@ -331,6 +331,9 @@ async def run_call(
     else:
         _tenant_id_ref = [str(tenant_id)]
 
+    from .report import ReportBuilder, save_report
+    report_builder = ReportBuilder()
+
     event_log = Logger(verbose=False)
     queue: asyncio.Queue[Event] = asyncio.Queue()
     tracer = Tracer()
@@ -499,6 +502,9 @@ async def run_call(
                 if on_agent_ready:
                     on_agent_ready(agent)
 
+                report_builder.set_task(goal=goal, ctx=ctx if not saved else None)
+                report_builder.set_phone(event.phone)
+
             # ── STEP (pure) ──────────────────────────────────────────
             old_phase = state.phase
             state, actions = step(state, event)
@@ -529,6 +535,23 @@ async def run_call(
             # ── DISPATCH ─────────────────────────────────────────────
             for action in actions:
                 await dispatch(action)
+
+            # ── REPORT BUILDER ────────────────────────────────────────
+            if isinstance(event, UserSpokeEvent) and event.transcript:
+                report_builder.on_user_spoke(event.transcript)
+            elif isinstance(event, AgentDoneEvent):
+                report_builder.on_agent_done(
+                    agent._current_turn_text if agent else ""
+                )
+            elif isinstance(event, DTMFEvent):
+                report_builder.on_dtmf(
+                    event.digits,
+                    agent_text=agent._current_turn_text if agent else "",
+                )
+            elif isinstance(event, HoldStartEvent):
+                report_builder.on_hold_start()
+            elif isinstance(event, (CallEndedEvent, HangupEvent)):
+                report_builder.on_call_ended()
 
             # ── DTMF ─────────────────────────────────────────────────
             if isinstance(event, DTMFEvent):
@@ -597,4 +620,15 @@ async def run_call(
         call_summary = telemetry.summary()
         logger.info(f"Call telemetry summary: {call_summary}")
         tracer.save(stream_sid or "unknown", call_summary=call_summary, tenant_id=_tenant_id_ref[0])
+
+        try:
+            report = await report_builder.finalize(
+                call_id=stream_sid or "unknown",
+                call_summary=call_summary,
+                tenant_id=_tenant_id_ref[0],
+            )
+            save_report(report, tenant_id=_tenant_id_ref[0])
+        except Exception as _report_exc:
+            logger.warning(f"Report generation failed: {_report_exc}")
+
         Logger.websocket_disconnected()

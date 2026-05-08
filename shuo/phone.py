@@ -289,6 +289,7 @@ def dial_out(
     to_number: str,
     ivr_mode: bool = False,
     tenant_config=None,   # Optional[TenantConfig] — uses env vars if None
+    status_callback: str = "",
 ) -> str:
     """
     Initiate an outbound call via Twilio REST.
@@ -316,6 +317,9 @@ def dial_out(
     twiml_url = f"{public_url}/twiml"
 
     kwargs: dict = dict(to=to_number, from_=from_number, url=twiml_url, record=True)
+    if status_callback:
+        kwargs["status_callback"] = status_callback
+        kwargs["status_callback_method"] = "POST"
     if not ivr_mode:
         # async_amd=True: Twilio connects the WebSocket immediately when the
         # callee answers, then runs AMD in the background. Without this,
