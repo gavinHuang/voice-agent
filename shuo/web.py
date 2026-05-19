@@ -30,6 +30,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, Response, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
 from twilio.request_validator import RequestValidator
 from twilio.jwt.access_token import AccessToken
@@ -119,6 +120,16 @@ async def verify_twilio_signature(
 
 
 app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
+
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(dashboard_router)
 app.include_router(ttft_router)
 
