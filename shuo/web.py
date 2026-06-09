@@ -887,7 +887,7 @@ async def websocket_endpoint(websocket: WebSocket):
             tenant_config_ref=_tenant_config_ref,
         )
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: call_id={ctx.call_id} error={e}", exc_info=True)
     finally:
         _active_calls -= 1
         cid = ctx.call_id

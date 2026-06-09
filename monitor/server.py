@@ -184,6 +184,7 @@ async def hangup(call_id: str):
         dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended"})
         return {"status": "ok"}
     except Exception as e:
+        _log.error(f"hangup failed: call_id={call_id!r} error={e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -254,6 +255,7 @@ async def takeover(call_id: str):
         registry.update(call_id, softphone_call_sid=softphone_call.sid)
 
     except Exception as e:
+        _log.error(f"takeover failed: call_id={call_id!r} error={e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
     return {"status": "ok"}
@@ -303,6 +305,7 @@ async def handback(call_id: str):
             None, lambda: client.calls(call.call_sid).update(url=twiml_url)
         )
     except Exception as e:
+        _log.error(f"handback failed: call_id={call_id!r} error={e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
     return {"status": "ok"}
@@ -341,12 +344,15 @@ async def start_call(body: CallRequest, request: Request):
     if not phone.startswith("+") and not phone.startswith("client:"):
         phone = f"+{phone}"
 
+    _log.info(f"start_call: phone={phone!r} goal={body.goal!r} ivr_mode={body.ivr_mode} ip={ip!r}")
     try:
         from shuo.phone import dial_out
         call_sid = dial_out(phone, ivr_mode=body.ivr_mode)
         registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode)
+        _log.info(f"start_call: call initiated call_sid={call_sid!r} to={phone!r}")
         return {"status": "calling", "to": phone, "call_sid": call_sid}
     except Exception as e:
+        _log.error(f"start_call failed: phone={phone!r} goal={body.goal!r} error={e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -378,6 +384,7 @@ async def inject_dtmf(call_id: str, body: DTMFRequest):
         dashboard_bus.publish_global({"call_id": call_id, "type": "dtmf", "digit": digit})
         return {"status": "ok"}
     except Exception as e:
+        _log.error(f"inject_dtmf failed: call_id={call_id!r} digit={digit!r} error={e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -422,4 +429,5 @@ async def summarize_call(body: SummarizeRequest):
         summary = resp.choices[0].message.content.strip()
         return {"summary": summary}
     except Exception as e:
+        _log.error(f"summarize_call failed: error={e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
