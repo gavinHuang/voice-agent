@@ -71,6 +71,10 @@ voice-agent config
 | `/dashboard` | Supervisor dashboard — place calls, monitor, take over |
 | `/phone` | Browser softphone — answer / speak as human |
 | `/ivr-mock/twiml` | IVR entry point (when IVR is mounted on agent server) |
+| `/calls` | Call history — list all completed calls with metadata |
+| `/calls?tenant_id=acme` | Call history scoped to a specific tenant |
+| `/report/{call_id}` | Full report for a specific call (transcript, goal outcome, telemetry) |
+| `/report/latest` | Full report for the most recent call |
 | `/trace/latest` | Latest call latency trace (JSON) |
 | `/health` | Health check |
 
@@ -134,6 +138,9 @@ All config lives in `.env`:
 | `TTS_PROVIDER` | No | TTS engine: `elevenlabs` (default), `kokoro`, or `fish` |
 | `PORT` | No | Server port (default: `3040`) |
 | `DRAIN_TIMEOUT` | No | Seconds to wait for active calls on SIGTERM (default: `300`) |
+| `DATA_DIR` | No | Directory for call data (traces, reports, log file). Defaults to `./data` in the working directory. Set to an absolute path (e.g. a mounted volume) in production so data persists across restarts. |
+| `TRACE_MAX_FILES` | No | Maximum number of trace files to keep (default: `100`) |
+| `TRACE_MAX_AGE_HOURS` | No | Delete traces older than this many hours (default: `24`) |
 
 > **Note:** `CALL_GOAL` and `INITIAL_MESSAGE` are managed through the dashboard UI — no need to set them in `.env`.
 
@@ -422,8 +429,10 @@ shuo/
   voice_fish.py       # Fish Audio S2 self-hosted TTS
   phone.py            # TwilioPhone + LocalPhone + dial_out()
   web.py              # FastAPI server — all HTTP/WS endpoints
-  log.py              # Colored terminal logging
-  tracer.py           # Per-turn latency tracing (saves JSON to /tmp/shuo/)
+  log.py              # Colored terminal logging with per-call correlation IDs
+  tracer.py           # Per-turn latency tracing (saves JSON to DATA_DIR/calls/)
+  report.py           # Post-call task reports — transcript, IVR navigation, outcome
+  store.py            # Data directory management (DATA_DIR env var)
 ```
 
 ### TTS providers
@@ -436,15 +445,89 @@ shuo/
 
 Set `TTS_PROVIDER` in `.env` to switch providers.
 
-### Latency tracing
+### Observability
 
-Each call writes a JSON trace to `/tmp/shuo/{stream_sid}.json`:
+#### Per-call log correlation
+
+Every log line emitted during a call is prefixed with the short call ID in square brackets (`[abc12345]`), in both the console output and the rotating log file. This makes it straightforward to grep a single call out of concurrent traffic:
+
+```bash
+grep '\[abc12345\]' data/shuo.log
+```
+
+#### Latency traces
+
+Each call writes a per-turn JSON trace to `DATA_DIR/calls/<tenant>/<stream_sid>.json` (default `./data/calls/`):
 
 ```bash
 curl https://your-ngrok-url/trace/latest | python3 -m json.tool
 ```
 
-The trace contains per-turn spans (LLM first token, TTS first audio, playback complete) with millisecond timestamps relative to turn start.
+The trace contains nested spans (LLM first token, TTS first audio, playback complete) with millisecond timestamps relative to each turn start.
+
+#### Call reports
+
+After every call, a structured task report is saved alongside the trace:
+
+```bash
+curl https://your-ngrok-url/report/latest | python3 -m json.tool
+curl https://your-ngrok-url/report/<call_id>?tenant_id=acme | python3 -m json.tool
+```
+
+Reports contain the full conversation transcript, IVR DTMF sequence, transport metadata (duration, barge-in count, hold count), performance telemetry, and an LLM-assessed goal outcome (`goal_achieved`, `outcome_summary`).
+
+#### Call history
+
+List completed calls newest-first — useful for both platform maintainers and business users:
+
+```bash
+# All calls (platform maintainer view)
+curl https://your-ngrok-url/calls
+
+# Scoped to one tenant/customer (business user view)
+curl "https://your-ngrok-url/calls?tenant_id=acme&limit=20"
+```
+
+Each entry in the response is a lightweight summary (no full transcript) suitable for building a call-history UI or webhook payload:
+
+```json
+{
+  "calls": [
+    {
+      "call_id": "abc12345",
+      "tenant_id": "acme",
+      "phone_number": "+61400000000",
+      "started_at": "2025-06-09T04:12:00.000Z",
+      "duration_s": 73.4,
+      "goal": "Confirm the 9am appointment",
+      "call_disposition": "connected",
+      "goal_achieved": true,
+      "outcome_summary": "Appointment confirmed for 9am Thursday.",
+      "total_turns": 6,
+      "barge_in_count": 1
+    }
+  ],
+  "count": 1
+}
+```
+
+#### Data persistence
+
+All call data lives under `DATA_DIR` (default `./data/`):
+
+```
+data/
+  shuo.log                        # rotating application log
+  calls/
+    default/
+      <stream_sid>.json           # latency trace
+      <stream_sid>_report.json    # task report
+    acme/
+      <stream_sid>.json
+      <stream_sid>_report.json
+```
+
+Set `DATA_DIR` to a mounted volume path in production so data survives restarts. Old traces are automatically pruned at startup (configurable via `TRACE_MAX_FILES` and `TRACE_MAX_AGE_HOURS`).
 
 ---
 
@@ -460,6 +543,9 @@ The trace contains per-turn spans (LLM first token, TTS first audio, playback co
 | `GET/POST` | `/twiml/conference/{call_id}` | TwiML for supervisor takeover conference leg |
 | `WS` | `/ws` | Twilio media stream (one WebSocket per call) |
 | `WS` | `/ws-listen` | Listen-only stream for takeover transcription |
+| `GET` | `/calls` | Call history list — all tenants (add `?tenant_id=` to filter) |
+| `GET` | `/report/latest` | Full report for the most recent call |
+| `GET` | `/report/{call_id}` | Full report for a specific call (add `?tenant_id=` if non-default) |
 | `GET` | `/trace/latest` | Most recent call latency trace (JSON) |
 | `GET` | `/call/{number}` | Trigger outbound call via HTTP |
 
@@ -504,7 +590,7 @@ python -m pytest tests/ -v
 python -m pytest simulator/tests/ -v
 ```
 
-133/133 tests pass.
+218 tests pass.
 
 ---
 

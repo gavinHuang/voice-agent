@@ -8,7 +8,7 @@ Produces a structured report of a completed call combining:
   - Call transport:  metadata, timing, hold events
   - Outcome:         LLM-evaluated goal completion assessment
 
-Reports are saved alongside trace files in /tmp/shuo/<tenant_id>/<call_id>_report.json.
+Reports are saved under DATA_DIR/calls/<tenant_id>/<call_id>_report.json.
 """
 
 import json
@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import List, Optional, Any
 
 from .log import get_logger
-from .tracer import TRACE_DIR
+from .store import get_call_data_dir, get_data_dir
 
 logger = get_logger("shuo.report")
 
@@ -292,9 +292,8 @@ class ReportBuilder:
 # =============================================================================
 
 def save_report(report: TaskReport, tenant_id: str = "default") -> Path:
-    """Write report JSON to /tmp/shuo/<tenant_id>/<call_id>_report.json."""
-    report_dir = TRACE_DIR / tenant_id
-    report_dir.mkdir(parents=True, exist_ok=True)
+    """Write report JSON to DATA_DIR/calls/<tenant_id>/<call_id>_report.json."""
+    report_dir = get_call_data_dir(tenant_id)
     path = report_dir / f"{report.call_id}_report.json"
     path.write_text(json.dumps(asdict(report), indent=2))
     logger.info(f"Report saved → {path}")
@@ -303,10 +302,11 @@ def save_report(report: TaskReport, tenant_id: str = "default") -> Path:
 
 def load_latest_report() -> Optional[dict]:
     """Return the most recently written report dict across all tenant dirs."""
-    if not TRACE_DIR.exists():
+    scan_root = get_data_dir() / "calls"
+    if not scan_root.exists():
         return None
     reports = sorted(
-        TRACE_DIR.glob("**/*_report.json"),
+        scan_root.glob("**/*_report.json"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -315,8 +315,66 @@ def load_latest_report() -> Optional[dict]:
 
 def load_report(call_id: str, tenant_id: str = "default") -> Optional[dict]:
     """Return a specific report by call_id and tenant_id, or None if not found."""
-    path = TRACE_DIR / tenant_id / f"{call_id}_report.json"
+    path = get_call_data_dir(tenant_id) / f"{call_id}_report.json"
     return json.loads(path.read_text()) if path.exists() else None
+
+
+def list_reports(
+    tenant_id: Optional[str] = None,
+    limit: int = 100,
+) -> list:
+    """Return report metadata for all saved calls, newest first.
+
+    Args:
+        tenant_id: Filter to a specific tenant.  None = all tenants.
+        limit: Maximum number of entries to return.
+
+    Each entry is a lightweight dict containing the fields most useful for a
+    call-history listing (not the full conversation transcript):
+        call_id, tenant_id, phone_number, started_at, ended_at, duration_s,
+        goal, call_disposition, goal_achieved, outcome_summary, total_turns,
+        barge_in_count, report_id, generated_at
+    """
+    scan_root = get_data_dir() / "calls"
+    if not scan_root.exists():
+        return []
+
+    if tenant_id:
+        pattern = f"{tenant_id}/*_report.json"
+    else:
+        pattern = "**/*_report.json"
+
+    paths = sorted(
+        scan_root.glob(pattern),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )[:limit]
+
+    results = []
+    for p in paths:
+        try:
+            data = json.loads(p.read_text())
+            transport = data.get("transport", {})
+            results.append({
+                "call_id":        data.get("call_id", ""),
+                "tenant_id":      data.get("tenant_id", ""),
+                "phone_number":   transport.get("phone_number", ""),
+                "started_at":     transport.get("started_at", ""),
+                "ended_at":       transport.get("ended_at"),
+                "duration_s":     transport.get("duration_s"),
+                "goal":           data.get("goal", ""),
+                "call_disposition": data.get("call_disposition", ""),
+                "goal_achieved":  data.get("goal_achieved"),
+                "outcome_summary": data.get("outcome_summary"),
+                "total_turns":    transport.get("total_turns", 0),
+                "barge_in_count": transport.get("barge_in_count", 0),
+                "report_id":      data.get("report_id", ""),
+                "generated_at":   data.get("generated_at", ""),
+            })
+        except Exception:
+            pass
+
+    return results
 
 
 def build_disposition_report(

@@ -458,11 +458,17 @@ async def twiml_ivr_dtmf(digit: str = Query(..., description="DTMF digit(s) to p
 @app.get("/trace/latest")
 async def latest_trace():
     """Return the most recent call trace as JSON (searches all tenant subdirs)."""
-    trace_dir = Path("/tmp/shuo")
-    if not trace_dir.exists():
+    from .store import get_data_dir
+    scan_root = get_data_dir() / "calls"
+    if not scan_root.exists():
         return JSONResponse({"error": "No traces found"}, status_code=404)
 
-    traces = sorted(trace_dir.glob("**/*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    # Traces are named <call_id>.json; reports are <call_id>_report.json
+    traces = sorted(
+        [p for p in scan_root.glob("**/*.json") if not p.name.endswith("_report.json")],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if not traces:
         return JSONResponse({"error": "No traces found"}, status_code=404)
 
@@ -488,6 +494,27 @@ async def get_report(call_id: str, tenant_id: str = Query("default")):
     if data is None:
         return JSONResponse({"error": f"Report not found: {call_id}"}, status_code=404)
     return JSONResponse(data)
+
+
+@app.get("/calls")
+async def list_calls_history(
+    tenant_id: Optional[str] = Query(None, description="Filter by tenant; omit for all tenants"),
+    limit: int = Query(50, ge=1, le=500, description="Max results"),
+):
+    """
+    List completed calls with lightweight metadata — newest first.
+
+    Platform maintainers call this without tenant_id to see all calls.
+    Business users supply their tenant_id to see only their own calls.
+
+    Returns a JSON array; each element contains:
+        call_id, tenant_id, phone_number, started_at, ended_at, duration_s,
+        goal, call_disposition, goal_achieved, outcome_summary, total_turns,
+        barge_in_count, report_id, generated_at
+    """
+    from .report import list_reports
+    items = list_reports(tenant_id=tenant_id, limit=limit)
+    return JSONResponse({"calls": items, "count": len(items)})
 
 
 @app.api_route("/call-status", methods=["GET", "POST"])
@@ -741,6 +768,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Typed per-call context — call_id may be reassigned on takeover reconnect
     ctx = CallSession(call_id=uuid.uuid4().hex[:8])
+    from .log import set_log_call_id
+    set_log_call_id(ctx.call_id)
     dashboard_bus.create(ctx.call_id)
     dashboard_registry.register(dashboard_registry.ActiveCall(call_id=ctx.call_id))
 

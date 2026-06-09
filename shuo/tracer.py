@@ -21,9 +21,14 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field, asdict
 
 from .log import get_logger
+from .store import get_call_data_dir
 
 logger = get_logger("shuo.tracer")
 
+# ---------------------------------------------------------------------------
+# TRACE_DIR kept for backwards-compatibility so existing imports don't break,
+# but all writes now go through get_call_data_dir() which respects DATA_DIR.
+# ---------------------------------------------------------------------------
 TRACE_DIR = Path("/tmp/shuo")
 
 
@@ -132,8 +137,7 @@ class Tracer:
         if not self._turns:
             return None
 
-        trace_dir = TRACE_DIR / tenant_id
-        trace_dir.mkdir(parents=True, exist_ok=True)
+        trace_dir = get_call_data_dir(tenant_id)
         path = trace_dir / f"{call_id}.json"
 
         data: Dict = {
@@ -162,14 +166,16 @@ class Tracer:
 def cleanup_traces(
     max_files: int | None = None,
     max_age_hours: float | None = None,
+    _scan_root: Optional[Path] = None,
 ) -> int:
-    """Remove old trace files from TRACE_DIR. Returns number of files deleted.
+    """Remove old trace files. Returns number of files deleted.
 
     Args:
         max_files: Maximum number of trace files to keep (default from
             TRACE_MAX_FILES env var, fallback 100).
         max_age_hours: Maximum age in hours (default from TRACE_MAX_AGE_HOURS
             env var, fallback 24).
+        _scan_root: Override the directory to scan (used in tests).
 
     Applies age filter first, then caps total count by removing oldest first.
     """
@@ -178,15 +184,20 @@ def cleanup_traces(
     if max_age_hours is None:
         max_age_hours = float(os.getenv("TRACE_MAX_AGE_HOURS", "24"))
 
-    if not TRACE_DIR.exists():
+    if _scan_root is not None:
+        scan_root = _scan_root
+    else:
+        from .store import get_data_dir
+        scan_root = get_data_dir() / "calls"
+
+    if not scan_root.exists():
         return 0
 
     deleted = 0
     now = time.time()
     cutoff = now - (max_age_hours * 3600)
 
-    # Phase 1: Delete files older than max_age_hours (search all tenant subdirs)
-    traces = list(TRACE_DIR.glob("**/*.json"))
+    traces = list(scan_root.glob("**/*.json"))
     for p in traces:
         try:
             if p.stat().st_mtime < cutoff:
@@ -195,8 +206,7 @@ def cleanup_traces(
         except OSError:
             pass
 
-    # Phase 2: If still over max_files, delete oldest first
-    remaining = sorted(TRACE_DIR.glob("**/*.json"), key=lambda p: p.stat().st_mtime)
+    remaining = sorted(scan_root.glob("**/*.json"), key=lambda p: p.stat().st_mtime)
     over = len(remaining) - max_files
     if over > 0:
         for p in remaining[:over]:

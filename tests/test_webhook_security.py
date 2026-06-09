@@ -110,28 +110,22 @@ def _make_trace_file(directory, name, age_seconds=0):
     return p
 
 
-def test_cleanup_traces_deletes_old_files(tmp_path, monkeypatch):
+def test_cleanup_traces_deletes_old_files(tmp_path):
     """cleanup_traces deletes files older than max_age_hours."""
-    import shuo.tracer as tracer_module
-    monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
-
     from shuo.tracer import cleanup_traces
 
     old_file = _make_trace_file(tmp_path, "old.json", age_seconds=7200)  # 2 hours old
     new_file = _make_trace_file(tmp_path, "new.json", age_seconds=60)    # 1 minute old
 
-    deleted = cleanup_traces(max_age_hours=1.0, max_files=100)
+    deleted = cleanup_traces(max_age_hours=1.0, max_files=100, _scan_root=tmp_path)
 
     assert deleted == 1
     assert not old_file.exists(), "Old file should have been deleted"
     assert new_file.exists(), "New file should NOT have been deleted"
 
 
-def test_cleanup_traces_caps_file_count(tmp_path, monkeypatch):
+def test_cleanup_traces_caps_file_count(tmp_path):
     """cleanup_traces deletes oldest files when count exceeds max_files (keeps newest)."""
-    import shuo.tracer as tracer_module
-    monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
-
     from shuo.tracer import cleanup_traces
 
     # Create 5 files with increasing age
@@ -141,7 +135,7 @@ def test_cleanup_traces_caps_file_count(tmp_path, monkeypatch):
         files.append(f)
 
     # Cap at 2 files (keep newest 2), max_age set very high so nothing deleted by age
-    deleted = cleanup_traces(max_age_hours=100.0, max_files=2)
+    deleted = cleanup_traces(max_age_hours=100.0, max_files=2, _scan_root=tmp_path)
 
     assert deleted == 3
     # Oldest 3 should be gone, newest 2 should remain
@@ -149,11 +143,8 @@ def test_cleanup_traces_caps_file_count(tmp_path, monkeypatch):
     assert len(remaining) == 2
 
 
-def test_cleanup_traces_age_then_count(tmp_path, monkeypatch):
+def test_cleanup_traces_age_then_count(tmp_path):
     """cleanup_traces applies age deletion first, then count cap."""
-    import shuo.tracer as tracer_module
-    monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
-
     from shuo.tracer import cleanup_traces
 
     # 3 old files (2h+), 2 fresh files
@@ -163,28 +154,23 @@ def test_cleanup_traces_age_then_count(tmp_path, monkeypatch):
         _make_trace_file(tmp_path, f"new-{i}.json", age_seconds=60)
 
     # Age limit 1h kills the 3 old ones; count limit 1 kills 1 more (the older new one)
-    deleted = cleanup_traces(max_age_hours=1.0, max_files=1)
+    deleted = cleanup_traces(max_age_hours=1.0, max_files=1, _scan_root=tmp_path)
 
     assert deleted == 4
     remaining = list(tmp_path.glob("*.json"))
     assert len(remaining) == 1
 
 
-def test_cleanup_traces_no_directory(monkeypatch):
+def test_cleanup_traces_no_directory():
     """cleanup_traces does nothing when directory does not exist."""
     from pathlib import Path
-    import shuo.tracer as tracer_module
-    monkeypatch.setattr(tracer_module, "TRACE_DIR", Path("/tmp/shuo-nonexistent-xyz"))
-
     from shuo.tracer import cleanup_traces
-    deleted = cleanup_traces(max_age_hours=1.0, max_files=100)
+    deleted = cleanup_traces(max_age_hours=1.0, max_files=100, _scan_root=Path("/tmp/shuo-nonexistent-xyz"))
     assert deleted == 0
 
 
 def test_cleanup_traces_defaults_from_env(tmp_path, monkeypatch):
     """Env vars TRACE_MAX_FILES and TRACE_MAX_AGE_HOURS override defaults."""
-    import shuo.tracer as tracer_module
-    monkeypatch.setattr(tracer_module, "TRACE_DIR", tmp_path)
     monkeypatch.setenv("TRACE_MAX_FILES", "1")
     monkeypatch.setenv("TRACE_MAX_AGE_HOURS", "999")
 
@@ -194,7 +180,7 @@ def test_cleanup_traces_defaults_from_env(tmp_path, monkeypatch):
     for i in range(3):
         _make_trace_file(tmp_path, f"trace-{i}.json", age_seconds=(3 - i) * 60)
 
-    deleted = cleanup_traces()  # Use env-derived defaults
+    deleted = cleanup_traces(_scan_root=tmp_path)  # Use env-derived defaults
     assert deleted == 2
     remaining = list(tmp_path.glob("*.json"))
     assert len(remaining) == 1

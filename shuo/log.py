@@ -11,11 +11,30 @@ from __future__ import annotations
 
 import logging
 import sys
+from contextvars import ContextVar
 from typing import Optional
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .call import Event, Action, Phase
+
+# ---------------------------------------------------------------------------
+# Per-call log correlation
+# ---------------------------------------------------------------------------
+# Set this context variable to the current call_id at the start of each call
+# so every log line emitted during that call is automatically tagged.
+
+_call_id_var: ContextVar[str] = ContextVar("call_id", default="")
+
+
+def set_log_call_id(call_id: str) -> None:
+    """Tag all subsequent log lines in this async task with call_id."""
+    _call_id_var.set(call_id)
+
+
+def clear_log_call_id() -> None:
+    """Remove the call_id tag (call finished)."""
+    _call_id_var.set("")
 
 
 # =============================================================================
@@ -64,11 +83,24 @@ class ColorFormatter(logging.Formatter):
     """Custom formatter with colors and clean timestamp."""
 
     def format(self, record: logging.LogRecord) -> str:
-        # Millisecond-precision timestamps for latency debugging
         ms = int(record.msecs)
         ts = self.formatTime(record, "%H:%M:%S") + f".{ms:03d}"
         time_str = _c(C.DIM, ts)
-        return time_str + " \u2502 " + record.getMessage()
+        call_id = _call_id_var.get()
+        prefix = _c(C.DIM, f"[{call_id}] ") if call_id else ""
+        return time_str + " \u2502 " + prefix + record.getMessage()
+
+
+class CorrelatedFileFormatter(logging.Formatter):
+    """Plain file formatter that injects the active call_id when set."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        call_id = _call_id_var.get()
+        if call_id:
+            record = logging.makeLogRecord(record.__dict__)
+            record.msg = f"[{call_id}] {record.getMessage()}"
+            record.args = None
+        return super().format(record)
 
 
 def setup_logging(level: int = logging.INFO) -> None:
@@ -80,10 +112,17 @@ def setup_logging(level: int = logging.INFO) -> None:
     console.setFormatter(ColorFormatter())
     console.setLevel(level)
 
-    # Plain formatter for file (no ANSI colors)
-    file_formatter = logging.Formatter("%(asctime)s.%(msecs)03d | %(levelname)s | %(name)s | %(message)s",
-                                       datefmt="%Y-%m-%d %H:%M:%S")
-    log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shuo.log")
+    file_formatter = CorrelatedFileFormatter(
+        "%(asctime)s.%(msecs)03d | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    log_dir = os.getenv("DATA_DIR", "")
+    if log_dir:
+        import pathlib
+        pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
+        log_path = os.path.join(log_dir, "shuo.log")
+    else:
+        log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shuo.log")
     file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=3)
     file_handler.setFormatter(file_formatter)
     file_handler.setLevel(level)
