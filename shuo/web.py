@@ -430,12 +430,12 @@ async def twiml(request: Request):
     ws_url = f"{ws_url}/ws"
     logger.info(f"[BP2] WebSocket URL for Twilio: {ws_url!r} (TWILIO_PUBLIC_URL={public_url!r})")
 
-    from_number = params.get("From", "")
+    to_number = params.get("To", "")
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect record="record-from-answer-dual">
         <Stream url="{ws_url}" track="inbound_track">
-            <Parameter name="from" value="{from_number}"/>
+            <Parameter name="to" value="{to_number}"/>
         </Stream>
     </Connect>
 </Response>"""

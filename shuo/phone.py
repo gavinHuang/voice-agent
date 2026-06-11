@@ -71,7 +71,7 @@ def parse_twilio_message(data: dict):
         start     = data.get("start", {})
         stream_sid = start.get("streamSid", "")
         call_sid   = start.get("callSid", "")
-        phone      = start.get("customParameters", {}).get("from", "")
+        phone      = start.get("customParameters", {}).get("to", "")
         if stream_sid:
             return CallStartedEvent(stream_sid=stream_sid, call_sid=call_sid, phone=phone)
 
