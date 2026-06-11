@@ -29,6 +29,9 @@ _DEEPGRAM_LANGUAGE = os.getenv("DEEPGRAM_LANGUAGE", "").strip()
 # flux-general-en → V2 client (no language param).
 # nova-2 / nova-3  → V1 client (supports language param for multilingual STT).
 _USE_V1 = _DEEPGRAM_MODEL != "flux-general-en"
+# Silence duration (ms) before Deepgram declares end-of-utterance (speech_final on V1,
+# EndOfTurn on V2). Default 500 ms gives callers enough time to finish a sentence.
+_DEEPGRAM_ENDPOINTING_MS = int(os.getenv("DEEPGRAM_ENDPOINTING_MS", "500"))
 
 _DEEPGRAM_REGION = os.getenv("DEEPGRAM_REGION", "us").lower()  # "us" or "eu"
 
@@ -108,7 +111,12 @@ class Transcriber:
                 api_key=self._api_key,
                 **({'environment': env} if env else {}),
             )
-            connect_kwargs = dict(model=_DEEPGRAM_MODEL, encoding="mulaw", sample_rate=8000)
+            connect_kwargs = dict(
+                model=_DEEPGRAM_MODEL,
+                encoding="mulaw",
+                sample_rate=8000,
+                endpointing=_DEEPGRAM_ENDPOINTING_MS,
+            )
             if _USE_V1 and _DEEPGRAM_LANGUAGE:
                 connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
             listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2

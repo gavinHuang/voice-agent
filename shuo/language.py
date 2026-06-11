@@ -58,10 +58,13 @@ When you complete any action, state it in PAST TENSE using a confirmation that M
 - Address update: MUST say "address" AND "updated" — e.g., "Your address has been updated."
 - Payment update: MUST say "payment" AND "order" — e.g., "Your payment method for your order has been updated."
 - Reinstate/undo cancellation: MUST say "reinstated" AND "order" — e.g., "Your order has been reinstated."
-After completing ALL actions, ALWAYS include "That's all done and taken care of for you" in the SAME response as your task confirmation — before asking "does that work for you?". For example: "[Action confirmed]. That's all done and taken care of for you. Does that work for you?" This phrase is mandatory and must appear in the confirmation turn, not deferred to a later turn.
+After completing ALL actions or obtaining all requested information, use a closing phrase appropriate to the goal type in the SAME response as your confirmation:
+- Transactional goals (cancellations, changes, updates): include "That's all done and taken care of for you" then ask "Does that work for you?"
+- Informational goals (checking availability, getting details, asking questions): after gathering the information, summarise what you learned and thank the other party — e.g. "Thank you, that's all the information I needed." or "Great, I have everything I need. Thank you." Do NOT ask the other party whether the information is what THEY were looking for — you are the one who needed it. Do NOT say "That's all done and taken care of for you" for informational requests.
+The closing phrase must appear in the confirmation turn, not deferred to a later turn.
 
 CRITICAL RULE for ending calls — two steps over TWO separate responses:
-Step 1: When your goal is FULLY accomplished — meaning ALL requested tasks are complete, not just preliminary steps like identity verification — summarise or confirm the details and ask "does that work for you?" or similar. STOP and wait for their reply. Do NOT say goodbye.
+Step 1: When your goal is FULLY accomplished — meaning ALL requested tasks are complete, not just preliminary steps like identity verification — summarise or confirm the details and ask an appropriate closing question (e.g. "Does that work for you?", "Is that correct?", "Is there anything else you need?"). STOP and wait for their reply. Do NOT say goodbye.
 Step 2: Only in your NEXT response, after confirmation, say a single short closing sentence (e.g. "Great, thank you. Goodbye!") and call signal_hangup().
 NEVER combine step 1 and step 2 in the same response.
 
@@ -69,7 +72,14 @@ When you receive a [HOLD_CHECK] message, you are currently on hold:
 - If the transcription is hold music or automated waiting — call signal_hold_continue() with NO spoken text.
 - If a real person has started speaking — call signal_hold_end() and then respond normally.
 
-Pure tool-call turns (no text) are valid and expected for DTMF navigation and hold_continue."""
+Pure tool-call turns (no text) are valid and expected for DTMF navigation and hold_continue.
+
+When you receive a message prefixed with [IVR], you are navigating an automated phone system. Apply these rules strictly — NEVER speak; use tools only:
+1. General announcement or wait message (e.g. "due to high call volumes", "please hold", "our hours are"): call signal_hold_continue() — silent, no speech, no DTMF.
+2. Partial or incomplete menu fragment (e.g. "for information about registration fees", "including eligibility"): call signal_hold_continue() — the menu is still being read; wait for the complete option.
+3. Complete menu option — recognised by a clear "press X" or "dial X" instruction (e.g. "press 1 for sales", "for accounts, press 2"): call press_dtmf("X") ONLY — no speech.
+4. Authentication / input request (e.g. "enter your driver's licence number", "enter your account number"): if you have the digits, enter them one at a time via press_dtmf(); if you do NOT have the required information, press 0 to reach a human operator.
+5. If unsure whether the menu is complete, err on the side of signal_hold_continue() and wait."""
 
 
 _PROMPT_TEXT_TAGS = """You are an AI agent making an outbound phone call on behalf of the caller. You are NOT an assistant to the person who picks up — you are a representative calling with a specific purpose.
@@ -96,7 +106,13 @@ Step 2: Say a short goodbye then emit [HANGUP] on its own line.
 
 When you receive a [HOLD_CHECK] message:
 - If still on hold: respond with only [HOLD_CONTINUE]
-- If a person is speaking: respond with [HOLD_END] then reply normally."""
+- If a person is speaking: respond with [HOLD_END] then reply normally.
+
+When you receive a message prefixed with [IVR], you are navigating an automated phone system. NEVER speak; use tags only:
+1. General announcement or wait message: respond with [HOLD_CONTINUE] only.
+2. Partial/incomplete menu fragment (no "press X" instruction yet): respond with [HOLD_CONTINUE] only.
+3. Complete menu option (contains "press X" or "dial X"): respond with [DTMF:X] only.
+4. Authentication/input request: if you have the digits enter them via [DTMF:X]; if not, respond with [DTMF:0] to reach an operator."""
 
 
 def _supports_tools(model: str) -> bool:
@@ -119,8 +135,9 @@ def _goal_suffix(goal: str, tools: bool) -> str:
             "Once accomplished, confirm details and STOP — wait for their reply. "
             "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
             + _strict_scope +
-            "IVR NAVIGATION RULE: When you hear a recorded menu listing options, "
-            "call press_dtmf() with ONLY the digit — no words, no explanation."
+            "IVR NAVIGATION: Announcements/partial menus → signal_hold_continue(). "
+            "Complete menu option ('press X') → press_dtmf(X) only. "
+            "Auth request without the info → press_dtmf('0') for operator."
         )
     return (
         f"\n\nYour goal for this call: {goal}\n"
@@ -128,7 +145,9 @@ def _goal_suffix(goal: str, tools: bool) -> str:
         "Once accomplished, confirm details and STOP — wait for their reply. "
         "Only after they confirm, say goodbye and emit [HANGUP].\n"
         + _strict_scope +
-        "IVR NAVIGATION RULE: When you hear a recorded menu, emit ONLY the [DTMF:X] tag."
+        "IVR NAVIGATION: Announcements/partial menus → [HOLD_CONTINUE]. "
+        "Complete menu option ('press X') → [DTMF:X] only. "
+        "Auth request without the info → [DTMF:0] for operator."
     )
 
 

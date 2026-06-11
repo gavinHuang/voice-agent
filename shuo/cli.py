@@ -259,6 +259,8 @@ def serve(ctx: click.Context, port: int | None, drain_timeout: int | None, use_n
               help="Language the caller speaks (e.g. 'Spanish')")
 @click.option("--callee-lang", type=str, default=None,
               help="Language the agent/callee operates in (e.g. 'English')")
+@click.option("--ivr", "is_ivr", is_flag=True, default=False,
+              help="Number is an IVR/automated system — suppresses agent greeting and enables IVR navigation mode")
 @click.pass_context
 def call_cmd(
     ctx: click.Context,
@@ -276,6 +278,7 @@ def call_cmd(
     use_ngrok: bool,
     caller_lang: str | None,
     callee_lang: str | None,
+    is_ivr: bool,
 ) -> None:
     """Initiate an outbound call to PHONE."""
     import uvicorn
@@ -294,6 +297,8 @@ def call_cmd(
         os.environ["CALLER_LANG"] = caller_lang
     if callee_lang:
         os.environ["CALLEE_LANG"] = callee_lang
+    if is_ivr:
+        os.environ["CALL_IVR_MODE"] = "1"
 
     _check_env_vars()
 
@@ -308,7 +313,7 @@ def call_cmd(
     # ── 2. Base defaults: identity.md → config file → env ────────────
     ctx_fields: dict = {
         "goal":              cfg.get("goal", os.getenv("CALL_GOAL", "")),
-        "agent_name":        identity_fields.get("agent_name",       "Alex"),
+        "agent_name":        identity_fields.get("agent_name",       None),
         "agent_role":        identity_fields.get("agent_role",       "a professional assistant"),
         "agent_tone":        identity_fields.get("agent_tone",       "friendly and concise"),
         "agent_background":  identity_fields.get("agent_background"),
@@ -334,7 +339,7 @@ def call_cmd(
                       "constraints", "success_criteria"):
             val = getattr(file_ctx, fname)
             default_val = {
-                "goal": "", "agent_name": "Alex",
+                "goal": "", "agent_name": None,
                 "agent_role": "a professional assistant",
                 "agent_tone": "friendly and concise",
                 "agent_background": None, "caller_name": None,
@@ -415,18 +420,19 @@ def call_cmd(
     Logger.server_ready(os.getenv("TWILIO_PUBLIC_URL", ""))
 
     Logger.call_initiating(phone)
-    call_sid = dial_out(phone)
+    call_sid = dial_out(phone, ivr_mode=is_ivr)
     Logger.call_initiated(call_sid)
 
     import shuo.web as _web_module
 
-    # Wait for call to connect (up to 60s)
-    deadline = time.monotonic() + 60
+    # IVR service numbers may queue callers for several minutes before connecting.
+    connect_timeout = 180 if is_ivr else 60
+    deadline = time.monotonic() + connect_timeout
     while _web_module._active_calls == 0 and time.monotonic() < deadline:
         time.sleep(0.5)
 
     if _web_module._active_calls == 0:
-        click.echo("Warning: call did not connect within 60 seconds", err=True)
+        click.echo(f"Warning: call did not connect within {connect_timeout} seconds", err=True)
     else:
         # Wait for call to end
         try:

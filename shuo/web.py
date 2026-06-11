@@ -401,6 +401,7 @@ async def twiml(request: Request):
 
     # Store tenant_id in pending so the WebSocket handler can retrieve it
     call_sid = params.get("CallSid", "")
+    _ivr_mode = os.getenv("CALL_IVR_MODE", "").lower() in ("1", "true", "yes")
     if call_sid:
         _effective_goal = (
             tenant_cfg.default_goal or os.getenv("CALL_GOAL", "")
@@ -409,6 +410,7 @@ async def twiml(request: Request):
         # before this webhook fires are not overwritten by the default CALL_GOAL.
         dashboard_registry.set_pending(
             call_sid, "", _effective_goal, tenant_id=tenant_cfg.tenant_id,
+            ivr_mode=_ivr_mode,
             preserve_existing_goal=True,
         )
     answered_by = params.get("AnsweredBy", "")
@@ -416,7 +418,7 @@ async def twiml(request: Request):
     # Hang up only on confirmed machine/voicemail. "unknown" means AMD couldn't
     # determine — treat as human to avoid hanging up on real people.
     _machine_values = {"machine_start", "machine_end_beep", "machine_end_silence", "machine_end_other", "fax"}
-    if answered_by and answered_by in _machine_values:
+    if not _ivr_mode and answered_by and answered_by in _machine_values:
         logger.info(f"AMD: {answered_by} — hanging up without greeting")
         return Response(
             content='<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
@@ -428,11 +430,12 @@ async def twiml(request: Request):
     ws_url = f"{ws_url}/ws"
     logger.info(f"[BP2] WebSocket URL for Twilio: {ws_url!r} (TWILIO_PUBLIC_URL={public_url!r})")
 
+    from_number = params.get("From", "")
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect record="record-from-answer-dual">
         <Stream url="{ws_url}" track="inbound_track">
-            <Parameter name="from" value="{{From}}"/>
+            <Parameter name="from" value="{from_number}"/>
         </Stream>
     </Connect>
 </Response>"""
@@ -780,6 +783,10 @@ async def websocket_endpoint(websocket: WebSocket):
     # IVR Navigator observer — set when a navigator probe registers for this call
     _nav_observer_ref: list = [None]   # [Callable[[dict], None] | None]
 
+    # IVR auto-detector — set up in get_goal() once phone number is known
+    from .ivr_detector import IVRDetector
+    _ivr_detector = IVRDetector()
+
     def observer(event: dict) -> None:
         tagged = {**event, "call_id": ctx.call_id, "tenant_id": ctx.tenant_id}
         # On stream_start: embed phone and goal into the broadcast so the
@@ -808,6 +815,17 @@ async def websocket_endpoint(websocket: WebSocket):
         goal = pending["goal"] or os.getenv("CALL_GOAL", "")
         phone = pending["phone"]
         ctx.ivr_mode = pending.get("ivr_mode", False)
+        # Activate IVR detector now that the phone number is known.
+        # on_detected callback keeps ctx.ivr_mode in sync so the greeting
+        # suppression logic (which reads ctx.ivr_mode) sees the updated value.
+        _ivr_detector.setup(
+            phone=phone,
+            force=ctx.ivr_mode,
+            on_detected=lambda: setattr(ctx, "ivr_mode", True),
+        )
+        if _ivr_detector.is_ivr and not ctx.ivr_mode:
+            ctx.ivr_mode = True
+            logger.info(f"IVR auto-detected from phone number pattern: {phone!r}")
         # Propagate tenant_id from pending into the session + mutable refs
         tid = pending.get("tenant_id", "default")
         ctx.tenant_id = tid
@@ -912,6 +930,7 @@ async def websocket_endpoint(websocket: WebSocket):
             get_saved_state=get_saved_state,
             voice_pool=_voice_pool,
             ivr_mode=lambda: ctx.ivr_mode,
+            ivr_detector=_ivr_detector,
             tenant_id=_tenant_id_ref,
             tenant_config_ref=_tenant_config_ref,
         )
@@ -927,6 +946,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 dashboard_registry.update(cid, saved_history=call.agent.history)
             logger.info(f"Call {cid} paused for takeover  (active: {_active_calls})")
         else:
+            dashboard_bus.publish_global({"call_id": cid, "type": "call_ended"})
             dashboard_registry.remove(cid)
             dashboard_bus.destroy(cid)
             logger.info(f"Call ended  (active: {_active_calls})")

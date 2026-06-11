@@ -304,6 +304,7 @@ async def run_call(
     ctx:                   Optional[object]                                      = None,
     tenant_id                                                                    = "default",
     tenant_config_ref:     Optional[list]                                        = None,
+    ivr_detector:          Optional[object]                                      = None,
 ) -> None:
     """
     Drive a single call from connect to disconnect.
@@ -390,14 +391,31 @@ async def run_call(
                 await transcriber.send(action.audio_bytes)
 
         elif isinstance(action, StartTurnAction):
+            # Auto-detect IVR from transcript content before starting the turn.
+            # analyze() returns True on the first detection event (False → True).
+            if ivr_detector and not ivr_detector.is_ivr:
+                if ivr_detector.analyze(action.transcript):
+                    logger.info("IVR auto-detected from transcript content")
             if agent and not (should_suppress_agent and should_suppress_agent()):
-                await agent.start_turn(action.transcript, hold_check=action.hold_check)
+                _ivr_ctx = (
+                    (ivr_detector.is_ivr if ivr_detector else False)
+                    or (ivr_mode() if ivr_mode else False)
+                )
+                await agent.start_turn(
+                    action.transcript,
+                    hold_check=action.hold_check,
+                    ivr_context=_ivr_ctx,
+                )
 
         elif isinstance(action, CancelTurnAction):
             # In IVR mode the remote party is automated — suppress barge-in so
             # background audio doesn't cancel the agent's response mid-flight.
             # Also suppress if hangup is already decided — let goodbye play out.
-            if agent and not (ivr_mode and ivr_mode()) and not agent.hangup_decided:
+            _is_ivr = (
+                (ivr_detector.is_ivr if ivr_detector else False)
+                or (ivr_mode and ivr_mode())
+            )
+            if agent and not _is_ivr and not agent.hangup_decided:
                 await agent.cancel_turn()
 
     # ── Pre-start STT (no pool path) ─────────────────────────────────
@@ -567,7 +585,10 @@ async def run_call(
                         for act in acts:
                             await dispatch(act)
                 else:
-                    _is_ivr = ivr_mode() if ivr_mode else False
+                    _is_ivr = (
+                        (ivr_detector.is_ivr if ivr_detector else False)
+                        or (ivr_mode() if ivr_mode else False)
+                    )
                     if not _is_ivr:
                         initial_msg = os.getenv("INITIAL_MESSAGE", "").strip()
                         opener = initial_msg or ("[CALL_STARTED]" if goal else "")

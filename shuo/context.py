@@ -34,7 +34,7 @@ class CallContext(BaseModel):
     directly as a FastAPI request body.
     """
     goal: str
-    agent_name: str = "Alex"
+    agent_name: Optional[str] = None
     agent_role: str = "a professional assistant"
     agent_tone: str = "friendly and concise"
     agent_background: Optional[str] = None   # free-text from identity.md body
@@ -57,7 +57,7 @@ class CallContext(BaseModel):
         """
         defaults = {
             "goal": "",
-            "agent_name": "Alex",
+            "agent_name": None,
             "agent_role": "a professional assistant",
             "agent_tone": "friendly and concise",
             "agent_background": None,
@@ -78,7 +78,7 @@ class CallContext(BaseModel):
             data = yaml.safe_load(f) or {}
         return cls(
             goal=data.get("goal", ""),
-            agent_name=data.get("agent_name", "Alex"),
+            agent_name=data.get("agent_name") or None,
             agent_role=data.get("agent_role", "a professional assistant"),
             agent_tone=data.get("agent_tone", "friendly and concise"),
             agent_background=data.get("agent_background"),
@@ -91,7 +91,7 @@ class CallContext(BaseModel):
     def to_yaml(self, path: str | Path) -> None:
         """Serialize this CallContext to a YAML file."""
         data: dict = {"goal": self.goal}
-        if self.agent_name != "Alex":
+        if self.agent_name:
             data["agent_name"] = self.agent_name
         if self.agent_role != "a professional assistant":
             data["agent_role"] = self.agent_role
@@ -194,7 +194,7 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
 
     lines = [
         "Your identity on this call:",
-        f"- Name: {ctx.agent_name}",
+        f"- Name: {ctx.agent_name}" if ctx.agent_name else "- Name: (not provided — do NOT state or invent a name when introducing yourself)",
         f"- Role: {ctx.agent_role}",
         f"- Tone: {ctx.agent_tone}",
     ]
@@ -220,10 +220,18 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
         "part of the goal, skip them entirely."
     )
 
+    lines.append(
+        "\nDo NOT state or announce the name of the person you are calling during the call — "
+        "phone calls do not require stating the other party's name. "
+        "Never invent, assume, or guess any name that was not explicitly provided to you."
+    )
     if ctx.caller_name:
-        lines.append(f"\nYou are calling {ctx.caller_name}.")
+        lines.append(
+            f"The person you are calling is named {ctx.caller_name}. "
+            "Use this for your own reference only — do not proactively say their name on the call unless they ask."
+        )
     if ctx.caller_context:
-        lines.append(f"Context about the caller: {ctx.caller_context}")
+        lines.append(f"Context about the person you are calling: {ctx.caller_context}")
 
     if ctx.constraints:
         lines.append("\nInstructions you must follow:")
@@ -234,10 +242,18 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
         lines.append(f"\nThis call is successful when: {ctx.success_criteria}")
 
     ivr_rule = (
-        "\nIVR NAVIGATION RULE: When you hear a recorded menu listing options, "
-        + ("call press_dtmf() with ONLY the digit — no words, no explanation."
-           if tools else
-           "emit ONLY the [DTMF:X] tag.")
+        "\nIVR NAVIGATION: When the other party is an automated phone system, "
+        + (
+            "respond with tools only — no speech. "
+            "Announcements or partial menus → signal_hold_continue(). "
+            "Complete menu option ('press X for Y') → press_dtmf(X). "
+            "Auth/input request without the info → press_dtmf('0') for operator."
+            if tools else
+            "respond with tags only — no speech. "
+            "Announcements or partial menus → [HOLD_CONTINUE]. "
+            "Complete menu option ('press X for Y') → [DTMF:X]. "
+            "Auth/input request without the info → [DTMF:0] for operator."
+        )
     )
     lines.append(ivr_rule)
 

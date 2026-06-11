@@ -103,6 +103,7 @@ class Agent:
         self._pending_hangup:    bool       = False
         self._current_turn_text: str        = ""
         self._dtmf_queue:        List[str]  = []
+        self._response_started:  bool       = False  # True once first real content token sent
 
         # Set when LLM decides to hang up — blocks new turns and barge-in cancellation
         self._hangup_decided:    bool       = False
@@ -139,7 +140,7 @@ class Agent:
 
     # ── Turn lifecycle ──────────────────────────────────────────────
 
-    async def start_turn(self, transcript: str, hold_check: bool = False) -> None:
+    async def start_turn(self, transcript: str, hold_check: bool = False, ivr_context: bool = False) -> None:
         if self._hangup_decided:
             log.info("start_turn blocked: hangup already in progress")
             return
@@ -154,6 +155,7 @@ class Agent:
         self._tts_had_text     = False
         self._pending_hangup   = False
         self._current_turn_text = ""
+        self._response_started  = False
 
         self._turn = self._tracer.begin_turn(transcript)
         self._tracer.begin(self._turn, "tts_pool")
@@ -187,6 +189,18 @@ class Agent:
             )
         elif _is_control:
             message = transcript
+        elif ivr_context:
+            # IVR mode: wrap with context so LLM uses tools-only (no speech)
+            message = (
+                "[IVR] Automated phone system transcript:\n\n"
+                f"{transcript}\n\n"
+                "Respond with tools ONLY — no spoken text:\n"
+                "- Announcement / wait message / incomplete menu fragment → signal_hold_continue()\n"
+                "- Complete menu option with 'press X' instruction → press_dtmf('X')\n"
+                "- Input/authentication request and you have the digits → press_dtmf() each digit\n"
+                "- Input/authentication request and you DON'T have the digits → press_dtmf('0') for operator"
+            )
+            log.info(f"IVR context wrapped turn: {transcript!r}")
         elif self._translator and self._caller_lang and self._callee_lang:
             message = await self._translator.translate(
                 transcript, self._callee_lang, self._caller_lang
@@ -245,6 +259,12 @@ class Agent:
             log.info(f"LLM first token  +{_ms(self._t0)}ms")
 
         if token and not self._translator:
+            if not self._response_started:
+                token = token.lstrip(", \t\n")
+                if not token:
+                    return
+                self._response_started = True
+                self._current_turn_text = self._current_turn_text.lstrip(", \t\n")
             if not self._tts_had_text and self._telemetry:
                 self._telemetry.checkpoint(CP.TTS_SYNTHESIS_START)
                 self._telemetry.increment("tts_segments")
