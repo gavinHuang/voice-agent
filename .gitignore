@@ -48,3 +48,4 @@ htmlcov/
 # Log files (may contain credentials)
 *.log
 *.log.*
+data/calls/

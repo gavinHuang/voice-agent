@@ -24,10 +24,10 @@ def test_callcontext_required_field_raises():
 
 
 def test_callcontext_defaults():
-    """Optional fields default to the built-in Alex persona."""
+    """Optional fields use safe defaults (no invented name)."""
     from shuo.context import CallContext
     ctx = CallContext(goal="Book a table for two")
-    assert ctx.agent_name == "Alex"
+    assert ctx.agent_name is None
     assert ctx.agent_role == "a professional assistant"
     assert ctx.agent_tone == "friendly and concise"
     assert ctx.agent_background is None
@@ -103,7 +103,7 @@ def test_callcontext_yaml_minimal(tmp_path):
     p.write_text("goal: Confirm appointment\n")
     ctx = CallContext.from_yaml(p)
     assert ctx.goal == "Confirm appointment"
-    assert ctx.agent_name == "Alex"
+    assert ctx.agent_name is None
     assert ctx.constraints == []
     assert ctx.caller_name is None
 
@@ -147,11 +147,12 @@ def test_build_system_prompt_full():
 
 
 def test_build_system_prompt_minimal():
-    """Minimal context: Alex defaults appear, no placeholder text."""
+    """Minimal context: no invented name, no placeholder text."""
     from shuo.context import CallContext, build_system_prompt
     ctx = CallContext(goal="Book a table for two")
     prompt = build_system_prompt(ctx)
-    assert "Alex" in prompt
+    assert "Alex" not in prompt
+    assert "do NOT state or invent a name" in prompt
     assert "a professional assistant" in prompt
     assert "Book a table for two" in prompt
     # No placeholder text
@@ -333,7 +334,7 @@ def test_callcontext_json_minimal():
     json_str = json.dumps({"goal": "Book a table"})
     ctx = CallContext.model_validate_json(json_str)
     assert ctx.goal == "Book a table"
-    assert ctx.agent_name == "Alex"
+    assert ctx.agent_name is None
     assert ctx.constraints == []
 
 

@@ -88,48 +88,40 @@ def test_registry_set_and_pop_pending():
     call_sid = "CA_reg_test_001"
     registry._pending.pop(call_sid, None)
 
-    registry.set_pending(call_sid, phone="+61400000000", goal="Check today's date", ivr_mode=False)
+    registry.set_pending(call_sid, phone="+61400000000", goal="Check today's date", ivr_mode=False, tenant_id="user123")
     result = registry.pop_pending(call_sid)
 
     assert result["goal"] == "Check today's date"
     assert result["phone"] == "+61400000000"
     assert result["ivr_mode"] is False
+    assert result["tenant_id"] == "user123"
 
 
-def test_registry_pop_pending_missing_returns_defaults():
-    """pop_pending on an unknown call_sid returns empty defaults (not KeyError)."""
+def test_registry_set_pending_requires_tenant_id():
+    """set_pending raises ValueError when tenant_id is missing."""
     from monitor import registry
-    result = registry.pop_pending("CA_nonexistent_sid")
-    assert result["phone"] == ""
-    assert result["goal"] == ""
-    assert result["ivr_mode"] is False
-    assert result.get("tenant_id", "default") == "default"
+    import pytest
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        registry.set_pending("CA_no_tenant", phone="+1000000000", goal="test")
+
+
+def test_registry_pop_pending_missing_raises():
+    """pop_pending on an unknown call_sid raises KeyError."""
+    from monitor import registry
+    import pytest
+    with pytest.raises(KeyError):
+        registry.pop_pending("CA_nonexistent_sid")
 
 
 def test_registry_pop_pending_removes_entry():
-    """After pop_pending, the entry is gone — second pop returns defaults."""
+    """After pop_pending, the entry is gone — second pop raises KeyError."""
     from monitor import registry
+    import pytest
     call_sid = "CA_reg_test_002"
-    registry.set_pending(call_sid, phone="+1000000000", goal="test goal")
+    registry.set_pending(call_sid, phone="+1000000000", goal="test goal", tenant_id="user123")
     registry.pop_pending(call_sid)
-    second = registry.pop_pending(call_sid)
-    assert second["goal"] == ""
-
-
-def test_get_goal_falls_back_to_env_var(monkeypatch):
-    """
-    REG-02: When no pending entry exists (separate server process), get_goal falls
-    back to CALL_GOAL env var so the agent still has a goal.
-    """
-    monkeypatch.setenv("CALL_GOAL", "Fallback goal from env")
-    from monitor import registry
-    call_sid = "CA_no_pending_sid"
-    registry._pending.pop(call_sid, None)
-
-    # Simulate what server.py's get_goal() does
-    pending = registry.pop_pending(call_sid)
-    goal = pending["goal"] or os.getenv("CALL_GOAL", "")
-    assert goal == "Fallback goal from env"
+    with pytest.raises(KeyError):
+        registry.pop_pending(call_sid)
 
 
 def test_get_goal_prefers_registry_over_env_var(monkeypatch):
@@ -137,7 +129,7 @@ def test_get_goal_prefers_registry_over_env_var(monkeypatch):
     monkeypatch.setenv("CALL_GOAL", "env goal")
     from monitor import registry
     call_sid = "CA_priority_test"
-    registry.set_pending(call_sid, phone="+1000000000", goal="registry goal")
+    registry.set_pending(call_sid, phone="+1000000000", goal="registry goal", tenant_id="user123")
 
     pending = registry.pop_pending(call_sid)
     goal = pending["goal"] or os.getenv("CALL_GOAL", "")
@@ -313,7 +305,7 @@ def test_dashboard_call_registers_pending_goal(monkeypatch, dashboard_client):
     with patch("shuo.phone.dial_out", return_value=fake_call_sid):
         resp = dashboard_client.post(
             "/dashboard/call",
-            json={"phone": "+61400000001", "goal": "Check today's date", "ivr_mode": False},
+            json={"phone": "+61400000001", "goal": "Check today's date", "ivr_mode": False, "tenant_id": "test_profile_001"},
         )
 
     assert resp.status_code == 200
@@ -328,6 +320,7 @@ def test_dashboard_call_registers_pending_goal(monkeypatch, dashboard_client):
     )
     assert pending["phone"] == "+61400000001"
     assert pending["ivr_mode"] is False
+    assert pending["tenant_id"] == "test_profile_001"
 
 
 def test_dashboard_call_ivr_mode_sets_flag(monkeypatch, dashboard_client):
@@ -339,7 +332,7 @@ def test_dashboard_call_ivr_mode_sets_flag(monkeypatch, dashboard_client):
     with patch("shuo.phone.dial_out", return_value=fake_call_sid):
         resp = dashboard_client.post(
             "/dashboard/call",
-            json={"phone": "+61400000002", "goal": "Navigate IVR menu", "ivr_mode": True},
+            json={"phone": "+61400000002", "goal": "Navigate IVR menu", "ivr_mode": True, "tenant_id": "test_profile_002"},
         )
 
     assert resp.status_code == 200
@@ -410,7 +403,7 @@ def test_get_call_endpoint_still_works(call_api_client):
     fake_call_sid = "CA_get_test_001"
 
     with patch("shuo.web.dial_out", return_value=fake_call_sid):
-        resp = call_api_client.get("/call/+61400000099?goal=Check+status")
+        resp = call_api_client.get("/call/+61400000099?goal=Check+status&tenant_id=test_profile_001")
 
     assert resp.status_code == 200
     data = resp.json()

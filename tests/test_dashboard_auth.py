@@ -196,7 +196,7 @@ def test_rate_limit_allows_up_to_limit(monkeypatch):
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="3")
-        payload = {"phone": "+15550001111", "goal": "test"}
+        payload = {"phone": "+15550001111", "goal": "test", "tenant_id": "test_profile_001"}
         for i in range(3):
             resp = client.post("/dashboard/call", json=payload)
             assert resp.status_code in (200, 500), (
@@ -210,7 +210,7 @@ def test_rate_limit_blocks_over_limit(monkeypatch):
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="3")
-        payload = {"phone": "+15550001111", "goal": "test"}
+        payload = {"phone": "+15550001111", "goal": "test", "tenant_id": "test_profile_001"}
         # Exhaust the limit
         for _ in range(3):
             client.post("/dashboard/call", json=payload)
@@ -228,7 +228,7 @@ def test_rate_limit_retry_after_is_numeric(monkeypatch):
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="2")
-        payload = {"phone": "+15550001111", "goal": "test"}
+        payload = {"phone": "+15550001111", "goal": "test", "tenant_id": "test_profile_001"}
         for _ in range(2):
             client.post("/dashboard/call", json=payload)
         resp = client.post("/dashboard/call", json=payload)
@@ -244,7 +244,7 @@ def test_call_rate_limit_env_var_respected(monkeypatch):
     with patch("shuo.phone.dial_out", return_value=mock_sid), \
          patch("monitor.registry.set_pending"):
         client = _make_call_client(monkeypatch, limit="2")
-        payload = {"phone": "+15550009999", "goal": "env-var test"}
+        payload = {"phone": "+15550009999", "goal": "env-var test", "tenant_id": "test_profile_002"}
         # First 2 succeed
         for _ in range(2):
             resp = client.post("/dashboard/call", json=payload)

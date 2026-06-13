@@ -611,13 +611,13 @@ async def trigger_call_post(phone_number: str, body: _OutboundCallBody):
 
 
 @app.get("/call/{phone_number:path}")
-async def trigger_call(phone_number: str, goal: Optional[str] = Query(None)):
+async def trigger_call(phone_number: str, goal: Optional[str] = Query(None), tenant_id: str = Query(...)):
     """
     Initiate an outbound call (legacy GET endpoint — preserved for backward compatibility).
 
     Usage:
-        curl https://your-server/call/+1234567890
-        curl https://your-server/call/+1234567890?goal=ask+about+pricing
+        curl https://your-server/call/+1234567890?tenant_id=<profile_id>
+        curl https://your-server/call/+1234567890?goal=ask+about+pricing&tenant_id=<profile_id>
     """
     if not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
@@ -633,9 +633,9 @@ async def trigger_call(phone_number: str, goal: Optional[str] = Query(None)):
             "call_id":   call_id,
             "goal":      effective_goal,
             "phone":     phone_number,
-            "tenant_id": "default",
+            "tenant_id": tenant_id,
         }
-        dashboard_registry.set_pending(call_sid, phone_number, effective_goal)
+        dashboard_registry.set_pending(call_sid, phone_number, effective_goal, tenant_id=tenant_id)
         return {"status": "calling", "to": phone_number, "call_sid": call_sid, "call_id": call_id, "goal": effective_goal}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -827,7 +827,7 @@ async def websocket_endpoint(websocket: WebSocket):
             ctx.ivr_mode = True
             logger.info(f"IVR auto-detected from phone number pattern: {phone!r}")
         # Propagate tenant_id from pending into the session + mutable refs
-        tid = pending.get("tenant_id", "default")
+        tid = pending["tenant_id"]
         ctx.tenant_id = tid
         _tenant_id_ref[0] = tid
         _tenant_config_ref[0] = _tenant_store.get(tid) if _tenant_store else None
@@ -870,7 +870,7 @@ async def websocket_endpoint(websocket: WebSocket):
             ctx.ivr_mode = True
             goal = saved_dtmf["goal"]
             phone = saved_dtmf["phone"]
-            tid = saved_dtmf.get("tenant_id", "default")
+            tid = saved_dtmf["tenant_id"]
             ctx.tenant_id = tid
             _tenant_id_ref[0] = tid
             _tenant_config_ref[0] = saved_dtmf.get("tenant_config")

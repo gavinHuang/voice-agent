@@ -217,11 +217,13 @@ class IVRNavigator:
     def __init__(
         self,
         phone_number: str,
+        tenant_id: str,
         max_depth: int = 5,
         max_calls: int = 30,
         call_timeout: int = 90,
     ):
         self.phone_number = phone_number
+        self.tenant_id = tenant_id
         self.max_depth = max_depth
         self.max_calls = max_calls
         self.call_timeout = call_timeout
@@ -327,7 +329,7 @@ class IVRNavigator:
 
         # Register goal and observer AFTER obtaining call_sid (Twilio has latency
         # before the WebSocket connects, so there is no race condition here)
-        dashboard_registry.set_pending(call_sid, self.phone_number, goal, ivr_mode=True)
+        dashboard_registry.set_pending(call_sid, self.phone_number, goal, ivr_mode=True, tenant_id=self.tenant_id)
         _web_module._navigator_observers[call_sid] = nav_observer
 
         try:

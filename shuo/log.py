@@ -1,159 +1,39 @@
 """
-Centralized logging for shuo.
+log.py — Logging for voice-agent.
 
-Provides:
-- Configured console logger with colors
-- Logger for consistent event/lifecycle/action logging
-- ServiceLogger for individual services
+Shared utilities (colors, formatters, ServiceLogger) are imported from
+core.log in dialact-eval (source of truth).
+
+Logger — the call-lifecycle/event/action logger — stays here because it
+depends on shuo.call event types (CallStartedEvent, AudioChunkEvent, etc.)
+which are voice-agent specific.
+
+Install dialact-eval in editable mode: pip install -e ../dialact-eval
 """
-
-from __future__ import annotations
-
-import logging
-import sys
-from contextvars import ContextVar
 from typing import Optional
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .call import Event, Action, Phase
+from core.log import (  # noqa: F401
+    C,
+    _c,
+    _quote,
+    ServiceLogger,
+    ColorFormatter,
+    CorrelatedFileFormatter,
+    setup_logging,
+    get_logger,
+    set_log_call_id,
+    clear_log_call_id,
+)
 
-# ---------------------------------------------------------------------------
-# Per-call log correlation
-# ---------------------------------------------------------------------------
-# Set this context variable to the current call_id at the start of each call
-# so every log line emitted during that call is automatically tagged.
+import logging
 
-_call_id_var: ContextVar[str] = ContextVar("call_id", default="")
-
-
-def set_log_call_id(call_id: str) -> None:
-    """Tag all subsequent log lines in this async task with call_id."""
-    _call_id_var.set(call_id)
-
-
-def clear_log_call_id() -> None:
-    """Remove the call_id tag (call finished)."""
-    _call_id_var.set("")
-
-
-# =============================================================================
-# COLORS
-# =============================================================================
-
-class C:
-    """ANSI color codes."""
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-
-    # Colors
-    RED = "\033[31m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
-    WHITE = "\033[37m"
-
-    # Bright colors
-    BRIGHT_RED = "\033[91m"
-    BRIGHT_GREEN = "\033[92m"
-    BRIGHT_YELLOW = "\033[93m"
-    BRIGHT_BLUE = "\033[94m"
-    BRIGHT_MAGENTA = "\033[95m"
-    BRIGHT_CYAN = "\033[96m"
-
-
-def _c(color: str, text: str) -> str:
-    """Wrap text in color codes."""
-    return color + text + C.RESET
-
-
-def _quote(text: str, color: str = C.WHITE) -> str:
-    """Wrap text in quotes with color."""
-    return _c(color, '"' + text + '"')
-
-
-# =============================================================================
-# LOGGING SETUP
-# =============================================================================
-
-class ColorFormatter(logging.Formatter):
-    """Custom formatter with colors and clean timestamp."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        ms = int(record.msecs)
-        ts = self.formatTime(record, "%H:%M:%S") + f".{ms:03d}"
-        time_str = _c(C.DIM, ts)
-        call_id = _call_id_var.get()
-        prefix = _c(C.DIM, f"[{call_id}] ") if call_id else ""
-        return time_str + " \u2502 " + prefix + record.getMessage()
-
-
-class CorrelatedFileFormatter(logging.Formatter):
-    """Plain file formatter that injects the active call_id when set."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        call_id = _call_id_var.get()
-        if call_id:
-            record = logging.makeLogRecord(record.__dict__)
-            record.msg = f"[{call_id}] {record.getMessage()}"
-            record.args = None
-        return super().format(record)
-
-
-def setup_logging(level: int = logging.INFO) -> None:
-    """Configure logging for the application."""
-    import os
-    from logging.handlers import RotatingFileHandler
-
-    console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(ColorFormatter())
-    console.setLevel(level)
-
-    file_formatter = CorrelatedFileFormatter(
-        "%(asctime)s.%(msecs)03d | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    log_dir = os.getenv("DATA_DIR", "")
-    if log_dir:
-        import pathlib
-        pathlib.Path(log_dir).mkdir(parents=True, exist_ok=True)
-        log_path = os.path.join(log_dir, "shuo.log")
-    else:
-        log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shuo.log")
-    file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=3)
-    file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(level)
-
-    root = logging.getLogger()
-    root.setLevel(level)
-    root.handlers = [console, file_handler]
-
-    # Quiet noisy libraries
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("websockets").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("twilio.http_client").setLevel(logging.WARNING)
-
-
-def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance."""
-    return logging.getLogger(name)
-
-
-# =============================================================================
-# LOGGER (unified lifecycle + event + action logging)
-# =============================================================================
 
 class Logger:
     """
-    Unified logger for shuo.
+    Unified logger for shuo call lifecycle events, actions, and transitions.
 
-    Class methods  -- lifecycle events (server, call, websocket, stream)
-    Instance methods -- event/action/transition logging in the conversation loop
+    Class methods  — lifecycle events (server, call, websocket, stream)
+    Instance methods — event/action/transition logging in the conversation loop
     """
 
     _logger = logging.getLogger("shuo")
@@ -196,8 +76,8 @@ class Logger:
         self._events_logger = logging.getLogger("shuo.events")
         self._verbose = verbose
 
-    def event(self, event: "Event") -> None:
-        """Log an incoming event."""
+    def event(self, event) -> None:
+        """Log an incoming call event."""
         from .call import (
             AudioChunkEvent, CallStartedEvent, CallEndedEvent,
             UserSpokeEvent, UserSpeakingEvent, AgentDoneEvent,
@@ -263,8 +143,8 @@ class Logger:
             )
             return
 
-    def action(self, action: "Action") -> None:
-        """Log an outgoing action."""
+    def action(self, action) -> None:
+        """Log an outgoing call action."""
         from .call import StreamToSTTAction, StartTurnAction, CancelTurnAction
 
         if isinstance(action, StreamToSTTAction):
@@ -293,8 +173,8 @@ class Logger:
             )
             return
 
-    def transition(self, old_phase: Phase, new_phase: Phase) -> None:
-        """Log a phase transition (magenta)."""
+    def transition(self, old_phase, new_phase) -> None:
+        """Log a phase transition."""
         if old_phase != new_phase:
             self._events_logger.info(
                 _c(C.MAGENTA, "\u25C6") + " " +
@@ -304,60 +184,9 @@ class Logger:
             )
 
     def error(self, msg: str, exc: Optional[Exception] = None) -> None:
-        """Log an error (red)."""
         if exc:
             self._events_logger.error(
                 _c(C.RED, "\u2717 " + msg + ":") + " " + _c(C.DIM, str(exc))
             )
         else:
             self._events_logger.error(_c(C.RED, "\u2717 " + msg))
-
-
-# =============================================================================
-# SERVICE LOGGING
-# =============================================================================
-
-class ServiceLogger:
-    """Logger for individual services (Flux, LLM, TTS, Player, Agent)."""
-
-    COLORS = {
-        "Flux": C.BRIGHT_BLUE,
-        "LLM": C.BRIGHT_MAGENTA,
-        "TTS": C.BRIGHT_CYAN,
-        "Player": C.WHITE,
-        "Agent": C.BRIGHT_GREEN,
-    }
-
-    def __init__(self, service_name: str):
-        self._logger = logging.getLogger("shuo." + service_name)
-        self._name = service_name
-        self._color = self.COLORS.get(service_name, C.WHITE)
-
-    def connected(self) -> None:
-        self._logger.info(
-            _c(C.GREEN, "\u2713") + " " + _c(self._color, self._name) + " " + _c(C.DIM, "connected")
-        )
-
-    def disconnected(self) -> None:
-        self._logger.debug(_c(C.DIM, "\u25CB " + self._name + " disconnected"))
-
-    def cancelled(self) -> None:
-        self._logger.debug(_c(C.DIM, "\u25CB " + self._name + " cancelled"))
-
-    def error(self, msg: str, exc: Optional[Exception] = None) -> None:
-        if exc:
-            self._logger.error(
-                _c(C.RED, "\u2717") + " " +
-                _c(self._color, self._name + ":") + " " +
-                msg + " " + _c(C.DIM, "(" + str(exc) + ")")
-            )
-        else:
-            self._logger.error(
-                _c(C.RED, "\u2717") + " " + _c(self._color, self._name + ":") + " " + msg
-            )
-
-    def debug(self, msg: str) -> None:
-        self._logger.debug("  " + _c(C.DIM, self._name + ": " + msg))
-
-    def info(self, msg: str) -> None:
-        self._logger.info("  " + _c(self._color, self._name + ":") + " " + msg)

@@ -81,7 +81,7 @@ class TaskReport:
 
     # ── Semantic task ──────────────────────────────────────────────────────────
     goal: str
-    agent_name: str
+    agent_name: Optional[str]
     agent_role: str
     agent_tone: str
     success_criteria: Optional[str]
@@ -130,7 +130,7 @@ class ReportBuilder:
 
         # Task fields — populated by set_task()
         self._goal: str = ""
-        self._agent_name: str = "Alex"
+        self._agent_name: Optional[str] = None
         self._agent_role: str = "a professional assistant"
         self._agent_tone: str = "friendly and concise"
         self._success_criteria: Optional[str] = None
@@ -154,7 +154,7 @@ class ReportBuilder:
         """Set the call goal and optional full CallContext."""
         self._goal = goal
         if ctx is not None:
-            self._agent_name = getattr(ctx, "agent_name", "Alex")
+            self._agent_name = getattr(ctx, "agent_name", None)
             self._agent_role = getattr(ctx, "agent_role", "a professional assistant")
             self._agent_tone = getattr(ctx, "agent_tone", "friendly and concise")
             self._success_criteria = getattr(ctx, "success_criteria", None)
@@ -401,7 +401,7 @@ def build_disposition_report(
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     summary = _DISPOSITION_SUMMARIES.get(disposition, f"Call ended with status: {disposition}.")
 
-    agent_name = getattr(ctx, "agent_name", "Alex") if ctx else "Alex"
+    agent_name = getattr(ctx, "agent_name", None) if ctx else None
     agent_role = getattr(ctx, "agent_role", "a professional assistant") if ctx else "a professional assistant"
     agent_tone = getattr(ctx, "agent_tone", "friendly and concise") if ctx else "friendly and concise"
 

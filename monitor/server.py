@@ -317,6 +317,7 @@ class CallRequest(BaseModel):
     phone: str
     goal: str = ""
     ivr_mode: bool = False  # When True: suppress opener, force DTMF-only navigation
+    tenant_id: str  # Google profile_id — required, no default
 
 
 @router.post("/call", dependencies=[Depends(verify_api_key)])
@@ -348,7 +349,7 @@ async def start_call(body: CallRequest, request: Request):
     try:
         from shuo.phone import dial_out
         call_sid = dial_out(phone, ivr_mode=body.ivr_mode)
-        registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode)
+        registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode, tenant_id=body.tenant_id)
         _log.info(f"start_call: call initiated call_sid={call_sid!r} to={phone!r}")
         return {"status": "calling", "to": phone, "call_sid": call_sid}
     except Exception as e:
