@@ -183,12 +183,7 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
     lines.append(f"\nYour goal for this call: {ctx.goal}")
     lines.append(
         "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-        "Once accomplished, confirm details and STOP — wait for their reply. "
-        + (
-            "Only after they confirm, say goodbye and call signal_hangup() in a separate response."
-            if tools else
-            "Only after they confirm, say goodbye and emit [HANGUP]."
-        )
+        "Follow the CRITICAL RULE for ending calls defined above."
     )
     lines.append(
         "\nCRITICAL — STRICT SCOPE RULE: Only ask for information that is EXPLICITLY required "
