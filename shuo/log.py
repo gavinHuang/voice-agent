@@ -65,6 +65,11 @@ def _quote(text: str, color: str = C.WHITE) -> str:
     return _c(color, '"' + text + '"')
 
 
+# Public aliases (used by dialact-eval)
+colorize = _c
+quote = _quote
+
+
 # =============================================================================
 # LOGGING SETUP
 # =============================================================================

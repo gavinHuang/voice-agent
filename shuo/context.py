@@ -242,7 +242,7 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
 # PRE-CALL CONFIRMATION (CLI helper)
 # =============================================================================
 
-_EDITABLE_FIELDS = [
+EDITABLE_FIELDS = [
     ("Agent name",       "agent_name",       False),
     ("Agent role",       "agent_role",       False),
     ("Agent tone",       "agent_tone",       False),
@@ -253,8 +253,8 @@ _EDITABLE_FIELDS = [
     ("Success criteria", "success_criteria", False),
 ]
 
-_ACTION_PROCEED = "Proceed with call"
-_ACTION_CANCEL  = "Cancel"
+ACTION_PROCEED = "Proceed with call"
+ACTION_CANCEL  = "Cancel"
 
 
 def _render_context(ctx: CallContext, sources: dict) -> None:
@@ -269,7 +269,7 @@ def _render_context(ctx: CallContext, sources: dict) -> None:
     table.add_column("Value")
     table.add_column("Source", style="dim italic")
 
-    for label, fname, is_list in _EDITABLE_FIELDS:
+    for label, fname, is_list in EDITABLE_FIELDS:
         value = getattr(ctx, fname)
         src   = sources.get(fname, "")
 
@@ -298,11 +298,11 @@ def _render_context(ctx: CallContext, sources: dict) -> None:
 def _build_choices(ctx: CallContext) -> list:
     import questionary
     choices = [
-        questionary.Choice(title=_ACTION_PROCEED, value=_ACTION_PROCEED),
-        questionary.Choice(title=_ACTION_CANCEL,  value=_ACTION_CANCEL),
+        questionary.Choice(title=ACTION_PROCEED, value=ACTION_PROCEED),
+        questionary.Choice(title=ACTION_CANCEL,  value=ACTION_CANCEL),
         questionary.Separator(),
     ]
-    for label, fname, is_list in _EDITABLE_FIELDS:
+    for label, fname, is_list in EDITABLE_FIELDS:
         value = getattr(ctx, fname)
         if is_list:
             preview = ", ".join(value) if value else "(none)"
@@ -315,7 +315,7 @@ def _build_choices(ctx: CallContext) -> list:
 
 def _edit_field(ctx: CallContext, fname: str, sources: dict) -> CallContext:
     import questionary
-    label, _, is_list = next(f for f in _EDITABLE_FIELDS if f[1] == fname)
+    label, _, is_list = next(f for f in EDITABLE_FIELDS if f[1] == fname)
     current = getattr(ctx, fname)
 
     if is_list:
@@ -377,10 +377,10 @@ def confirm_context(
             use_shortcuts=False,
         ).ask()
 
-        if action is None or action == _ACTION_CANCEL:
+        if action is None or action == ACTION_CANCEL:
             click.echo("Call cancelled.")
             sys.exit(0)
-        elif action == _ACTION_PROCEED:
+        elif action == ACTION_PROCEED:
             return ctx
         else:
             ctx = _edit_field(ctx, action, sources)

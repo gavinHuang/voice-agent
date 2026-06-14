@@ -45,4 +45,4 @@ vibevoice = [
 asyncio_mode = "auto"
 
 [tool.setuptools.packages.find]
-include = ["shuo*", "monitor*", "simulator*"]
+include = ["shuo*"]
