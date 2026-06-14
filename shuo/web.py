@@ -44,6 +44,7 @@ from .tenant import TenantConfig, default_tenant_store, resolve_tenant
 from .voice import VoicePool
 from .log import get_logger
 from .ttft import router as ttft_router
+from .llm_api import router as llm_router, start_cleanup_task, stop_cleanup_task
 from monitor.server import router as dashboard_router
 from monitor import bus as dashboard_bus, registry as dashboard_registry
 
@@ -132,6 +133,7 @@ app.add_middleware(
 
 app.include_router(dashboard_router)
 app.include_router(ttft_router)
+app.include_router(llm_router, prefix="/llm")
 
 # ── Mount IVR mock server at /ivr-mock ───────────────────────────────
 try:
@@ -190,6 +192,7 @@ async def startup_warmup() -> None:
     if public_url and not os.getenv("IVR_BASE_URL", "").startswith(public_url):
         os.environ["IVR_BASE_URL"] = f"{public_url}/ivr-mock"
         logger.info(f"IVR base URL set to {public_url}/ivr-mock")
+    start_cleanup_task()
     asyncio.create_task(_warmup())
 
 
@@ -258,6 +261,7 @@ async def _warmup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown_pools() -> None:
+    stop_cleanup_task()
     if _voice_pool:
         await _voice_pool.stop()
 

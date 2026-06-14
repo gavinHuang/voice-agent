@@ -317,7 +317,7 @@ class CallRequest(BaseModel):
     phone: str
     goal: str = ""
     ivr_mode: bool = False  # When True: suppress opener, force DTMF-only navigation
-    tenant_id: str  # Google profile_id — required, no default
+    tenant_id: str = "default"  # Google profile_id; falls back to "default" when auth is not configured
 
 
 @router.post("/call", dependencies=[Depends(verify_api_key)])

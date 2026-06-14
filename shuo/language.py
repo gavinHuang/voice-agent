@@ -12,7 +12,7 @@ import os
 import asyncio
 import re
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Awaitable, List
+from typing import AsyncIterator, Optional, Callable, Awaitable, List, Union
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import ModelMessage, PartDeltaEvent, TextPartDelta
@@ -68,6 +68,39 @@ class _TurnCtx:
 
 
 # =============================================================================
+# TURN RESULT  (returned by generate() / iter_stream() — eval and HTTP paths)
+# =============================================================================
+
+@dataclass
+class TurnResult:
+    """Outcome of a single LLM turn (text + control signals)."""
+    text:          str           # Speech text (control tokens stripped)
+    raw_text:      str           # Full token stream including control tokens
+    dtmf_digits:   Optional[str] # DTMF digits pressed (None if none)
+    hangup:        bool
+    hold_continue: bool
+    has_speech:    bool
+
+
+def _build_turn_result(raw_tokens: List[str], turn_ctx: "_TurnCtx") -> TurnResult:
+    from .translation import extract_speech_text
+    raw_text = "".join(raw_tokens)
+    speech_text = extract_speech_text(raw_text)
+    dtmf_digits = "".join(turn_ctx.dtmf_queue) if turn_ctx.dtmf_queue else None
+    hangup = turn_ctx.hangup_pending
+    if not hangup and dtmf_digits is None and is_farewell(raw_text):
+        hangup = True
+    return TurnResult(
+        text=speech_text,
+        raw_text=raw_text,
+        dtmf_digits=dtmf_digits,
+        hangup=hangup,
+        hold_continue=turn_ctx.hold_continue,
+        has_speech=bool(speech_text.strip()) and not turn_ctx.hold_continue and dtmf_digits is None,
+    )
+
+
+# =============================================================================
 # LANGUAGE MODEL
 # =============================================================================
 
@@ -81,8 +114,8 @@ class LanguageModel:
 
     def __init__(
         self,
-        on_token:   Callable[[str], Awaitable[None]],
-        on_done:    Callable[[], Awaitable[None]],
+        on_token:   Optional[Callable[[str], Awaitable[None]]] = None,
+        on_done:    Optional[Callable[[], Awaitable[None]]] = None,
         goal:       str = "",
         ctx:        Optional["CallContext"] = None,
         telemetry:  Optional[CallTelemetry] = None,
@@ -168,6 +201,10 @@ class LanguageModel:
         self._ctx:            _TurnCtx               = _TurnCtx()
         self._tokens_emitted: bool                   = False
 
+        _path = "phone-call" if on_token is not None else "http-api"
+        _src  = f"goal={goal!r}" if ctx is None else f"goal={ctx.goal!r}"
+        log.info(f"[LanguageModel] init  path={_path}  model={model}  {_src}")
+
     # ── Public API ──────────────────────────────────────────────────
 
     @property
@@ -245,6 +282,12 @@ class LanguageModel:
         )
 
     async def start(self, message: str) -> None:
+        if self._on_token is None or self._on_done is None:
+            raise RuntimeError(
+                "LanguageModel.start() requires on_token and on_done callbacks. "
+                "Use generate() or iter_stream() for callback-free usage."
+            )
+        log.info(f"[LanguageModel] start()  path=phone-call  turn={len(self._history) // 2 + 1}  msg={message[:80]!r}")
         if self._running:
             await self.cancel()
         self._pending = message
@@ -262,6 +305,107 @@ class LanguageModel:
                 pass
             self._task = None
         log.cancelled()
+
+    # ── Direct-generate API (for HTTP sessions and eval) ────────────
+
+    async def generate(self, message: str) -> TurnResult:
+        """
+        Run a full LLM turn, accumulate all tokens, and return a TurnResult.
+
+        Does not use on_token / on_done callbacks.
+        Maintains the same conversation history as start().
+        """
+        log.info(f"[LanguageModel] generate()  path=http-api  turn={len(self._history) // 2 + 1}  msg={message[:80]!r}")
+        turn_ctx = _TurnCtx()
+        raw_tokens: List[str] = []
+        tokens_emitted = False
+        attempt = 0
+
+        while attempt <= _LLM_MAX_RETRIES:
+            try:
+                async with asyncio.timeout(_LLM_TIMEOUT):
+                    async with self._agent.iter(
+                        message,
+                        deps=turn_ctx,
+                        message_history=self._history,
+                    ) as run:
+                        async for node in run:
+                            if Agent.is_model_request_node(node):
+                                async with node.stream(run.ctx) as stream:
+                                    async for event in stream:
+                                        if (
+                                            isinstance(event, PartDeltaEvent)
+                                            and isinstance(event.delta, TextPartDelta)
+                                            and event.delta.content_delta
+                                        ):
+                                            tokens_emitted = True
+                                            raw_tokens.append(event.delta.content_delta)
+                            elif Agent.is_call_tools_node(node):
+                                async with node.stream(run.ctx) as stream:
+                                    async for _ in stream:
+                                        pass
+                    self._history = list(run.result.all_messages())
+                    break
+            except asyncio.TimeoutError:
+                log.warning(f"LLM timed out after {_LLM_TIMEOUT}s (attempt {attempt + 1})")
+                if attempt < _LLM_MAX_RETRIES and not tokens_emitted:
+                    attempt += 1
+                    raw_tokens.clear()
+                    continue
+                break
+            except Exception as e:
+                log.error(f"LLM generate failed (attempt {attempt + 1}): {e}")
+                if attempt < _LLM_MAX_RETRIES and not tokens_emitted:
+                    attempt += 1
+                    raw_tokens.clear()
+                    continue
+                break
+
+        return _build_turn_result(raw_tokens, turn_ctx)
+
+    async def iter_stream(self, message: str) -> AsyncIterator[Union[str, TurnResult]]:
+        """
+        Async generator: yields speech token strings, then a final TurnResult.
+
+        Suppresses control tokens from the yielded stream (same as the TTS path).
+        The TurnResult is always the last item.
+        """
+        log.info(f"[LanguageModel] iter_stream()  path=http-api  turn={len(self._history) // 2 + 1}  msg={message[:80]!r}")
+        turn_ctx = _TurnCtx()
+        raw_tokens: List[str] = []
+        response_started = False
+
+        async with self._agent.iter(
+            message,
+            deps=turn_ctx,
+            message_history=self._history,
+        ) as run:
+            async for node in run:
+                if Agent.is_model_request_node(node):
+                    async with node.stream(run.ctx) as stream:
+                        async for event in stream:
+                            if (
+                                isinstance(event, PartDeltaEvent)
+                                and isinstance(event.delta, TextPartDelta)
+                                and event.delta.content_delta
+                            ):
+                                token = event.delta.content_delta
+                                raw_tokens.append(token)
+                                if not self.is_suppressed_token(token):
+                                    if not response_started:
+                                        token = token.lstrip(", \t\n")
+                                        if token:
+                                            response_started = True
+                                            yield token
+                                    else:
+                                        yield token
+                elif Agent.is_call_tools_node(node):
+                    async with node.stream(run.ctx) as stream:
+                        async for _ in stream:
+                            pass
+
+        self._history = list(run.result.all_messages())
+        yield _build_turn_result(raw_tokens, turn_ctx)
 
     # ── Internal ────────────────────────────────────────────────────
 
