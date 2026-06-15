@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Optional, Any
 
 from .log import get_logger
-from .store import get_call_data_dir, get_data_dir
+from .store import get_call_data_dir
 
 logger = get_logger("shuo.report")
 
@@ -318,86 +318,6 @@ def save_report(report: TaskReport, tenant_id: str = "default") -> Path:
 
 
     return path
-
-
-def load_latest_report() -> Optional[dict]:
-    """Return the most recently written report dict across all tenant dirs."""
-    scan_root = get_data_dir() / "calls"
-    if not scan_root.exists():
-        return None
-    reports = sorted(
-        scan_root.glob("**/*_report.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return json.loads(reports[0].read_text()) if reports else None
-
-
-async def load_report(call_id: str, tenant_id: str = "default") -> Optional[dict]:
-    """Return a specific report by call_id and tenant_id, or None if not found.
-
-    Reads from local JSON storage.
-    """
-    path = get_call_data_dir(tenant_id) / f"{call_id}_report.json"
-    return json.loads(path.read_text()) if path.exists() else None
-
-
-async def list_reports(
-    tenant_id: Optional[str] = None,
-    limit: int = 100,
-) -> list:
-    """Return report metadata for all saved calls, newest first.
-
-    Args:
-        tenant_id: Filter to a specific tenant.  None = all tenants.
-        limit: Maximum number of entries to return.
-
-    Each entry is a lightweight dict containing the fields most useful for a
-    call-history listing (not the full conversation transcript):
-        call_id, tenant_id, phone_number, started_at, ended_at, duration_s,
-        goal, call_disposition, goal_achieved, outcome_summary, total_turns,
-        barge_in_count, report_id, generated_at
-    """
-    scan_root = get_data_dir() / "calls"
-    if not scan_root.exists():
-        return []
-
-    if tenant_id:
-        pattern = f"{tenant_id}/*_report.json"
-    else:
-        pattern = "**/*_report.json"
-
-    paths = sorted(
-        scan_root.glob(pattern),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )[:limit]
-
-    results = []
-    for p in paths:
-        try:
-            data = json.loads(p.read_text())
-            transport = data.get("transport", {})
-            results.append({
-                "call_id":        data.get("call_id", ""),
-                "tenant_id":      data.get("tenant_id", ""),
-                "phone_number":   transport.get("phone_number", ""),
-                "started_at":     transport.get("started_at", ""),
-                "ended_at":       transport.get("ended_at"),
-                "duration_s":     transport.get("duration_s"),
-                "goal":           data.get("goal", ""),
-                "call_disposition": data.get("call_disposition", ""),
-                "goal_achieved":  data.get("goal_achieved"),
-                "outcome_summary": data.get("outcome_summary"),
-                "total_turns":    transport.get("total_turns", 0),
-                "barge_in_count": transport.get("barge_in_count", 0),
-                "report_id":      data.get("report_id", ""),
-                "generated_at":   data.get("generated_at", ""),
-            })
-        except Exception:
-            pass
-
-    return results
 
 
 def build_disposition_report(
