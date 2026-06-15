@@ -266,43 +266,6 @@ async def shutdown_pools() -> None:
         await _voice_pool.stop()
 
 
-@app.post("/auth/google")
-async def auth_google(request: Request):
-    """
-    Verify a Google credential JWT and return the decoded profile.
-    """
-    body = await request.json()
-    credential = body.get("credential", "")
-    if not credential:
-        raise HTTPException(status_code=400, detail="Missing credential")
-
-    import httpx
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"id_token": credential},
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid Google credential")
-
-    payload = resp.json()
-    google_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
-    if google_client_id and payload.get("aud") != google_client_id:
-        raise HTTPException(status_code=401, detail="Credential audience mismatch")
-
-    google_id = payload.get("sub", "")
-    email = payload.get("email", "")
-    if not google_id or not email:
-        raise HTTPException(status_code=400, detail="Incomplete Google profile")
-
-    return JSONResponse({
-        "google_id": google_id,
-        "email": email,
-        "name": payload.get("name", ""),
-        "picture": payload.get("picture", ""),
-    })
-
-
 @app.get("/health")
 async def health():
     """Health check endpoint."""
@@ -518,47 +481,6 @@ async def latest_trace():
 
     data = json.loads(traces[0].read_text())
     return JSONResponse(data)
-
-
-@app.get("/report/latest")
-async def latest_report():
-    """Return the most recently generated call task report as JSON."""
-    from .report import load_latest_report
-    data = load_latest_report()
-    if data is None:
-        return JSONResponse({"error": "No reports found"}, status_code=404)
-    return JSONResponse(data)
-
-
-@app.get("/report/{call_id}")
-async def get_report(call_id: str, tenant_id: str = Query("default")):
-    """Return a specific call task report by call_id."""
-    from .report import load_report
-    data = await load_report(call_id, tenant_id=tenant_id)
-    if data is None:
-        return JSONResponse({"error": f"Report not found: {call_id}"}, status_code=404)
-    return JSONResponse(data)
-
-
-@app.get("/calls")
-async def list_calls_history(
-    tenant_id: Optional[str] = Query(None, description="Filter by tenant; omit for all tenants"),
-    limit: int = Query(50, ge=1, le=500, description="Max results"),
-):
-    """
-    List completed calls with lightweight metadata — newest first.
-
-    Platform maintainers call this without tenant_id to see all calls.
-    Business users supply their tenant_id to see only their own calls.
-
-    Returns a JSON array; each element contains:
-        call_id, tenant_id, phone_number, started_at, ended_at, duration_s,
-        goal, call_disposition, goal_achieved, outcome_summary, total_turns,
-        barge_in_count, report_id, generated_at
-    """
-    from .report import list_reports
-    items = await list_reports(tenant_id=tenant_id, limit=limit)
-    return JSONResponse({"calls": items, "count": len(items)})
 
 
 @app.api_route("/call-status", methods=["GET", "POST"])
