@@ -45,7 +45,6 @@ from .voice import VoicePool
 from .log import get_logger
 from .ttft import router as ttft_router
 from .llm_api import router as llm_router, start_cleanup_task, stop_cleanup_task
-from . import db as _db
 from monitor.server import router as dashboard_router
 from monitor import bus as dashboard_bus, registry as dashboard_registry
 
@@ -193,7 +192,6 @@ async def startup_warmup() -> None:
     if public_url and not os.getenv("IVR_BASE_URL", "").startswith(public_url):
         os.environ["IVR_BASE_URL"] = f"{public_url}/ivr-mock"
         logger.info(f"IVR base URL set to {public_url}/ivr-mock")
-    await _db.init_pool()
     start_cleanup_task()
     asyncio.create_task(_warmup())
 
@@ -266,21 +264,18 @@ async def shutdown_pools() -> None:
     stop_cleanup_task()
     if _voice_pool:
         await _voice_pool.stop()
-    await _db.close_pool()
 
 
 @app.post("/auth/google")
 async def auth_google(request: Request):
     """
-    Verify a Google credential JWT, upsert the user profile in PostgreSQL,
-    and return the stored profile.
+    Verify a Google credential JWT and return the decoded profile.
     """
     body = await request.json()
     credential = body.get("credential", "")
     if not credential:
         raise HTTPException(status_code=400, detail="Missing credential")
 
-    # Verify with Google tokeninfo endpoint
     import httpx
     async with httpx.AsyncClient() as client:
         resp = await client.get(
@@ -297,29 +292,15 @@ async def auth_google(request: Request):
 
     google_id = payload.get("sub", "")
     email = payload.get("email", "")
-    name = payload.get("name", "")
-    picture = payload.get("picture", "")
-
     if not google_id or not email:
         raise HTTPException(status_code=400, detail="Incomplete Google profile")
 
-    if _db.is_available():
-        user = await _db.upsert_user(google_id, email, name, picture)
-    else:
-        user = {"google_id": google_id, "email": email, "name": name, "picture": picture}
-
-    return JSONResponse(user)
-
-
-@app.get("/user/profile")
-async def get_user_profile(google_id: str = Query(...)):
-    """Return the stored profile for a given Google user ID."""
-    if not _db.is_available():
-        raise HTTPException(status_code=503, detail="Database not available")
-    user = await _db.get_user_by_google_id(google_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return JSONResponse(user)
+    return JSONResponse({
+        "google_id": google_id,
+        "email": email,
+        "name": payload.get("name", ""),
+        "picture": payload.get("picture", ""),
+    })
 
 
 @app.get("/health")

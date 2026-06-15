@@ -316,21 +316,6 @@ def save_report(report: TaskReport, tenant_id: str = "default") -> Path:
     path.write_text(json.dumps(asdict(report), indent=2))
     logger.info(f"Report saved → {path}")
 
-    # Fire-and-forget DB write with a bounded timeout so a slow/hung DB
-    # connection never leaks into the event loop indefinitely.
-    from . import db as _db
-    if _db.is_available():
-        try:
-            async def _save_with_timeout(report_dict: dict) -> None:
-                try:
-                    await asyncio.wait_for(_db.save_call_log(report_dict), timeout=12.0)
-                except Exception as _exc:
-                    logger.warning(f"DB report write failed: {_exc}")
-
-            if asyncio.get_event_loop().is_running():
-                asyncio.ensure_future(_save_with_timeout(asdict(report)))
-        except Exception as _exc:
-            logger.warning(f"DB report schedule failed: {_exc}")
 
     return path
 
@@ -351,17 +336,8 @@ def load_latest_report() -> Optional[dict]:
 async def load_report(call_id: str, tenant_id: str = "default") -> Optional[dict]:
     """Return a specific report by call_id and tenant_id, or None if not found.
 
-    Reads from PostgreSQL when available, falling back to local JSON.
+    Reads from local JSON storage.
     """
-    from . import db as _db
-    if _db.is_available():
-        try:
-            result = await asyncio.wait_for(_db.get_call_log(call_id, tenant_id), timeout=5.0)
-            if result is not None:
-                return result
-        except Exception as _exc:
-            logger.warning(f"DB report load failed, falling back to JSON: {_exc}")
-
     path = get_call_data_dir(tenant_id) / f"{call_id}_report.json"
     return json.loads(path.read_text()) if path.exists() else None
 
@@ -382,16 +358,6 @@ async def list_reports(
         goal, call_disposition, goal_achieved, outcome_summary, total_turns,
         barge_in_count, report_id, generated_at
     """
-    from . import db as _db
-    if _db.is_available():
-        try:
-            return await asyncio.wait_for(
-                _db.list_call_logs(tenant_id=tenant_id, limit=limit),
-                timeout=5.0,
-            )
-        except Exception as _exc:
-            logger.warning(f"DB list_reports failed, falling back to JSON: {_exc}")
-
     scan_root = get_data_dir() / "calls"
     if not scan_root.exists():
         return []
