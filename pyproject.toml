@@ -31,6 +31,7 @@ dependencies = [
     "misaki[zh]>=0.9.4",
     "cn2an>=0.5.23",
     "sounddevice",
+    "asyncpg>=0.29.0",
 ]
 
 [project.scripts]

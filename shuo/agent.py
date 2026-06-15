@@ -63,6 +63,7 @@ class Agent:
         callee_lang:          str = "English",
         tts_provider_override: Optional[str] = None,
         voice_id_override:    Optional[str] = None,
+        caller_name:          str = "",
     ):
         self._phone                 = phone
         self._stream_sid            = stream_sid
@@ -84,6 +85,7 @@ class Agent:
             ctx=ctx,
             telemetry=telemetry,
             callee_lang=caller_lang,  # LLM responds in the agent's operating language
+            caller_name=caller_name,
         )
 
         self._tts:    Optional[object]      = None

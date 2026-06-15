@@ -174,8 +174,11 @@ def test_build_system_prompt_tools_flag():
     ctx = CallContext(goal="Do something")
     prompt_tools = build_system_prompt(ctx, tools=True)
     prompt_tags  = build_system_prompt(ctx, tools=False)
-    assert "signal_hangup()" in prompt_tools
-    assert "[HANGUP]" in prompt_tags
+    # Tools mode uses function-call names; tags mode uses bracket tags
+    assert "signal_hold_continue()" in prompt_tools
+    assert "[HOLD_CONTINUE]" in prompt_tags
+    assert "press_dtmf" in prompt_tools
+    assert "[DTMF:" in prompt_tags
 
 
 # =============================================================================

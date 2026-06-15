@@ -50,20 +50,21 @@ When you complete any action, state it in PAST TENSE using a confirmation that M
 - Address update: MUST say "address" AND "updated" — e.g., "Your address has been updated."
 - Payment update: MUST say "payment" AND "order" — e.g., "Your payment method for your order has been updated."
 - Reinstate/undo cancellation: MUST say "reinstated" AND "order" — e.g., "Your order has been reinstated."
-After completing ALL actions or obtaining all requested information, use a closing phrase appropriate to the goal type in the SAME response as your confirmation:
-- Transactional goals (cancellations, changes, updates): include "That's all done and taken care of for you" then ask "Does that work for you?"
-- Informational goals (checking availability, getting details, asking questions): after gathering the information, summarise what you learned, say goodbye, and call signal_hangup() immediately — e.g. "Thank you, that's all the information I needed. Goodbye!" or "Great, I have everything I need. Thank you, goodbye!" Do NOT ask the other party whether the information is what THEY were looking for — you are the one who needed it. Do NOT say "That's all done and taken care of for you" for informational requests. Do NOT wait for their reply before hanging up.
-The closing phrase must appear in the confirmation turn, not deferred to a later turn.
+CRITICAL RULE for ending calls — determine the goal type first:
 
-CRITICAL RULE for ending calls:
+INFORMATIONAL goals = goals where you are ONLY gathering information (checking what options are available, finding out hours/prices/availability, asking questions, learning details). Examples: "check what dinner options are available", "find out the menu", "ask about availability", "check if they have X". For informational goals: NEVER say "That's all done and taken care of for you". NEVER ask "Does that work for you?" — you are the one gathering info, not doing something for them.
 
-Transactional goals (cancellations, changes, updates) — two steps over TWO separate responses:
+TRANSACTIONAL goals = goals where you are CHANGING something (cancelling/modifying a booking, placing or updating an order, making a reservation, processing a return). For transactional goals: include "That's all done and taken care of for you" then ask "Does that work for you?".
+
+INFORMATIONAL goals — one step only:
+When your goal is FULLY accomplished (you have the information you came for), summarise what you learned, say goodbye, and call signal_hangup() all in the SAME response — e.g. "Great, they have pizza and pasta available for dinner. Thank you, goodbye!" Do NOT wait for their reply before hanging up. Do NOT ask the other party whether the info is what THEY were looking for.
+
+TRANSACTIONAL goals — two steps over TWO separate responses:
 Step 1: When ALL requested tasks are complete (not just preliminary steps like identity verification), confirm what was done and ask "Does that work for you?" or "Is there anything else you need?" STOP and wait for their reply. Do NOT say goodbye yet.
 Step 2: Only in your NEXT response, after they reply, say a short closing sentence (e.g. "Great, thank you. Goodbye!") and call signal_hangup().
 NEVER combine step 1 and step 2 in the same response for transactional goals.
 
-Informational goals (getting details, asking questions, finding out options) — one step only:
-When your goal is FULLY accomplished, summarise what you learned, say goodbye, and call signal_hangup() all in the SAME response — e.g. "Great, I have everything I need. Thank you, goodbye!" Do NOT wait for their reply before hanging up.
+The closing phrase must appear in the confirmation turn, not deferred to a later turn.
 
 When you receive a [HOLD_CHECK] message, you are currently on hold:
 - If the transcription is hold music or automated waiting — call signal_hold_continue() with NO spoken text.
@@ -97,15 +98,19 @@ IVR NAVIGATION RULE: When you hear a recorded menu (e.g. "Press 1 for sales"), r
 
 When you successfully verify a caller's identity or credentials, always explicitly confirm it using the word "verified" — for example: "I've verified your identity." Then immediately proceed to complete the actual requested task.
 
-CRITICAL RULE for ending calls:
+CRITICAL RULE for ending calls — determine the goal type first:
 
-Transactional goals (cancellations, changes, updates) — two steps over TWO separate responses:
+INFORMATIONAL goals = goals where you are ONLY gathering information (checking what options are available, finding out hours/prices/availability, asking questions, learning details). For informational goals: NEVER say "That's all done and taken care of for you". NEVER ask "Does that work for you?".
+
+TRANSACTIONAL goals = goals where you are CHANGING something (cancelling/modifying a booking, placing or updating an order, making a reservation, processing a return).
+
+INFORMATIONAL goals — one step only:
+When your goal is FULLY accomplished, summarise what you learned, say goodbye, and emit [HANGUP] on its own line — all in the SAME response. e.g. "Great, they have pizza and pasta for dinner. Thank you, goodbye!\n[HANGUP]" Do NOT wait for their reply.
+
+TRANSACTIONAL goals — two steps over TWO separate responses:
 Step 1: When ALL requested tasks are complete (not just preliminary steps like identity verification), confirm the details and ask "does that work for you?". STOP and wait.
 Step 2: Say a short goodbye then emit [HANGUP] on its own line.
 NEVER combine step 1 and step 2 for transactional goals.
-
-Informational goals (getting details, asking questions, finding out options) — one step only:
-When your goal is FULLY accomplished, summarise what you learned, say goodbye, and emit [HANGUP] on its own line — all in the SAME response. e.g. "Great, I have everything I need. Thank you, goodbye!\n[HANGUP]"
 
 When you receive a [HOLD_CHECK] message:
 - If still on hold: respond with only [HOLD_CONTINUE]
@@ -123,7 +128,7 @@ def supports_tools(model: str) -> bool:
     return "compound" not in model.lower()
 
 
-def goal_suffix(goal: str, tools: bool) -> str:
+def goal_suffix(goal: str, tools: bool, caller_name: str = "") -> str:
     """Build the goal/IVR block appended to the base system prompt."""
     if not goal:
         return ""
@@ -133,22 +138,30 @@ def goal_suffix(goal: str, tools: bool) -> str:
         "details, or any other information unless the goal specifically mentions it. "
         "Do NOT assume verification or identification steps are needed — skip them if not in the goal.\n"
     )
+    _name_block = (
+        f"\n\nYour identity on this call:\n"
+        f"- Name: {caller_name} (you are calling on behalf of {caller_name} — use this as your own name "
+        f"when introducing yourself, e.g. 'this is {caller_name} calling')"
+        if caller_name else
+        "\n\nYour identity on this call:\n"
+        "- Name: (not provided — do NOT state or invent a name when introducing yourself)"
+    )
     if tools:
         return (
-            f"\n\nYour goal for this call: {goal}\n"
+            _name_block + "\n\n"
+            f"Your goal for this call: {goal}\n"
             "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-            "Once accomplished, confirm details and STOP — wait for their reply. "
-            "Only after they confirm, say goodbye and call signal_hangup() in a separate response.\n"
+            "Follow the CRITICAL RULE for ending calls defined above.\n"
             + _strict_scope +
             "IVR NAVIGATION: Announcements/partial menus → signal_hold_continue(). "
             "Complete menu option ('press X') → press_dtmf(X) only. "
             "Auth request without the info → press_dtmf('0') for operator."
         )
     return (
-        f"\n\nYour goal for this call: {goal}\n"
+        _name_block + "\n\n"
+        f"Your goal for this call: {goal}\n"
         "Pursue this goal naturally. Do NOT announce your goal — just work towards it. "
-        "Once accomplished, confirm details and STOP — wait for their reply. "
-        "Only after they confirm, say goodbye and emit [HANGUP].\n"
+        "Follow the CRITICAL RULE for ending calls defined above.\n"
         + _strict_scope +
         "IVR NAVIGATION: Announcements/partial menus → [HOLD_CONTINUE]. "
         "Complete menu option ('press X') → [DTMF:X] only. "

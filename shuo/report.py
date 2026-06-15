@@ -11,6 +11,7 @@ Produces a structured report of a completed call combining:
 Reports are saved under DATA_DIR/calls/<tenant_id>/<call_id>_report.json.
 """
 
+import asyncio
 import json
 import uuid
 import datetime
@@ -150,7 +151,7 @@ class ReportBuilder:
 
     # ── Configuration ────────────────────────────────────────────────────────
 
-    def set_task(self, goal: str, ctx: Any = None) -> None:
+    def set_task(self, goal: str, ctx: Any = None, caller_name: Optional[str] = None) -> None:
         """Set the call goal and optional full CallContext."""
         self._goal = goal
         if ctx is not None:
@@ -161,6 +162,8 @@ class ReportBuilder:
             self._constraints = list(getattr(ctx, "constraints", []))
             self._caller_name = getattr(ctx, "caller_name", None)
             self._caller_context = getattr(ctx, "caller_context", None)
+        if caller_name is not None:
+            self._caller_name = caller_name
 
     def set_phone(self, phone_number: str) -> None:
         self._phone_number = phone_number
@@ -213,19 +216,31 @@ class ReportBuilder:
         call_summary: dict,
         tenant_id: str = "default",
         assess: bool = True,
+        partial_agent_text: str = "",
     ) -> "TaskReport":
         """
         Build the final TaskReport.
 
         Parameters
         ----------
-        call_id:      Call identifier (stream_sid from Twilio).
-        call_summary: Telemetry summary dict from CallTelemetry.summary().
-        tenant_id:    Resolved tenant identifier.
-        assess:       Run LLM goal-achievement assessment (requires GROQ_API_KEY).
+        call_id:             Call identifier (stream_sid from Twilio).
+        call_summary:        Telemetry summary dict from CallTelemetry.summary().
+        tenant_id:           Resolved tenant identifier.
+        assess:              Run LLM goal-achievement assessment (requires GROQ_API_KEY).
+        partial_agent_text:  In-progress agent text if call ended mid-turn.
         """
         if not self._ended_at:
             self.on_call_ended()
+
+        # Flush any pending turn (caller spoke but call ended before agent finished responding)
+        if self._pending_speaker_text or partial_agent_text:
+            self._turn_counter += 1
+            self._turns.append(ConversationTurn(
+                turn=self._turn_counter,
+                speaker_text=self._pending_speaker_text,
+                agent_text=partial_agent_text,
+            ))
+            self._pending_speaker_text = ""
 
         # Derive duration from telemetry first, fall back to wall-clock
         duration_s: Optional[float] = None
@@ -292,11 +307,31 @@ class ReportBuilder:
 # =============================================================================
 
 def save_report(report: TaskReport, tenant_id: str = "default") -> Path:
-    """Write report JSON to DATA_DIR/calls/<tenant_id>/<call_id>_report.json."""
+    """Write report JSON to DATA_DIR/calls/<tenant_id>/<call_id>_report.json.
+
+    Also persists to PostgreSQL asynchronously when a database pool is available.
+    """
     report_dir = get_call_data_dir(tenant_id)
     path = report_dir / f"{report.call_id}_report.json"
     path.write_text(json.dumps(asdict(report), indent=2))
     logger.info(f"Report saved → {path}")
+
+    # Fire-and-forget DB write with a bounded timeout so a slow/hung DB
+    # connection never leaks into the event loop indefinitely.
+    from . import db as _db
+    if _db.is_available():
+        try:
+            async def _save_with_timeout(report_dict: dict) -> None:
+                try:
+                    await asyncio.wait_for(_db.save_call_log(report_dict), timeout=12.0)
+                except Exception as _exc:
+                    logger.warning(f"DB report write failed: {_exc}")
+
+            if asyncio.get_event_loop().is_running():
+                asyncio.ensure_future(_save_with_timeout(asdict(report)))
+        except Exception as _exc:
+            logger.warning(f"DB report schedule failed: {_exc}")
+
     return path
 
 
@@ -313,13 +348,25 @@ def load_latest_report() -> Optional[dict]:
     return json.loads(reports[0].read_text()) if reports else None
 
 
-def load_report(call_id: str, tenant_id: str = "default") -> Optional[dict]:
-    """Return a specific report by call_id and tenant_id, or None if not found."""
+async def load_report(call_id: str, tenant_id: str = "default") -> Optional[dict]:
+    """Return a specific report by call_id and tenant_id, or None if not found.
+
+    Reads from PostgreSQL when available, falling back to local JSON.
+    """
+    from . import db as _db
+    if _db.is_available():
+        try:
+            result = await asyncio.wait_for(_db.get_call_log(call_id, tenant_id), timeout=5.0)
+            if result is not None:
+                return result
+        except Exception as _exc:
+            logger.warning(f"DB report load failed, falling back to JSON: {_exc}")
+
     path = get_call_data_dir(tenant_id) / f"{call_id}_report.json"
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def list_reports(
+async def list_reports(
     tenant_id: Optional[str] = None,
     limit: int = 100,
 ) -> list:
@@ -335,6 +382,16 @@ def list_reports(
         goal, call_disposition, goal_achieved, outcome_summary, total_turns,
         barge_in_count, report_id, generated_at
     """
+    from . import db as _db
+    if _db.is_available():
+        try:
+            return await asyncio.wait_for(
+                _db.list_call_logs(tenant_id=tenant_id, limit=limit),
+                timeout=5.0,
+            )
+        except Exception as _exc:
+            logger.warning(f"DB list_reports failed, falling back to JSON: {_exc}")
+
     scan_root = get_data_dir() / "calls"
     if not scan_root.exists():
         return []

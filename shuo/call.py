@@ -305,6 +305,7 @@ async def run_call(
     tenant_id                                                                    = "default",
     tenant_config_ref:     Optional[list]                                        = None,
     ivr_detector:          Optional[object]                                      = None,
+    caller_name_ref:       Optional[list]                                        = None,
 ) -> None:
     """
     Drive a single call from connect to disconnect.
@@ -508,6 +509,7 @@ async def run_call(
                     callee_lang=os.getenv("CALLEE_LANG", "English"),
                     tts_provider_override=_tc.tts_provider if _tc else None,
                     voice_id_override=_tc.voice_id if _tc else None,
+                    caller_name=caller_name_ref[0] or "" if caller_name_ref else "",
                 )
                 telemetry.checkpoint(CP.SCRIPT_GENERATION_END)
 
@@ -520,7 +522,11 @@ async def run_call(
                 if on_agent_ready:
                     on_agent_ready(agent)
 
-                report_builder.set_task(goal=goal, ctx=ctx if not saved else None)
+                report_builder.set_task(
+                    goal=goal,
+                    ctx=ctx if not saved else None,
+                    caller_name=caller_name_ref[0] if caller_name_ref else None,
+                )
                 report_builder.set_phone(event.phone)
 
             # ── STEP (pure) ──────────────────────────────────────────
@@ -647,6 +653,7 @@ async def run_call(
                 call_id=stream_sid or "unknown",
                 call_summary=call_summary,
                 tenant_id=_tenant_id_ref[0],
+                partial_agent_text=agent._current_turn_text if agent else "",
             )
             save_report(report, tenant_id=_tenant_id_ref[0])
         except Exception as _report_exc:

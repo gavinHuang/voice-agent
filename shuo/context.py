@@ -170,12 +170,26 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
     if not ctx.goal:
         return ""
 
+    if ctx.agent_name:
+        _name_line = f"- Name: {ctx.agent_name}"
+    elif ctx.caller_name:
+        _name_line = (
+            f"- Name: {ctx.caller_name} "
+            f"(you are calling on behalf of {ctx.caller_name} — use this as your own name "
+            f"when introducing yourself, e.g. 'this is {ctx.caller_name} calling')"
+        )
+    else:
+        _name_line = "- Name: (not provided — do NOT state or invent a name when introducing yourself)"
+
     lines = [
         "Your identity on this call:",
-        f"- Name: {ctx.agent_name}" if ctx.agent_name else "- Name: (not provided — do NOT state or invent a name when introducing yourself)",
+        _name_line,
         f"- Role: {ctx.agent_role}",
         f"- Tone: {ctx.agent_tone}",
     ]
+
+    if ctx.caller_name and ctx.agent_name:
+        lines.append(f"- Calling on behalf of: {ctx.caller_name}")
 
     if ctx.agent_background:
         lines.append(f"\nBackground:\n{ctx.agent_background}")
@@ -198,11 +212,6 @@ def build_system_prompt(ctx: CallContext, tools: bool = True) -> str:
         "phone calls do not require stating the other party's name. "
         "Never invent, assume, or guess any name that was not explicitly provided to you."
     )
-    if ctx.caller_name:
-        lines.append(
-            f"The person you are calling is named {ctx.caller_name}. "
-            "Use this for your own reference only — do not proactively say their name on the call unless they ask."
-        )
     if ctx.caller_context:
         lines.append(f"Context about the person you are calling: {ctx.caller_context}")
 

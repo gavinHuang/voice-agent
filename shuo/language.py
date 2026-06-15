@@ -114,12 +114,13 @@ class LanguageModel:
 
     def __init__(
         self,
-        on_token:   Optional[Callable[[str], Awaitable[None]]] = None,
-        on_done:    Optional[Callable[[], Awaitable[None]]] = None,
-        goal:       str = "",
-        ctx:        Optional["CallContext"] = None,
-        telemetry:  Optional[CallTelemetry] = None,
+        on_token:    Optional[Callable[[str], Awaitable[None]]] = None,
+        on_done:     Optional[Callable[[], Awaitable[None]]] = None,
+        goal:        str = "",
+        ctx:         Optional["CallContext"] = None,
+        telemetry:   Optional[CallTelemetry] = None,
         callee_lang: str = "English",
+        caller_name: str = "",
     ):
         self._on_token  = on_token
         self._on_done   = on_done
@@ -131,7 +132,7 @@ class LanguageModel:
         if ctx is not None:
             context_suffix = "\n\n" + build_system_prompt(ctx, tools=self._tools_enabled)
         else:
-            context_suffix = goal_suffix(goal, self._tools_enabled)
+            context_suffix = goal_suffix(goal, self._tools_enabled, caller_name=caller_name)
 
         lang_suffix = (
             f"\n\nIMPORTANT: Always respond in {callee_lang}, regardless of the language of incoming messages."

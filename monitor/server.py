@@ -16,7 +16,7 @@ import time
 import asyncio
 import collections
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -318,6 +318,7 @@ class CallRequest(BaseModel):
     goal: str = ""
     ivr_mode: bool = False  # When True: suppress opener, force DTMF-only navigation
     tenant_id: str = "default"  # Google profile_id; falls back to "default" when auth is not configured
+    caller_name: Optional[str] = None  # Google profile display name of the initiating user
 
 
 @router.post("/call", dependencies=[Depends(verify_api_key)])
@@ -349,7 +350,7 @@ async def start_call(body: CallRequest, request: Request):
     try:
         from shuo.phone import dial_out
         call_sid = dial_out(phone, ivr_mode=body.ivr_mode)
-        registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode, tenant_id=body.tenant_id)
+        registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode, tenant_id=body.tenant_id, caller_name=body.caller_name)
         _log.info(f"start_call: call initiated call_sid={call_sid!r} to={phone!r}")
         return {"status": "calling", "to": phone, "call_sid": call_sid}
     except Exception as e:

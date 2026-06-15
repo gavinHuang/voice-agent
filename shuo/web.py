@@ -45,6 +45,7 @@ from .voice import VoicePool
 from .log import get_logger
 from .ttft import router as ttft_router
 from .llm_api import router as llm_router, start_cleanup_task, stop_cleanup_task
+from . import db as _db
 from monitor.server import router as dashboard_router
 from monitor import bus as dashboard_bus, registry as dashboard_registry
 
@@ -192,6 +193,7 @@ async def startup_warmup() -> None:
     if public_url and not os.getenv("IVR_BASE_URL", "").startswith(public_url):
         os.environ["IVR_BASE_URL"] = f"{public_url}/ivr-mock"
         logger.info(f"IVR base URL set to {public_url}/ivr-mock")
+    await _db.init_pool()
     start_cleanup_task()
     asyncio.create_task(_warmup())
 
@@ -264,6 +266,60 @@ async def shutdown_pools() -> None:
     stop_cleanup_task()
     if _voice_pool:
         await _voice_pool.stop()
+    await _db.close_pool()
+
+
+@app.post("/auth/google")
+async def auth_google(request: Request):
+    """
+    Verify a Google credential JWT, upsert the user profile in PostgreSQL,
+    and return the stored profile.
+    """
+    body = await request.json()
+    credential = body.get("credential", "")
+    if not credential:
+        raise HTTPException(status_code=400, detail="Missing credential")
+
+    # Verify with Google tokeninfo endpoint
+    import httpx
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": credential},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google credential")
+
+    payload = resp.json()
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+    if google_client_id and payload.get("aud") != google_client_id:
+        raise HTTPException(status_code=401, detail="Credential audience mismatch")
+
+    google_id = payload.get("sub", "")
+    email = payload.get("email", "")
+    name = payload.get("name", "")
+    picture = payload.get("picture", "")
+
+    if not google_id or not email:
+        raise HTTPException(status_code=400, detail="Incomplete Google profile")
+
+    if _db.is_available():
+        user = await _db.upsert_user(google_id, email, name, picture)
+    else:
+        user = {"google_id": google_id, "email": email, "name": name, "picture": picture}
+
+    return JSONResponse(user)
+
+
+@app.get("/user/profile")
+async def get_user_profile(google_id: str = Query(...)):
+    """Return the stored profile for a given Google user ID."""
+    if not _db.is_available():
+        raise HTTPException(status_code=503, detail="Database not available")
+    user = await _db.get_user_by_google_id(google_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return JSONResponse(user)
 
 
 @app.get("/health")
@@ -497,7 +553,7 @@ async def latest_report():
 async def get_report(call_id: str, tenant_id: str = Query("default")):
     """Return a specific call task report by call_id."""
     from .report import load_report
-    data = load_report(call_id, tenant_id=tenant_id)
+    data = await load_report(call_id, tenant_id=tenant_id)
     if data is None:
         return JSONResponse({"error": f"Report not found: {call_id}"}, status_code=404)
     return JSONResponse(data)
@@ -520,7 +576,7 @@ async def list_calls_history(
         barge_in_count, report_id, generated_at
     """
     from .report import list_reports
-    items = list_reports(tenant_id=tenant_id, limit=limit)
+    items = await list_reports(tenant_id=tenant_id, limit=limit)
     return JSONResponse({"calls": items, "count": len(items)})
 
 
@@ -783,6 +839,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # Mutable tenant references — both updated by get_goal when CallSid is known
     _tenant_id_ref: list = ["default"]
     _tenant_config_ref: list = [None]   # Optional[TenantConfig]
+    _caller_name_ref: list = [None]     # Optional[str] — set from pending when call connects
 
     # IVR Navigator observer — set when a navigator probe registers for this call
     _nav_observer_ref: list = [None]   # [Callable[[dict], None] | None]
@@ -835,6 +892,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ctx.tenant_id = tid
         _tenant_id_ref[0] = tid
         _tenant_config_ref[0] = _tenant_store.get(tid) if _tenant_store else None
+        _caller_name_ref[0] = pending.get("caller_name")
         dashboard_registry.update(ctx.call_id, goal=goal, phone=phone, call_sid=call_sid, tenant_id=tid)
         # Attach IVR navigator observer if one was registered for this call
         nav_obs = _navigator_observers.pop(call_sid, None)
@@ -937,6 +995,7 @@ async def websocket_endpoint(websocket: WebSocket):
             ivr_detector=_ivr_detector,
             tenant_id=_tenant_id_ref,
             tenant_config_ref=_tenant_config_ref,
+            caller_name_ref=_caller_name_ref,
         )
     except Exception as e:
         logger.error(f"WebSocket error: call_id={ctx.call_id} error={e}", exc_info=True)

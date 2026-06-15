@@ -47,6 +47,7 @@ def set_pending(
     ivr_mode: bool = False,
     tenant_id: str = "",
     preserve_existing_goal: bool = False,
+    caller_name: Optional[str] = None,
 ) -> None:
     """Register pending call data keyed by call_sid.
 
@@ -64,6 +65,7 @@ def set_pending(
         "goal": goal,
         "ivr_mode": ivr_mode,
         "tenant_id": tenant_id,
+        "caller_name": caller_name,
     }
 
 
