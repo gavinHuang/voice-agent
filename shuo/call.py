@@ -75,6 +75,7 @@ class TurnOutcome:
     emit_hold_end:  bool = False
     hangup:         bool = False
     has_speech:     bool = False
+    voicemail:      bool = False
 
 
 # =============================================================================
@@ -649,6 +650,9 @@ async def run_call(
         logger.info(f"Call telemetry summary: {call_summary}")
         call_id_for_report = call_id or stream_sid or "unknown"
         tracer.save(call_id_for_report, call_summary=call_summary, tenant_id=_tenant_id_ref[0])
+
+        if agent and agent.voicemail_detected:
+            report_builder.set_disposition("voicemail")
 
         try:
             report = await report_builder.finalize(

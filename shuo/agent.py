@@ -109,6 +109,8 @@ class Agent:
 
         # Set when LLM decides to hang up — blocks new turns and barge-in cancellation
         self._hangup_decided:    bool       = False
+        # Set when voicemail greeting is detected — used for call disposition reporting
+        self._voicemail_detected: bool      = False
 
     @property
     def is_turn_active(self) -> bool:
@@ -117,6 +119,10 @@ class Agent:
     @property
     def hangup_decided(self) -> bool:
         return self._hangup_decided
+
+    @property
+    def voicemail_detected(self) -> bool:
+        return self._voicemail_detected
 
     @property
     def history(self) -> list:
@@ -303,6 +309,17 @@ class Agent:
         await self._dispatch_outcome(outcome)
 
     async def _dispatch_outcome(self, outcome: TurnOutcome) -> None:
+        if outcome.voicemail:
+            log.info("Voicemail detected — hanging up silently")
+            self._hangup_decided = True
+            self._voicemail_detected = True
+            await self._tts.cancel()
+            self._tts    = None
+            self._player = None
+            self._active = False
+            self._emit(HangupEvent())
+            return
+
         if outcome.hold_continue:
             await self._tts.cancel()
             self._tts    = None

@@ -68,6 +68,7 @@ class TaskReport:
     call_disposition captures the telephony outcome regardless of whether a
     conversation took place:
       "connected"  — call answered, agent ran
+      "voicemail"  — call went to voicemail, agent hung up without speaking
       "busy"       — remote party returned busy signal
       "no-answer"  — call rang but was not answered
       "failed"     — call could not be placed (routing/carrier error)
@@ -139,6 +140,8 @@ class ReportBuilder:
         self._caller_name: Optional[str] = None
         self._caller_context: Optional[str] = None
 
+        self._disposition: str = "connected"
+
         # Conversation accumulation
         self._turns: List[ConversationTurn] = []
         self._turn_counter: int = 0
@@ -167,6 +170,10 @@ class ReportBuilder:
 
     def set_phone(self, phone_number: str) -> None:
         self._phone_number = phone_number
+
+    def set_disposition(self, disposition: str) -> None:
+        """Override the default 'connected' disposition (e.g. 'voicemail')."""
+        self._disposition = disposition
 
     # ── Event hooks ──────────────────────────────────────────────────────────
 
@@ -268,7 +275,7 @@ class ReportBuilder:
             constraints=self._constraints,
             caller_name=self._caller_name,
             caller_context=self._caller_context,
-            call_disposition="connected",
+            call_disposition=self._disposition,
             conversation=list(self._turns),
             transport=CallTransport(
                 call_id=call_id,

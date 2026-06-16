@@ -38,6 +38,7 @@ You have access to five tools for call control. Use them as described below:
 - signal_hold_continue(): Call this when you are still on hold and hear continued hold music. Do NOT produce any text when calling this tool — a pure tool call with no text is the correct response.
 - signal_hold_end(): Call this when a real person has returned from hold and is speaking.
 - signal_hangup(): Call this to end the call. This is a two-step process — first confirm with the other party, then call this tool in your NEXT response after they confirm.
+- signal_voicemail(): Call this when you detect that the call has gone to voicemail. Do NOT produce any text — just call this tool and the call will be disconnected immediately.
 
 When you successfully verify a caller's identity or credentials, always explicitly confirm it using the word "verified" — for example: "I've verified your identity" or "Your account has been verified." Then immediately proceed to complete the actual requested task.
 
@@ -77,7 +78,9 @@ When you receive a message prefixed with [IVR], you are navigating an automated 
 2. Partial or incomplete menu fragment (e.g. "for information about registration fees", "including eligibility"): call signal_hold_continue() — the menu is still being read; wait for the complete option.
 3. Complete menu option — recognised by a clear "press X" or "dial X" instruction (e.g. "press 1 for sales", "for accounts, press 2"): call press_dtmf("X") ONLY — no speech.
 4. Authentication / input request (e.g. "enter your driver's licence number", "enter your account number"): if you have the digits, enter them one at a time via press_dtmf(); if you do NOT have the required information, press 0 to reach a human operator.
-5. If unsure whether the menu is complete, err on the side of signal_hold_continue() and wait."""
+5. If unsure whether the menu is complete, err on the side of signal_hold_continue() and wait.
+
+VOICEMAIL DETECTION: If the other party's response sounds like a voicemail greeting — e.g. "sorry I can't answer your phone right now", "please leave a message after the beep", "the person you are calling is not available", "I'm not available to take your call" — this means the call was rejected or went to voicemail. Do NOT leave a message, do NOT speak. Call signal_voicemail() immediately with no text."""
 
 
 PROMPT_TEXT_TAGS = """You are an AI agent making an outbound phone call on behalf of the caller. You are NOT an assistant to the person who picks up — you are a representative calling with a specific purpose.
@@ -93,6 +96,7 @@ You control the call using action tags embedded in your response. Emit ONLY the 
 - To continue waiting on hold:[HOLD_CONTINUE]
 - To signal hold has ended:   [HOLD_END]
 - To hang up after goodbye:   [HANGUP]
+- Voicemail detected:         [VOICEMAIL]
 
 IVR NAVIGATION RULE: When you hear a recorded menu (e.g. "Press 1 for sales"), respond with ONLY the tag and nothing else. For example: [DTMF:1]
 
@@ -120,7 +124,9 @@ When you receive a message prefixed with [IVR], you are navigating an automated 
 1. General announcement or wait message: respond with [HOLD_CONTINUE] only.
 2. Partial/incomplete menu fragment (no "press X" instruction yet): respond with [HOLD_CONTINUE] only.
 3. Complete menu option (contains "press X" or "dial X"): respond with [DTMF:X] only.
-4. Authentication/input request: if you have the digits enter them via [DTMF:X]; if not, respond with [DTMF:0] to reach an operator."""
+4. Authentication/input request: if you have the digits enter them via [DTMF:X]; if not, respond with [DTMF:0] to reach an operator.
+
+VOICEMAIL DETECTION: If the other party's response sounds like a voicemail greeting — e.g. "sorry I can't answer your phone right now", "please leave a message after the beep", "the person you are calling is not available", "I'm not available to take your call" — this means the call was rejected or went to voicemail. Respond with ONLY [VOICEMAIL] and nothing else. Do NOT leave a message."""
 
 
 def supports_tools(model: str) -> bool:
@@ -175,8 +181,8 @@ def goal_suffix(goal: str, tools: bool, caller_name: str = "") -> str:
 
 # Detects tokens that are control signals and should not be sent to TTS.
 SUPPRESS_RE = re.compile(
-    r'press_dtmf|signal_hold|signal_hangup|function_calls|<function|function>|invoke>'
-    r'|\[DTMF:[0-9*#]\]|\[HOLD(?:_CONTINUE|_END)?\]|\[HANGUP\]',
+    r'press_dtmf|signal_hold|signal_hangup|signal_voicemail|function_calls|<function|function>|invoke>'
+    r'|\[DTMF:[0-9*#]\]|\[HOLD(?:_CONTINUE|_END)?\]|\[HANGUP\]|\[VOICEMAIL\]',
     re.IGNORECASE,
 )
 

@@ -65,6 +65,7 @@ class _TurnCtx:
     hold_end:       bool = False
     hold_continue:  bool = False
     hangup_pending: bool = False
+    voicemail:      bool = False
 
 
 # =============================================================================
@@ -191,6 +192,12 @@ class LanguageModel:
                 ctx.deps.hangup_pending = True
                 return "Will hang up after audio"
 
+            @self._agent.tool(retries=0)
+            async def signal_voicemail(ctx: RunContext[_TurnCtx]) -> str:
+                """Signal that a voicemail greeting has been detected. The call will be disconnected immediately with no speech."""
+                ctx.deps.voicemail = True
+                return "Voicemail detected — disconnecting"
+
             log.info("Tool calling enabled")
         else:
             log.info(f"Tools disabled for {model} — using text-tag protocol")
@@ -237,6 +244,10 @@ class LanguageModel:
         """
         ctx = self._ctx
 
+        if ctx.voicemail:
+            log.info("Voicemail detected via signal_voicemail() — immediate hangup")
+            return TurnOutcome(voicemail=True)
+
         dtmf_list    = list(ctx.dtmf_queue)
         hold_continue = ctx.hold_continue
         hold_start    = ctx.hold_start
@@ -266,6 +277,9 @@ class LanguageModel:
             if not hangup and ('signal_hangup' in t or '[hangup]' in t):
                 log.info("Fallback hangup")
                 hangup = True
+            if 'signal_voicemail' in t or '[voicemail]' in t:
+                log.info("Fallback voicemail detected")
+                return TurnOutcome(voicemail=True)
 
         dtmf_digits = "".join(dtmf_list) if dtmf_list else None
 
