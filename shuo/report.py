@@ -320,6 +320,12 @@ def save_report(report: TaskReport, tenant_id: str = "default") -> Path:
     return path
 
 
+async def load_report(call_id: str, tenant_id: str = "default") -> Optional[dict]:
+    """Return a specific report by call_id and tenant_id, or None if not found."""
+    path = get_call_data_dir(tenant_id) / f"{call_id}_report.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
 def build_disposition_report(
     call_id: str,
     tenant_id: str,

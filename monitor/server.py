@@ -181,7 +181,7 @@ async def hangup(call_id: str):
         # Clean up registry and bus
         registry.remove(call_id)
         dashboard_bus.destroy(call_id)
-        dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended"})
+        dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended", "tenant_id": call.tenant_id if hasattr(call, 'tenant_id') else "default"})
         return {"status": "ok"}
     except Exception as e:
         _log.error(f"hangup failed: call_id={call_id!r} error={e}", exc_info=True)

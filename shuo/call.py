@@ -306,6 +306,7 @@ async def run_call(
     tenant_config_ref:     Optional[list]                                        = None,
     ivr_detector:          Optional[object]                                      = None,
     caller_name_ref:       Optional[list]                                        = None,
+    call_id:               Optional[str]                                         = None,
 ) -> None:
     """
     Drive a single call from connect to disconnect.
@@ -646,11 +647,12 @@ async def run_call(
         telemetry.checkpoint(CP.HANGUP)
         call_summary = telemetry.summary()
         logger.info(f"Call telemetry summary: {call_summary}")
-        tracer.save(stream_sid or "unknown", call_summary=call_summary, tenant_id=_tenant_id_ref[0])
+        call_id_for_report = call_id or stream_sid or "unknown"
+        tracer.save(call_id_for_report, call_summary=call_summary, tenant_id=_tenant_id_ref[0])
 
         try:
             report = await report_builder.finalize(
-                call_id=stream_sid or "unknown",
+                call_id=call_id_for_report,
                 call_summary=call_summary,
                 tenant_id=_tenant_id_ref[0],
                 partial_agent_text=agent._current_turn_text if agent else "",

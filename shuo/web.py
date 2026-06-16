@@ -343,7 +343,7 @@ async def dial_action(call_id: str):
                 logger.warning(f"Softphone cleanup failed: {e}")
             dashboard_registry.update(call_id, softphone_call_sid="")
 
-        dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended"})
+        dashboard_bus.publish_global({"call_id": call_id, "type": "call_ended", "tenant_id": call.tenant_id if call else "default"})
         dashboard_registry.remove(call_id)
         dashboard_bus.destroy(call_id)
         # Callee already hung up — return empty TwiML
@@ -480,6 +480,16 @@ async def latest_trace():
         return JSONResponse({"error": "No traces found"}, status_code=404)
 
     data = json.loads(traces[0].read_text())
+    return JSONResponse(data)
+
+
+@app.get("/report/{call_id}")
+async def get_report(call_id: str, tenant_id: str = Query("default")):
+    """Return a specific call task report by call_id."""
+    from .report import load_report
+    data = await load_report(call_id, tenant_id=tenant_id)
+    if data is None:
+        return JSONResponse({"error": f"Report not found: {call_id}"}, status_code=404)
     return JSONResponse(data)
 
 
@@ -899,6 +909,7 @@ async def websocket_endpoint(websocket: WebSocket):
             tenant_id=_tenant_id_ref,
             tenant_config_ref=_tenant_config_ref,
             caller_name_ref=_caller_name_ref,
+            call_id=ctx.call_id,
         )
     except Exception as e:
         logger.error(f"WebSocket error: call_id={ctx.call_id} error={e}", exc_info=True)
@@ -912,7 +923,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 dashboard_registry.update(cid, saved_history=call.agent.history)
             logger.info(f"Call {cid} paused for takeover  (active: {_active_calls})")
         else:
-            dashboard_bus.publish_global({"call_id": cid, "type": "call_ended"})
+            dashboard_bus.publish_global({"call_id": cid, "type": "call_ended", "tenant_id": ctx.tenant_id})
             dashboard_registry.remove(cid)
             dashboard_bus.destroy(cid)
             logger.info(f"Call ended  (active: {_active_calls})")
