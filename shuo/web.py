@@ -137,9 +137,7 @@ app.include_router(llm_router, prefix="/llm")
 
 # ── Mount IVR mock server at /ivr-mock ───────────────────────────────
 try:
-    import sys as _sys, os as _os
-    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-    from simulator.server import app as _ivr_app
+    from ivr.server import app as _ivr_app
     app.mount("/ivr-mock", _ivr_app)
     logger.info("IVR mock mounted at /ivr-mock")
 except Exception as _e:

@@ -35,6 +35,9 @@ from .log import Logger, get_logger
 logger = get_logger("shuo.call")
 
 CALL_INACTIVITY_TIMEOUT = float(os.getenv("CALL_INACTIVITY_TIMEOUT", "300"))
+# How long to wait for the callee to speak after the agent's initial greeting.
+# Covers rejected calls, unanswered voicemail, and dead air.
+NO_RESPONSE_TIMEOUT = float(os.getenv("NO_RESPONSE_TIMEOUT", "15"))
 
 
 # =============================================================================
@@ -50,8 +53,9 @@ class Phase(Enum):
 @dataclass(frozen=True)
 class CallState:
     """Routing-only state. History lives in Agent; connection metadata is local."""
-    phase:     Phase = Phase.LISTENING
-    hold_mode: bool  = False
+    phase:              Phase         = Phase.LISTENING
+    hold_mode:          bool          = False
+    pending_transcript: Optional[str] = None   # Buffered speech during RESPONDING (IVR barge-in suppressed)
 
 
 # =============================================================================
@@ -224,9 +228,13 @@ def step(state: CallState, event: Event) -> Tuple[CallState, List[Action]]:
 
     if isinstance(event, UserSpokeEvent):
         if event.transcript and state.phase == Phase.LISTENING:
-            return replace(state, phase=Phase.RESPONDING), [
+            return replace(state, phase=Phase.RESPONDING, pending_transcript=None), [
                 StartTurnAction(transcript=event.transcript, hold_check=state.hold_mode)
             ]
+        # Buffer transcript during RESPONDING so it isn't lost when barge-in
+        # is suppressed (e.g. IVR mode).  Replayed on AgentDoneEvent.
+        if event.transcript and state.phase == Phase.RESPONDING:
+            return replace(state, pending_transcript=event.transcript), []
         return state, []
 
     if isinstance(event, UserSpeakingEvent):
@@ -236,6 +244,11 @@ def step(state: CallState, event: Event) -> Tuple[CallState, List[Action]]:
 
     if isinstance(event, AgentDoneEvent):
         if state.phase == Phase.RESPONDING:
+            # Replay buffered transcript that arrived while agent was speaking
+            if state.pending_transcript:
+                return replace(state, phase=Phase.RESPONDING, pending_transcript=None), [
+                    StartTurnAction(transcript=state.pending_transcript, hold_check=state.hold_mode)
+                ]
             return replace(state, phase=Phase.LISTENING), []
         return state, []
 
@@ -283,6 +296,25 @@ async def _inactivity_watchdog(
                 logger.warning(f"Inactivity timeout ({timeout}s) — requesting hangup")
                 await queue.put(HangupEvent())
                 return
+    except asyncio.CancelledError:
+        pass
+
+
+async def _no_response_watchdog(
+    queue: asyncio.Queue,
+    timeout: float,
+) -> None:
+    """Hang up if the callee never speaks after the agent's greeting.
+
+    Started after the first agent turn completes.  Cancelled as soon as
+    a UserSpokeEvent arrives (the callee said something).  Covers rejected
+    calls, carrier dead-air, and voicemail systems that produce no
+    detectable audio.
+    """
+    try:
+        await asyncio.sleep(timeout)
+        logger.warning(f"No callee response after {timeout}s — assuming rejected/voicemail, hanging up")
+        await queue.put(HangupEvent())
     except asyncio.CancelledError:
         pass
 
@@ -439,6 +471,9 @@ async def run_call(
 
     state = CallState()
     watchdog: Optional[asyncio.Task] = None
+    no_response_wd: Optional[asyncio.Task] = None
+    _callee_has_spoken = False
+    _greeting_done = False
     last_activity = [asyncio.get_event_loop().time()]
     await phone.start(on_audio, on_call_started, on_call_ended)
 
@@ -605,6 +640,18 @@ async def run_call(
                             for act in acts:
                                 await dispatch(act)
 
+            # ── NO-RESPONSE WATCHDOG ─────────────────────────────────
+            # Start after the greeting turn completes; cancel once callee speaks.
+            if isinstance(event, AgentDoneEvent) and not _greeting_done and not _callee_has_spoken:
+                _greeting_done = True
+                no_response_wd = asyncio.create_task(
+                    _no_response_watchdog(queue, NO_RESPONSE_TIMEOUT)
+                )
+            if isinstance(event, UserSpokeEvent) and event.transcript and not _callee_has_spoken:
+                _callee_has_spoken = True
+                if no_response_wd and not no_response_wd.done():
+                    no_response_wd.cancel()
+
             # ── WATCHDOG START ───────────────────────────────────────
             if isinstance(event, CallStartedEvent) and watchdog is None:
                 watchdog = asyncio.create_task(
@@ -627,12 +674,13 @@ async def run_call(
         raise
 
     finally:
-        if watchdog and not watchdog.done():
-            watchdog.cancel()
-            try:
-                await watchdog
-            except asyncio.CancelledError:
-                pass
+        for wd in (watchdog, no_response_wd):
+            if wd and not wd.done():
+                wd.cancel()
+                try:
+                    await wd
+                except asyncio.CancelledError:
+                    pass
 
         await phone.stop()
 
@@ -653,6 +701,8 @@ async def run_call(
 
         if agent and agent.voicemail_detected:
             report_builder.set_disposition("voicemail")
+        elif not _callee_has_spoken:
+            report_builder.set_disposition("no-answer")
 
         try:
             report = await report_builder.finalize(

@@ -495,7 +495,7 @@ def bench(
         sys.exit(1)
 
     if use_synthesize:
-        from simulator.synthesizer import synthesize as _synthesize
+        from ivr.synthesizer import synthesize as _synthesize
         tmpdir = _tempfile.mkdtemp(prefix="ivr_synth_")
         click.echo(f"Synthesizing edge-case scenarios (seed={synthesize_seed}) → {tmpdir}")
         results = _synthesize(seed=synthesize_seed)
@@ -700,8 +700,6 @@ def ivr_serve(
     _check_ivr_env_vars()
 
     # Import after env vars are set so IVR engine picks them up
-    import sys as _sys, os as _os
-    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
     from ivr.server import app as ivr_app
 
     click.echo(f"IVR mock server starting on port {effective_port}")
@@ -1151,7 +1149,7 @@ def ivr_synthesize(patterns: tuple[str, ...], output: str, seed: int | None) -> 
     dtmf-timeout-loop, menu-repeat-cap.
     """
     import os as _os
-    from simulator.synthesizer import synthesize, PATTERNS
+    from ivr.synthesizer import synthesize, PATTERNS
 
     selected = list(patterns) if patterns else None
     if seed is not None:

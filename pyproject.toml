@@ -7,6 +7,7 @@ name = "shuo"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
+    "dialact-ivr",
     "fastapi>=0.109.0",
     "uvicorn>=0.27.0",
     "websockets>=12.0",
@@ -44,6 +45,9 @@ vibevoice = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.uv.sources]
+dialact-ivr = { path = "../dialact-ivr", editable = true }
 
 [tool.setuptools.packages.find]
 include = ["shuo*"]

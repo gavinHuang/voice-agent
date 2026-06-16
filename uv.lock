@@ -1139,6 +1139,31 @@ wheels = [
 ]
 
 [[package]]
+name = "dialact-ivr"
+version = "0.1.0"
+source = { editable = "../dialact-ivr" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pytest-asyncio" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "shuo" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pytest-asyncio", specifier = ">=0.21.0" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+    { name = "shuo", editable = "." },
+    { name = "uvicorn", specifier = ">=0.27.0" },
+]
+
+[[package]]
 name = "diffusers"
 version = "0.37.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4508,6 +4533,7 @@ dependencies = [
     { name = "click" },
     { name = "cn2an" },
     { name = "deepgram-sdk" },
+    { name = "dialact-ivr" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "kokoro", marker = "python_full_version < '3.13'" },
@@ -4543,6 +4569,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
     { name = "cn2an", specifier = ">=0.5.23" },
     { name = "deepgram-sdk", specifier = ">=3.0.0" },
+    { name = "dialact-ivr", editable = "../dialact-ivr" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "kokoro", marker = "python_full_version >= '3.10' and python_full_version < '3.13'", specifier = ">=0.9.2" },
