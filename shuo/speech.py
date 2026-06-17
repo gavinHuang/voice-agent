@@ -39,6 +39,7 @@ _DEEPGRAM_EU = DeepgramClientEnvironment(
     base="wss://api.eu.deepgram.com",
     production="wss://api.eu.deepgram.com",
     agent="wss://agent.eu.deepgram.com",
+    agent_rest="https://agent.eu.deepgram.com",
 )
 
 
