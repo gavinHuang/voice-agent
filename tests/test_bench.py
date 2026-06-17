@@ -206,7 +206,7 @@ def test_extract_say_and_gather_say_redirect():
         '<?xml version="1.0"?>'
         '<Response>'
         '<Say>Welcome to the IVR system.</Say>'
-        '<Redirect>http://127.0.0.1:9999/ivr/step?node=main_menu</Redirect>'
+        '<Redirect>http://127.0.0.1:9999/step?node=main_menu</Redirect>'
         '</Response>'
     )
     say, gather_node, redirect_node, has_hangup = _extract_say_and_gather(xml)
@@ -221,11 +221,11 @@ def test_extract_say_and_gather_menu_gather():
     xml = (
         '<?xml version="1.0"?>'
         '<Response>'
-        '<Gather action="http://127.0.0.1:9999/ivr/gather?node=main_menu" '
+        '<Gather action="http://127.0.0.1:9999/gather?node=main_menu" '
         'method="POST" timeout="5" numDigits="1">'
         '<Say>Press 1 for sales.</Say>'
         '</Gather>'
-        '<Redirect>http://127.0.0.1:9999/ivr/step?node=main_menu</Redirect>'
+        '<Redirect>http://127.0.0.1:9999/step?node=main_menu</Redirect>'
         '</Response>'
     )
     say, gather_node, redirect_node, has_hangup = _extract_say_and_gather(xml)

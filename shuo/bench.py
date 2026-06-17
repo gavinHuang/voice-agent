@@ -280,7 +280,7 @@ class IVRDriver:
                     timeout=per_step_timeout,
                 )
                 resp = await client.post(
-                    f"{self._base}/ivr/gather",
+                    f"{self._base}/gather",
                     params={"node": gather_node},
                     data={"Digits": digit},
                 )
@@ -291,7 +291,7 @@ class IVRDriver:
 
             if redirect_node is not None:
                 resp = await client.post(
-                    f"{self._base}/ivr/step",
+                    f"{self._base}/step",
                     params={"node": redirect_node},
                 )
                 resp.raise_for_status()
