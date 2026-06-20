@@ -122,6 +122,29 @@ async def verify_twilio_signature(
 
 app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
 
+# ── API key gate (optional) ─────────────────────────────────────────
+# When INTERNAL_API_KEY is set, every HTTP request (except health checks
+# and Twilio webhooks) must carry a matching X-API-Key header.  This keeps
+# the voice-agent accessible only to the web proxy that knows the shared
+# secret.  WebSocket upgrades are NOT checked here — they arrive via the
+# web proxy which already validated the key, and Starlette's
+# BaseHTTPMiddleware does not support WebSocket connections.
+_internal_api_key = os.getenv("INTERNAL_API_KEY", "")
+_public_path_prefixes = ("/health", "/ready", "/twiml", "/call-status")
+
+if _internal_api_key:
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class _APIKeyMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            if request.url.path.startswith(_public_path_prefixes):
+                return await call_next(request)
+            if request.headers.get("x-api-key") != _internal_api_key:
+                return JSONResponse({"detail": "Forbidden"}, status_code=403)
+            return await call_next(request)
+
+    app.add_middleware(_APIKeyMiddleware)
+
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,

@@ -13,12 +13,12 @@ COPY pyproject.toml .
 # Copy source packages
 COPY shuo/ ./shuo/
 COPY monitor/ ./monitor/
-COPY simulator/ ./simulator/
 COPY main.py .
 
 # Install the package and dependencies
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
-EXPOSE 3040
+ENV PORT=3040
+EXPOSE ${PORT}
 
-CMD ["uvicorn", "shuo.web:app", "--host", "0.0.0.0", "--port", "3040"]
+CMD uvicorn shuo.web:app --host 0.0.0.0 --port ${PORT}
