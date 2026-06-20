@@ -116,10 +116,11 @@ class Transcriber:
                 model=_DEEPGRAM_MODEL,
                 encoding="mulaw",
                 sample_rate=8000,
-                endpointing=_DEEPGRAM_ENDPOINTING_MS,
             )
-            if _USE_V1 and _DEEPGRAM_LANGUAGE:
-                connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+            if _USE_V1:
+                connect_kwargs["endpointing"] = _DEEPGRAM_ENDPOINTING_MS
+                if _DEEPGRAM_LANGUAGE:
+                    connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
             listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
             self._cm = listener.connect(**connect_kwargs)
             self._connection = await self._cm.__aenter__()
@@ -250,8 +251,10 @@ class Transcriber:
                     **({'environment': env} if env else {}),
                 )
                 connect_kwargs = dict(model=_DEEPGRAM_MODEL, encoding="mulaw", sample_rate=8000)
-                if _USE_V1 and _DEEPGRAM_LANGUAGE:
-                    connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+                if _USE_V1:
+                    connect_kwargs["endpointing"] = _DEEPGRAM_ENDPOINTING_MS
+                    if _DEEPGRAM_LANGUAGE:
+                        connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
                 listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
                 self._cm = listener.connect(**connect_kwargs)
                 self._connection = await self._cm.__aenter__()
