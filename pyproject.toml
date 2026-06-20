@@ -7,7 +7,6 @@ name = "shuo"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "dialact-eval",
     "fastapi>=0.109.0",
     "uvicorn>=0.27.0",
     "websockets>=12.0",
@@ -50,4 +49,4 @@ asyncio_mode = "auto"
 dialact-eval = { path = "../dialact-eval", editable = true }
 
 [tool.setuptools.packages.find]
-include = ["shuo*"]
+include = ["shuo*", "monitor*"]
