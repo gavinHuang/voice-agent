@@ -89,7 +89,7 @@ async def verify_twilio_signature(
     # Prefer the incoming Host header (ngrok forwards it as the public domain),
     # so validation works even when TWILIO_PUBLIC_URL is stale or a new ngrok
     # tunnel is started while an existing server is already running on this port.
-    host = request.headers.get("host", "")
+    host = request.headers.get("x-forwarded-host", "") or request.headers.get("host", "")
     proto = request.headers.get("x-forwarded-proto", "https")
     if host and not host.startswith("localhost") and not host.startswith("127."):
         url = f"{proto}://{host}{request.url.path}"
