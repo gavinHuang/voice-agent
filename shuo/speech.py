@@ -139,11 +139,12 @@ class Transcriber:
         if not self._connection or not self._running:
             return
         try:
-            await asyncio.wait_for(self._connection.send_media(audio_bytes), timeout=0.1)
+            await asyncio.wait_for(self._connection.send_media(audio_bytes), timeout=0.5)
         except Exception as e:
-            log.error("Send failed", e)
-            self._running = False
+            log.error("Send failed — triggering reconnect", e)
             self._connection = None
+            if self._running and not (self._reconnect_task and not self._reconnect_task.done()):
+                self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def stop(self) -> None:
         self._running = False

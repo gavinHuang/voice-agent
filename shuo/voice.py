@@ -181,6 +181,8 @@ class AudioPlayer:
         except Exception as e:
             log.error("Playback failed", e)
             self._running = False
+            if self._on_done:
+                self._on_done()
 
 
 # =============================================================================
