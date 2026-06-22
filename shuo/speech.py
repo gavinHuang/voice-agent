@@ -116,11 +116,10 @@ class Transcriber:
                 model=_DEEPGRAM_MODEL,
                 encoding="mulaw",
                 sample_rate=8000,
+                endpointing=_DEEPGRAM_ENDPOINTING_MS,
             )
-            if _USE_V1:
-                connect_kwargs["endpointing"] = _DEEPGRAM_ENDPOINTING_MS
-                if _DEEPGRAM_LANGUAGE:
-                    connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+            if _USE_V1 and _DEEPGRAM_LANGUAGE:
+                connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
             listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
             self._cm = listener.connect(**connect_kwargs)
             self._connection = await self._cm.__aenter__()
@@ -139,12 +138,11 @@ class Transcriber:
         if not self._connection or not self._running:
             return
         try:
-            await asyncio.wait_for(self._connection.send_media(audio_bytes), timeout=0.5)
+            await asyncio.wait_for(self._connection.send_media(audio_bytes), timeout=0.1)
         except Exception as e:
-            log.error("Send failed — triggering reconnect", e)
+            log.error("Send failed", e)
+            self._running = False
             self._connection = None
-            if self._running and not (self._reconnect_task and not self._reconnect_task.done()):
-                self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def stop(self) -> None:
         self._running = False
@@ -252,10 +250,8 @@ class Transcriber:
                     **({'environment': env} if env else {}),
                 )
                 connect_kwargs = dict(model=_DEEPGRAM_MODEL, encoding="mulaw", sample_rate=8000)
-                if _USE_V1:
-                    connect_kwargs["endpointing"] = _DEEPGRAM_ENDPOINTING_MS
-                    if _DEEPGRAM_LANGUAGE:
-                        connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+                if _USE_V1 and _DEEPGRAM_LANGUAGE:
+                    connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
                 listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
                 self._cm = listener.connect(**connect_kwargs)
                 self._connection = await self._cm.__aenter__()
