@@ -43,6 +43,7 @@ from .speech import Transcriber
 from .tenant import TenantConfig, default_tenant_store, resolve_tenant
 from .voice import VoicePool
 from .log import get_logger
+from .status import StatusChecker
 from .ttft import router as ttft_router
 from .llm_api import router as llm_router, start_cleanup_task, stop_cleanup_task
 from monitor.server import router as dashboard_router
@@ -130,7 +131,7 @@ app = FastAPI(title="shuo", docs_url=None, redoc_url=None)
 # web proxy which already validated the key, and Starlette's
 # BaseHTTPMiddleware does not support WebSocket connections.
 _internal_api_key = os.getenv("INTERNAL_API_KEY", "")
-_public_path_prefixes = ("/health", "/ready", "/twiml", "/call-status")
+_public_path_prefixes = ("/health", "/ready", "/status", "/twiml", "/call-status")
 
 if _internal_api_key:
     from starlette.middleware.base import BaseHTTPMiddleware
@@ -188,6 +189,9 @@ _task_store: dict = {}   # call_sid -> {call_id, goal, phone, tenant_id}
 
 # ── Global pre-warmed voice pool ─────────────────────────────────────
 _voice_pool: Optional[VoicePool] = None
+
+# ── Global status checker ────────────────────────────────────────────
+_status_checker: Optional[StatusChecker] = None
 
 
 @dataclass
@@ -254,6 +258,12 @@ async def _warmup() -> None:
 
     _warmup_done = True
 
+    # Start status checker now that voice pool is available
+    global _status_checker
+    _status_checker = StatusChecker()
+    _status_checker.set_voice_pool(_voice_pool)
+    await _status_checker.start()
+
     # Trace file cleanup — remove old/excess traces at startup
     from .tracer import cleanup_traces
     deleted = cleanup_traces()
@@ -283,6 +293,8 @@ async def _warmup() -> None:
 @app.on_event("shutdown")
 async def shutdown_pools() -> None:
     stop_cleanup_task()
+    if _status_checker:
+        await _status_checker.stop()
     if _voice_pool:
         await _voice_pool.stop()
 
@@ -300,6 +312,18 @@ async def ready():
         return {"status": "ready"}
     from fastapi.responses import JSONResponse
     return JSONResponse({"status": "warming_up"}, status_code=503)
+
+
+@app.get("/status")
+async def status():
+    """Comprehensive system status with component health, config, and history."""
+    if not _warmup_done or _status_checker is None:
+        checker = _status_checker or StatusChecker()
+        return JSONResponse(checker.get_warmup_response())
+    latest = _status_checker.get_latest()
+    if latest is None:
+        return JSONResponse(_status_checker.get_warmup_response())
+    return JSONResponse({**latest, "history": _status_checker.get_history()})
 
 
 @app.get("/token")
