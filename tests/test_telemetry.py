@@ -146,8 +146,8 @@ class TestMissingCheckpointWarning:
         tel.checkpoint(CP.CALL_CONNECTED)
         with caplog.at_level(logging.WARNING):
             tel.summary()
-        warning_messages = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert any("missing" in m.lower() for m in warning_messages)
+        error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert any("missing" in m.lower() for m in error_messages)
 
     def test_no_warning_when_all_required_present(self, caplog):
         import logging

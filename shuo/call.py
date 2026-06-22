@@ -695,14 +695,27 @@ async def run_call(
 
         telemetry.checkpoint(CP.HANGUP)
         call_summary = telemetry.summary()
-        logger.info(f"Call telemetry summary: {call_summary}")
         call_id_for_report = call_id or stream_sid or "unknown"
-        tracer.save(call_id_for_report, call_summary=call_summary, tenant_id=_tenant_id_ref[0])
+        logger.info(f"Call telemetry summary: {call_summary}")
 
+        # ── Structured failure logging ──────────────────────────────
         if agent and agent.voicemail_detected:
             report_builder.set_disposition("voicemail")
+            logger.error(
+                f"CALL OUTCOME: voicemail — call_id={call_id_for_report} "
+                f"tenant={_tenant_id_ref[0]}"
+            )
         elif not _callee_has_spoken:
             report_builder.set_disposition("no-answer")
+            logger.error(
+                f"CALL OUTCOME: no-answer — callee never spoke — "
+                f"call_id={call_id_for_report} tenant={_tenant_id_ref[0]}"
+            )
+        else:
+            logger.info(
+                f"CALL OUTCOME: completed — call_id={call_id_for_report} "
+                f"tenant={_tenant_id_ref[0]}"
+            )
 
         try:
             report = await report_builder.finalize(

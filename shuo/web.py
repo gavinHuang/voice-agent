@@ -261,6 +261,26 @@ async def _warmup() -> None:
         while _voice_pool.available == 0 and asyncio.get_event_loop().time() < deadline:
             await asyncio.sleep(0.5)
 
+    # ── Validate Deepgram API key at startup ────────────────────────────
+    # Without a working key, STT silently fails on every call.
+    dg_key = os.getenv("DEEPGRAM_API_KEY", "")
+    if not dg_key:
+        logger.error("DEEPGRAM_API_KEY is not set — STT will not work, all calls will fail")
+    else:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    "https://api.deepgram.com/v1/projects",
+                    headers={"Authorization": f"Token {dg_key}"},
+                )
+            if resp.status_code == 200:
+                logger.info("Deepgram API key validated successfully")
+            else:
+                logger.error(f"Deepgram API key validation failed: HTTP {resp.status_code} — STT will not work")
+        except Exception as e:
+            logger.warning(f"Deepgram API key validation failed (network error, may work later): {e}")
+
     _warmup_done = True
 
     # Start status checker now that voice pool is available
@@ -293,6 +313,11 @@ async def _warmup() -> None:
     # Reusing an idle connection causes the turn detector to fire prematurely
     # (calibrated to silence, not live speech).
     # A fresh Transcriber is created per call for correct turn detection.
+
+    # Pause the voice pool now that warmup is done — no calls are active yet,
+    # so there's no point cycling connections. The pool auto-resumes when the
+    # first call connects (see websocket_endpoint).
+    _voice_pool.pause()
 
 
 @app.on_event("shutdown")
@@ -791,6 +816,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await websocket.accept()
     _active_calls += 1
+    if _voice_pool and _active_calls == 1:
+        _voice_pool.resume()
 
     # Typed per-call context — call_id may be reassigned on takeover reconnect
     ctx = CallSession(call_id=uuid.uuid4().hex[:8])
@@ -965,6 +992,8 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: call_id={ctx.call_id} error={e}", exc_info=True)
     finally:
         _active_calls -= 1
+        if _voice_pool and _active_calls <= 0:
+            _voice_pool.pause()
         cid = ctx.call_id
         call = dashboard_registry.get(cid)
         if call and call.mode == dashboard_registry.CallMode.TAKEOVER:

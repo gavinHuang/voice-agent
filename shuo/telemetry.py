@@ -123,10 +123,15 @@ class CallTelemetry:
                     (self._checkpoints[to_cp] - self._checkpoints[from_cp]) * 1000, 1
                 )
 
-        # Warn on missing required checkpoints
+        # Log missing required checkpoints as errors with context
         missing = [cp for cp in _REQUIRED_CHECKPOINTS if cp not in self._checkpoints]
         if missing:
-            logger.warning(f"Call telemetry: missing checkpoints: {missing}")
+            present = [cp for cp in _REQUIRED_CHECKPOINTS if cp in self._checkpoints]
+            logger.error(
+                f"CALL FAILURE — missing telemetry checkpoints: {missing} "
+                f"(present: {present}). "
+                f"This indicates the call pipeline broke before reaching these stages."
+            )
 
         return {
             "checkpoints": timestamps,

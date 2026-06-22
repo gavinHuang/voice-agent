@@ -210,6 +210,7 @@ class VoicePool:
         self._ttl        = ttl
         self._ready:     List[_Entry]            = []
         self._running:   bool                    = False
+        self._paused:    bool                    = False
         self._fill_event = asyncio.Event()
         self._fill_task: Optional[asyncio.Task]  = None
         self._lock       = asyncio.Lock()
@@ -224,6 +225,19 @@ class VoicePool:
         self._running   = True
         self._fill_task = asyncio.create_task(self._fill_loop())
 
+    def pause(self) -> None:
+        """Pause pool maintenance — stop evicting and refilling when no calls are active."""
+        if not self._paused:
+            self._paused = True
+            log.info("Pool paused (no active calls)")
+
+    def resume(self) -> None:
+        """Resume pool maintenance — start refilling when a call needs a connection."""
+        if self._paused:
+            self._paused = False
+            log.info("Pool resumed (call active)")
+            self._fill_event.set()
+
     async def get(
         self,
         on_audio:          Callable[[str], Awaitable[None]],
@@ -231,6 +245,10 @@ class VoicePool:
         provider_override: Optional[str] = None,
         voice_id_override: Optional[str] = None,
     ):
+        # Auto-resume pool when a connection is requested
+        if self._paused:
+            self.resume()
+
         # Per-tenant overrides require a fresh, correctly-configured connection.
         if provider_override or voice_id_override:
             log.info(f"Creating fresh TTS for override provider={provider_override!r} voice={voice_id_override!r}")
@@ -280,8 +298,13 @@ class VoicePool:
     async def _fill_loop(self) -> None:
         try:
             while self._running:
+                if self._paused:
+                    # While paused, just wait for resume signal — no eviction or refill
+                    self._fill_event.clear()
+                    await self._fill_event.wait()
+                    continue
                 await self._evict_stale()
-                while self._running and len(self._ready) < self._pool_size:
+                while self._running and not self._paused and len(self._ready) < self._pool_size:
                     tts = _create_tts(on_audio=_noop_audio, on_done=_noop_done)
                     try:
                         await tts.start()
