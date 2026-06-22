@@ -1,0 +1,50 @@
+steps:
+  # Build with Kaniko for layer caching.
+  # Kaniko caches each Docker layer in Artifact Registry, so unchanged layers
+  # (system deps, Python packages, Kokoro model) are reused across builds.
+  # Only the app-code layer rebuilds on typical pushes → ~2-3 min total.
+  - name: 'gcr.io/kaniko-project/executor:latest'
+    id: Build
+    args:
+      - --destination=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --destination=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest
+      - --cache=true
+      - --cache-ttl=720h
+      - --dockerfile=Dockerfile
+      - --context=.
+      - --compressed-caching=false
+      - --snapshot-mode=redo
+
+  # Deploy the pre-built image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: Deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - $_SERVICE_NAME
+      - --platform=managed
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
+      - --region=$_DEPLOY_REGION
+      - --quiet
+
+substitutions:
+  _AR_HOSTNAME: us-central1-docker.pkg.dev
+  _AR_PROJECT_ID: gen-lang-client-0029580765
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: us-central1
+  _PLATFORM: managed
+  _SERVICE_NAME: voice-agent
+  _TRIGGER_ID: 85319284-88e1-486b-8525-59f41df691d8
+
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - voice-agent
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+  machineType: E2_HIGHCPU_8
