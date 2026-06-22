@@ -42,8 +42,13 @@ from .phone import TwilioPhone, dial_out
 from .speech import Transcriber
 from .tenant import TenantConfig, default_tenant_store, resolve_tenant
 from .voice import VoicePool
-from .log import get_logger
+from .log import get_logger, setup_logging
 from .status import StatusChecker
+
+# Ensure logging is configured even when running via bare uvicorn (outside CLI).
+# Without this, Python's default WARNING-only lastResort handler drops all INFO
+# logs — making the entire call pipeline (STT/LLM/TTS) invisible in Cloud Run.
+setup_logging()
 from .ttft import router as ttft_router
 from .llm_api import router as llm_router, start_cleanup_task, stop_cleanup_task
 from monitor.server import router as dashboard_router

@@ -25,7 +25,19 @@ COPY main.py .
 # Re-install in-place (fast, deps already present)
 RUN pip install --no-cache-dir --no-deps .
 
+# Pre-download models so they're baked into the image.
+# Without this, every new Cloud Run instance downloads them at startup,
+# adding 8+ minutes before the service is ready to handle calls.
+#
+# 1. spacy en_core_web_sm: Kokoro TTS → misaki[en] → spacy needs this at runtime
+RUN python -m spacy download en_core_web_sm
+# 2. Kokoro TTS model from HuggingFace (hexgrad/Kokoro-82M, ~160 MB)
+#    Download via huggingface_hub directly (no audio device needed).
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('hexgrad/Kokoro-82M'); print('Kokoro model cached successfully')"
+
 ENV PORT=3040
 EXPOSE ${PORT}
 
-CMD uvicorn shuo.web:app --host 0.0.0.0 --port ${PORT}
+# Use main.py instead of bare uvicorn — it calls setup_logging() (required
+# for application logs) and handles SIGTERM for graceful connection draining.
+CMD ["python", "main.py"]
