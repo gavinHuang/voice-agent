@@ -116,10 +116,15 @@ class Transcriber:
                 model=_DEEPGRAM_MODEL,
                 encoding="mulaw",
                 sample_rate=8000,
-                endpointing=_DEEPGRAM_ENDPOINTING_MS,
             )
-            if _USE_V1 and _DEEPGRAM_LANGUAGE:
-                connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+            if _USE_V1:
+                # V1 uses 'endpointing' for silence detection
+                connect_kwargs["endpointing"] = _DEEPGRAM_ENDPOINTING_MS
+                if _DEEPGRAM_LANGUAGE:
+                    connect_kwargs["language"] = _DEEPGRAM_LANGUAGE
+            else:
+                # V2 (Flux) uses 'eot_timeout_ms' instead of 'endpointing'
+                connect_kwargs["eot_timeout_ms"] = _DEEPGRAM_ENDPOINTING_MS
             listener = self._client.listen.v1 if _USE_V1 else self._client.listen.v2
             self._cm = listener.connect(**connect_kwargs)
             self._connection = await self._cm.__aenter__()
