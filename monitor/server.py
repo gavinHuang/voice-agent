@@ -36,14 +36,18 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 # ── Auth dependency ───────────────────────────────────────────────────────────
 
 def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")) -> None:
-    """Verify X-API-Key header against DASHBOARD_API_KEY env var.
+    """Verify X-API-Key header for dashboard routes.
 
-    Auth is disabled (passes through) when DASHBOARD_API_KEY is unset or empty.
+    Accepts either DASHBOARD_API_KEY (browser-direct) or INTERNAL_API_KEY (set
+    by the web reverse proxy, which overwrites the browser's X-API-Key with the
+    proxy↔agent shared secret). Auth is disabled (passes through) when neither
+    env var is set.
     """
-    expected = os.getenv("DASHBOARD_API_KEY", "")
-    if not expected:
-        return  # Auth disabled when env var unset
-    if x_api_key != expected:
+    accepted = {k for k in (os.getenv("DASHBOARD_API_KEY", ""),
+                            os.getenv("INTERNAL_API_KEY", "")) if k}
+    if not accepted:
+        return  # Auth disabled when no key configured
+    if x_api_key not in accepted:
         raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
 
