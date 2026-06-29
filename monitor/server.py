@@ -16,8 +16,9 @@ import time
 import asyncio
 import collections
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
+import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -27,6 +28,13 @@ from . import registry
 
 import logging
 _log = logging.getLogger("dashboard.server")
+
+# ── Per-user usage limits ───────────────────────────────────────────────────
+# Defaults applied to every user; overridden per-user by the users table
+# columns total_minutes_limit / per_call_minutes_limit when those are set.
+# A resolved limit <= 0 disables that check.
+USER_TOTAL_MINUTES_LIMIT = float(os.getenv("USER_TOTAL_MINUTES_LIMIT", "60"))
+PER_CALL_MINUTES_LIMIT = float(os.getenv("PER_CALL_MINUTES_LIMIT", "10"))
 
 _HERE = Path(__file__).parent
 
@@ -43,10 +51,12 @@ def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")) -> None:
     proxy↔agent shared secret). Auth is disabled (passes through) when neither
     env var is set.
     """
-    accepted = {k for k in (os.getenv("DASHBOARD_API_KEY", ""),
-                            os.getenv("INTERNAL_API_KEY", "")) if k}
-    if not accepted:
-        return  # Auth disabled when no key configured
+    expected = os.getenv("DASHBOARD_API_KEY", "")
+    if not expected:
+        return  # Auth disabled when DASHBOARD_API_KEY unset
+    # Also accept INTERNAL_API_KEY: the web reverse proxy overwrites the
+    # browser's X-API-Key with the proxy↔agent shared secret before forwarding.
+    accepted = {expected, os.getenv("INTERNAL_API_KEY", "")} - {""}
     if x_api_key not in accepted:
         raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
@@ -74,6 +84,94 @@ class _RateLimiter:
 
 
 _call_limiter = _RateLimiter()
+
+
+# ── Per-user usage enforcement (Supabase-backed) ──────────────────────────────
+
+def _supabase_headers() -> dict:
+    key = os.getenv("SUPABASE_KEY", "")
+    return {"apikey": key, "Authorization": f"Bearer {key}"} if key else {}
+
+
+async def _supabase_get(path: str, params: dict) -> list:
+    """GET a PostgREST endpoint; returns the decoded JSON list (or [] on error)."""
+    url = os.getenv("SUPABASE_URL", "")
+    if not url:
+        return []
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        resp = await client.get(
+            f"{url.rstrip('/')}/rest/v1/{path}",
+            params=params,
+            headers=_supabase_headers(),
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+async def resolve_user_limits(tenant_id: str) -> Tuple[float, float]:
+    """Return (total_minutes_limit, per_call_minutes_limit) for a tenant.
+
+    Per-user values from the users table override the env defaults; NULL columns
+    fall back to the defaults. Any lookup error falls back to defaults so a
+    Supabase hiccup never blocks calls outright.
+    """
+    total, per_call = USER_TOTAL_MINUTES_LIMIT, PER_CALL_MINUTES_LIMIT
+    try:
+        rows = await _supabase_get(
+            "users",
+            {"google_id": f"eq.{tenant_id}",
+             "select": "total_minutes_limit,per_call_minutes_limit",
+             "limit": "1"},
+        )
+        if rows:
+            row = rows[0]
+            if row.get("total_minutes_limit") is not None:
+                total = float(row["total_minutes_limit"])
+            if row.get("per_call_minutes_limit") is not None:
+                per_call = float(row["per_call_minutes_limit"])
+    except Exception as e:
+        _log.warning(f"resolve_user_limits({tenant_id!r}) failed, using defaults: {e}")
+    return total, per_call
+
+
+async def used_minutes(tenant_id: str) -> float:
+    """Total minutes already consumed by a tenant across completed call_logs."""
+    rows = await _supabase_get(
+        "call_logs",
+        {"tenant_id": f"eq.{tenant_id}", "select": "duration_s"},
+    )
+    total_s = sum((r.get("duration_s") or 0.0) for r in rows)
+    return total_s / 60.0
+
+
+# Keep references to in-flight per-call watchdogs so they aren't GC'd.
+_duration_watchdogs: set = set()
+
+
+async def _enforce_call_duration(call_sid: str, max_seconds: float) -> None:
+    """Hang up a call via Twilio REST once it exceeds its per-call minute cap."""
+    try:
+        await asyncio.sleep(max_seconds)
+        from twilio.rest import Client
+        client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, lambda: client.calls(call_sid).update(status="completed")
+        )
+        _log.info(f"Per-call limit reached ({max_seconds/60:.0f} min) — hung up call_sid={call_sid!r}")
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        _log.warning(f"Per-call duration hangup failed for call_sid={call_sid!r}: {e}")
+
+
+def _schedule_call_duration_limit(call_sid: str, per_call_minutes: float) -> None:
+    if per_call_minutes <= 0:
+        return
+    task = asyncio.create_task(_enforce_call_duration(call_sid, per_call_minutes * 60.0))
+    _duration_watchdogs.add(task)
+    task.add_done_callback(_duration_watchdogs.discard)
 
 
 # ── Pages ────────────────────────────────────────────────────────────────────
@@ -350,11 +448,30 @@ async def start_call(body: CallRequest, request: Request):
     if not phone.startswith("+") and not phone.startswith("client:"):
         phone = f"+{phone}"
 
+    # Per-user usage limits: block if the tenant has exhausted their total
+    # minutes; cap this call's duration to their per-call limit.
+    total_limit, per_call_limit = await resolve_user_limits(body.tenant_id)
+    if total_limit > 0:
+        try:
+            used = await used_minutes(body.tenant_id)
+        except Exception as e:
+            used = 0.0  # never block on a Supabase lookup failure
+            _log.warning(f"used_minutes({body.tenant_id!r}) failed, allowing call: {e}")
+        if used >= total_limit:
+            _log.info(f"start_call blocked: tenant={body.tenant_id!r} used={used:.1f}m limit={total_limit:.0f}m")
+            return JSONResponse(
+                {"error": f"Usage limit reached: {used:.0f}/{total_limit:.0f} min used",
+                 "used_minutes": round(used, 1),
+                 "limit_minutes": total_limit},
+                status_code=403,
+            )
+
     _log.info(f"start_call: phone={phone!r} goal={body.goal!r} ivr_mode={body.ivr_mode} ip={ip!r}")
     try:
         from shuo.phone import dial_out
         call_sid = dial_out(phone, ivr_mode=body.ivr_mode)
         registry.set_pending(call_sid, phone=phone, goal=body.goal, ivr_mode=body.ivr_mode, tenant_id=body.tenant_id, caller_name=body.caller_name)
+        _schedule_call_duration_limit(call_sid, per_call_limit)
         _log.info(f"start_call: call initiated call_sid={call_sid!r} to={phone!r}")
         return {"status": "calling", "to": phone, "call_sid": call_sid}
     except Exception as e:
